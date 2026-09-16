@@ -111,6 +111,16 @@ class RecordType(StrEnum):
     MEDICATION = "medication"
 
 
+class EvidenceSource(StrEnum):
+    """Evidence collections the module attempts to load into a bundle.
+
+    Listed in ``DataQuality.sources_unavailable`` when the read failed, so the
+    matcher can distinguish "checked, nothing found" from "could not check".
+    """
+
+    LAB_RESULTS = "lab_results"
+
+
 # --------------------------------------------------------------------------- #
 # Context bundle (module -> agent)
 # --------------------------------------------------------------------------- #
@@ -147,6 +157,21 @@ class LabResult(StrictModel):
     observed_at: AwareDatetime = Field(description="Result timestamp used for the evidence window.")
 
 
+class DataQuality(StrictModel):
+    """What the module could and could not load (ARCHITECTURE.md sections 11-12).
+
+    ``sources_unavailable`` names evidence collections whose read failed. A
+    source listed here is unreliable for verification even if partial records
+    were supplied; the matcher returns ``verification_unavailable`` for
+    commitments that depend on it. An absent source is never "no record".
+    """
+
+    sources_unavailable: list[EvidenceSource] = Field(default_factory=list)
+    duplicates_collapsed: int = Field(
+        default=0, ge=0, description="Count of duplicate source rows the module collapsed (AUDIT DATA-004)."
+    )
+
+
 class ContextBundle(StrictModel):
     """Minimum-necessary, single-patient context assembled by the OpenEMR module."""
 
@@ -157,6 +182,10 @@ class ContextBundle(StrictModel):
     patient_uuid: UUID = Field(description="OpenEMR patient uuid; the only patient reference allowed.")
     prior_note: PriorNote
     lab_results: list[LabResult] = Field(default_factory=list)
+    data_quality: DataQuality = Field(
+        default_factory=DataQuality,
+        description="Source availability and normalization notes; defaults to 'all sources available'.",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -245,7 +274,9 @@ __all__ = [
     "Citation",
     "CommitmentKind",
     "ContextBundle",
+    "DataQuality",
     "EvidenceMatch",
+    "EvidenceSource",
     "EvidenceState",
     "ExtractedCommitment",
     "ExtractionOutput",

@@ -9,6 +9,9 @@
       "note_date": "2026-06-10T14:30:00Z",
       "plan_text": "Continue metformin. Repeat HbA1c in three months."
     },
+    "data_quality": {
+      "sources_unavailable": []
+    },
     "lab_results": [
       {
         "result_id": "procedure_result:9001",
