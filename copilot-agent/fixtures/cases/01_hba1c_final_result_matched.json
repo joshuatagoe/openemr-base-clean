@@ -1,0 +1,107 @@
+{
+  "name": "01_hba1c_final_result_matched",
+  "test_class": "regression",
+  "guards": "The tracer bullet: one commitment, one final result after the note, cited with its order.",
+  "bundle": {
+    "schema_version": "1.0",
+    "correlation_id": "7f0e6b2a-3c4d-4e5f-9a1b-2c3d4e5f6a7b",
+    "patient_uuid": "3b9d2c1e-8f7a-4b6c-9d0e-1f2a3b4c5d6e",
+    "prior_note": {
+      "note_id": "form_soap:1001",
+      "encounter_id": "form_encounter:501",
+      "note_date": "2026-06-10T14:30:00Z",
+      "plan_text": "Continue metformin. Repeat HbA1c in three months."
+    },
+    "data_quality": {
+      "sources_unavailable": [],
+      "duplicates_collapsed": 0
+    },
+    "lab_results": [
+      {
+        "result_id": "procedure_result:9001",
+        "order_id": "procedure_order:12",
+        "test_name": "Hemoglobin A1c",
+        "code": "4548-4",
+        "value": "8.9",
+        "units": "%",
+        "abnormal_flag": "high",
+        "range": null,
+        "status": "final",
+        "observed_at": "2026-09-12T09:15:00Z"
+      }
+    ],
+    "lab_orders": [
+      {
+        "order_id": "procedure_order:12",
+        "sequence": 1,
+        "test_name": "Hemoglobin A1c",
+        "code": "4548-4",
+        "status": "complete",
+        "ordered_at": "2026-08-20T09:00:00Z"
+      }
+    ],
+    "medications": [
+      {
+        "record_id": "prescriptions:31",
+        "source_table": "prescriptions",
+        "drug_name": "Metformin HCl 500 mg",
+        "rxnorm_code": "861007",
+        "dosage_text": "1 tab BID",
+        "active": true,
+        "status_field": "active,end_date",
+        "status_value": "active=1,end_date=null",
+        "started_at": "2026-01-15T00:00:00Z",
+        "ended_at": null,
+        "modified_at": null,
+        "timestamp": "2026-01-15T00:00:00Z",
+        "timestamp_field": "date_added"
+      }
+    ]
+  },
+  "model_output": {
+    "commitments": [
+      {
+        "kind": "medication",
+        "source_span": "Continue metformin.",
+        "test_name": null,
+        "drug_name": "metformin",
+        "action": "continue",
+        "due_text": null,
+        "ambiguity_note": null
+      },
+      {
+        "kind": "lab_test",
+        "source_span": "Repeat HbA1c in three months.",
+        "test_name": "HbA1c",
+        "drug_name": null,
+        "action": null,
+        "due_text": "in three months",
+        "ambiguity_note": null
+      }
+    ],
+    "warnings": []
+  },
+  "expected": [
+    {
+      "kind": "medication",
+      "source_span": "Continue metformin.",
+      "state": "matching_medication_record_found",
+      "cited": [
+        "form_soap:1001",
+        "prescriptions:31"
+      ],
+      "not_cited": []
+    },
+    {
+      "kind": "lab_test",
+      "source_span": "Repeat HbA1c in three months.",
+      "state": "matching_result_found",
+      "cited": [
+        "form_soap:1001",
+        "procedure_result:9001",
+        "procedure_order:12:1"
+      ],
+      "not_cited": []
+    }
+  ]
+}
