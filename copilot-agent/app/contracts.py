@@ -42,10 +42,11 @@ class StrictModel(BaseModel):
 
 
 class CommitmentKind(StrEnum):
-    """Commitment kinds supported in the initial scope (USERS.md UC-01)."""
+    """Commitment kinds (USERS.md UC-01). ``OTHER`` is extracted but never checked."""
 
     LAB_TEST = "lab_test"
     MEDICATION = "medication"
+    OTHER = "other"
 
 
 class EvidenceState(StrEnum):
@@ -109,6 +110,7 @@ class RecordType(StrEnum):
     LAB_RESULT = "lab_result"
     LAB_ORDER = "lab_order"
     MEDICATION = "medication"
+    ALLERGY = "allergy"
 
 
 class EvidenceSource(StrEnum):
@@ -119,6 +121,37 @@ class EvidenceSource(StrEnum):
     """
 
     LAB_RESULTS = "lab_results"
+    LAB_ORDERS = "lab_orders"
+    MEDICATIONS = "medications"
+
+
+class MedicationAction(StrEnum):
+    """Explicit medication action stated in the plan (ARCHITECTURE.md section 7)."""
+
+    START = "start"
+    STOP = "stop"
+    INCREASE = "increase"
+    DECREASE = "decrease"
+    SWITCH = "switch"
+    CONTINUE = "continue"
+    UNCLEAR = "unclear"
+
+
+class MedicationSource(StrEnum):
+    """OpenEMR keeps medications in two tables (AUDIT DATA-001); both are carried, never collapsed."""
+
+    PRESCRIPTIONS = "prescriptions"
+    LISTS = "lists"
+
+
+class LabOrderStatus(StrEnum):
+    """Order status as recorded (OpenEMR ``ord_status``); ``unknown`` when blank or unmapped."""
+
+    PENDING = "pending"
+    ROUTED = "routed"
+    COMPLETE = "complete"
+    CANCELED = "canceled"
+    UNKNOWN = "unknown"
 
 
 # --------------------------------------------------------------------------- #
@@ -142,7 +175,9 @@ class LabResult(StrictModel):
     """A single structured lab result from the evidence window."""
 
     result_id: str = Field(min_length=1, description="Source record id, e.g. 'procedure_result:9001'.")
+    order_id: str | None = Field(default=None, min_length=1, description="The order this result belongs to, e.g. 'procedure_order:12'.")
     test_name: str = Field(min_length=1)
+    code: str | None = Field(default=None, min_length=1, description="LOINC (or lab-local) result code as recorded.")
     value: Decimal = Field(description="Numeric result value as recorded.")
     units: str | None = Field(
         default=None,
@@ -153,8 +188,47 @@ class LabResult(StrictModel):
         default=None,
         description="Source abnormal flag; None when the source recorded none.",
     )
+    range: str | None = Field(default=None, min_length=1, description="Reference range exactly as recorded; never interpreted here.")
     status: LabResultStatus
     observed_at: AwareDatetime = Field(description="Result timestamp used for the evidence window.")
+
+
+class LabOrder(StrictModel):
+    """One ordered test (a ``procedure_order_code`` row) from the evidence window."""
+
+    order_id: str = Field(min_length=1, description="Source order id, e.g. 'procedure_order:12'.")
+    sequence: int = Field(ge=1, description="procedure_order_code.procedure_order_seq (several tests per order).")
+    test_name: str = Field(min_length=1, description="procedure_name as recorded.")
+    code: str | None = Field(default=None, min_length=1, description="procedure_code as recorded (often a LOINC code).")
+    status: LabOrderStatus
+    ordered_at: AwareDatetime
+
+    @property
+    def record_id(self) -> str:
+        return f"{self.order_id}:{self.sequence}"
+
+
+class MedicationRecord(StrictModel):
+    """One medication row from either source, with its status derived per AUDIT DATA-003.
+
+    ``active`` is None when the source fields disagree (``indeterminate``);
+    ``status_field``/``status_value`` say which fields decided it. Dates are
+    kept as recorded; ``timestamp`` is the one used for the evidence window.
+    """
+
+    record_id: str = Field(min_length=1, description="'prescriptions:<id>' or 'lists:<id>'.")
+    source_table: MedicationSource
+    drug_name: str = Field(min_length=1, description="prescriptions.drug or lists.title, verbatim.")
+    rxnorm_code: str | None = Field(default=None, min_length=1)
+    dosage_text: str | None = Field(default=None, min_length=1, description="Free-text dose/sig as recorded; never parsed here.")
+    active: bool | None = Field(description="Derived status; None = indeterminate (fields disagree).")
+    status_field: str = Field(min_length=1, description="Fields the status was derived from, e.g. 'active,end_date'.")
+    status_value: str = Field(min_length=1, description="Their values as recorded, e.g. 'active=1,end_date=null'.")
+    started_at: AwareDatetime | None = Field(default=None, description="start_date/date_added (prescriptions) or begdate (lists).")
+    ended_at: AwareDatetime | None = Field(default=None, description="end_date (prescriptions) or enddate (lists).")
+    modified_at: AwareDatetime | None = Field(default=None, description="prescriptions.date_modified; lists.date.")
+    timestamp: AwareDatetime = Field(description="Window timestamp: max(date_added, date_modified) or lists.date.")
+    timestamp_field: str = Field(min_length=1)
 
 
 class DataQuality(StrictModel):
@@ -186,6 +260,8 @@ class ContextBundle(StrictModel):
     )
     prior_note: PriorNote
     lab_results: list[LabResult] = Field(default_factory=list)
+    lab_orders: list[LabOrder] = Field(default_factory=list)
+    medications: list[MedicationRecord] = Field(default_factory=list, description="All medication rows from both sources (not windowed: 'continue' needs older records).")
     data_quality: DataQuality = Field(
         default_factory=DataQuality,
         description="Source availability and normalization notes; defaults to 'all sources available'.",
@@ -207,9 +283,11 @@ class ExtractedCommitment(StrictModel):
     commitment_id: str = Field(min_length=1)
     kind: CommitmentKind
     source_span: str = Field(min_length=1, description="Verbatim span from the plan text.")
-    test_name: str | None = Field(default=None, description="Normalized test name for lab_test commitments.")
-    drug_name: str | None = Field(default=None, description="Normalized drug name for medication commitments.")
+    test_name: str | None = Field(default=None, description="Test name as written, for lab_test commitments.")
+    drug_name: str | None = Field(default=None, description="Drug name as written, for medication commitments.")
+    action: MedicationAction | None = Field(default=None, description="Stated medication action, for medication commitments.")
     due_text: str | None = Field(default=None, description="Timing as written, e.g. 'in three months'.")
+    ambiguity_note: str | None = Field(default=None, description="Model's note that the wording is unclear (e.g. test not named).")
 
 
 class ExtractionOutput(StrictModel):
@@ -236,12 +314,20 @@ class EvidenceMatch(StrictModel):
     """A commitment paired with the evidence state the matcher assigned."""
 
     commitment: ExtractedCommitment
-    state: EvidenceState
+    state: EvidenceState | None = Field(
+        description="Evidence state assigned by the matcher; None only for kind 'other', which is never checked."
+    )
     summary: str = Field(min_length=1, description="Short, non-interpretive description of the evidence.")
     citations: list[Citation] = Field(default_factory=list)
+    candidates: list[Citation] = Field(
+        default_factory=list,
+        description="Records shown side by side for ambiguous or conflicting states; never a claim of a match.",
+    )
 
     @model_validator(mode="after")
-    def _found_states_require_citations(self) -> EvidenceMatch:
+    def _state_invariants(self) -> EvidenceMatch:
+        if (self.commitment.kind is CommitmentKind.OTHER) != (self.state is None):
+            raise ValueError("kind 'other' is the only unchecked kind: it has no state, every other kind has one")
         if self.state in STATES_REQUIRING_CITATIONS and not self.citations:
             raise ValueError(
                 f"evidence state '{self.state}' asserts a record exists and requires at least one citation"
@@ -373,8 +459,13 @@ __all__ = [
     "ExtractedCommitment",
     "ExtractionOutput",
     "HealthResponse",
+    "LabOrder",
+    "LabOrderStatus",
     "LabResult",
     "LabResultStatus",
+    "MedicationAction",
+    "MedicationRecord",
+    "MedicationSource",
     "PriorNote",
     "ReadyResponse",
     "RecordType",

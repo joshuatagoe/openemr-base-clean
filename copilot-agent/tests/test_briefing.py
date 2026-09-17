@@ -86,13 +86,13 @@ def test_no_matching_result(client: TestClient, fixture_payload: dict) -> None:
     assert "supplied records" in lab["summary"]
 
 
-def test_unsupported_commitment_type_is_verification_unavailable(client: TestClient, fixture_payload: dict) -> None:
-    """Boundary: a medication commitment is carried but reported as not evaluated, not as absent evidence."""
+def test_medication_commitment_with_no_records_is_scoped_absence(client: TestClient, fixture_payload: dict) -> None:
+    """Boundary: the fixture carries no medication rows, so 'continue metformin' is no_matching_record_found - never 'not done'."""
     body = client.post("/v1/briefings", json=fixture_payload).json()
     med = by_kind(body)["medication"]
     assert med["commitment"]["source_span"] == "Continue metformin."
-    assert med["state"] == EvidenceState.VERIFICATION_UNAVAILABLE.value
-    assert "not supported" in med["summary"]
+    assert med["state"] == EvidenceState.NO_MATCHING_RECORD_FOUND.value
+    assert "either source" in med["summary"] and "not done" not in med["summary"]
 
 
 def test_unavailable_lab_source_is_verification_unavailable(client: TestClient, fixture_payload: dict) -> None:

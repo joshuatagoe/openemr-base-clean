@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.contracts import CommitmentKind, ExtractedCommitment, ExtractionOutput
+from app.contracts import CommitmentKind, ExtractedCommitment, ExtractionOutput, MedicationAction
 from app.providers.base import (
     ModelCommitment,
     ModelExtractionOutput,
@@ -33,7 +33,7 @@ REJECTED_SPAN_WARNING = (
     "A model-generated commitment was rejected because its source span was not grounded in the supplied plan."
 )
 REJECTED_LAB_NAME_WARNING = (
-    "A model-generated lab commitment was rejected because it did not name a test found in its source span."
+    "A model-generated lab commitment was rejected because its test name was not found in its source span."
 )
 REJECTED_DRUG_NAME_WARNING = (
     "A model-generated medication commitment was rejected because its drug name was not found in its source span."
@@ -69,6 +69,19 @@ def _contains_ci(haystack: str, needle: str) -> bool:
     return needle.strip() != "" and needle.strip().lower() in haystack.lower()
 
 
+MAX_NOTE_CHARS = 160
+
+
+def _bounded_note(note: str | None) -> str | None:
+    """Keep the model's ambiguity note short and plain; it is rendered as text only."""
+    if note is None:
+        return None
+    cleaned = " ".join(note.split())
+    if not cleaned:
+        return None
+    return cleaned[:MAX_NOTE_CHARS]
+
+
 def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> ExtractionOutput:
     """Deterministically verify and normalize model output against ``plan_text``.
 
@@ -87,19 +100,26 @@ def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> Extracti
 
         commitment = proposed
         if commitment.kind is CommitmentKind.LAB_TEST:
-            if commitment.test_name is None or not _contains_ci(span, commitment.test_name):
+            # A lab commitment may leave the test unnamed ("check labs"); a named test must appear in the span.
+            if commitment.test_name is not None and not _contains_ci(span, commitment.test_name):
                 warnings.append(REJECTED_LAB_NAME_WARNING)
                 continue
         elif commitment.kind is CommitmentKind.MEDICATION:
             if commitment.drug_name is not None and not _contains_ci(span, commitment.drug_name):
                 warnings.append(REJECTED_DRUG_NAME_WARNING)
                 continue
+            if commitment.action is None:
+                commitment = commitment.model_copy(update={"action": MedicationAction.UNCLEAR})
+        else:
+            # kind 'other' carries no names; drop any the model attached.
+            if commitment.test_name is not None or commitment.drug_name is not None:
+                commitment = commitment.model_copy(update={"test_name": None, "drug_name": None})
 
         if commitment.due_text is not None and commitment.due_text not in span:
             warnings.append(DROPPED_DUE_TEXT_WARNING)
             commitment = commitment.model_copy(update={"due_text": None})
 
-        key = (commitment.kind.value, span, commitment.test_name, commitment.drug_name, commitment.due_text)
+        key = (commitment.kind.value, span, commitment.test_name, commitment.drug_name, commitment.action, commitment.due_text)  # ambiguity_note is free text; not part of identity
         if key in seen:
             warnings.append(DUPLICATE_WARNING)
             continue
@@ -118,7 +138,9 @@ def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> Extracti
                 source_span=c.source_span,
                 test_name=c.test_name,
                 drug_name=c.drug_name,
+                action=c.action if c.kind is CommitmentKind.MEDICATION else None,
                 due_text=c.due_text,
+                ambiguity_note=_bounded_note(c.ambiguity_note),
             )
         )
 

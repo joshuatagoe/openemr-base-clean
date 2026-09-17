@@ -16,7 +16,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
-from app.contracts import CommitmentKind, StrictModel
+from app.contracts import CommitmentKind, MedicationAction, StrictModel
 
 # --------------------------------------------------------------------------- #
 # Model-facing (internal, untrusted until verified) contracts
@@ -29,7 +29,7 @@ class ModelCommitment(StrictModel):
     Field descriptions double as the JSON-schema guidance the model sees.
     """
 
-    kind: CommitmentKind = Field(description="lab_test for a test/lab to be obtained; medication for a start/stop/continue/change of a drug.")
+    kind: CommitmentKind = Field(description="lab_test for a test/lab to be obtained; medication for a start/stop/continue/change of a drug; other for any other explicit plan action (referral, imaging, follow-up visit, counseling).")
     source_span: str = Field(
         min_length=1,
         description="The exact, verbatim sentence or fragment from the plan that states this commitment. Copy it character for character; do not paraphrase.",
@@ -42,9 +42,17 @@ class ModelCommitment(StrictModel):
         default=None,
         description="For medication only: the drug name exactly as written in the span, without dose or frequency.",
     )
+    action: MedicationAction | None = Field(
+        default=None,
+        description="For medication only: the action the plan states - start, stop, increase, decrease, switch, continue - or unclear when the wording does not say.",
+    )
     due_text: str | None = Field(
         default=None,
         description="Timing language exactly as written in the span (for example 'in three months'), or null if the plan states no timing.",
+    )
+    ambiguity_note: str | None = Field(
+        default=None,
+        description="Short note when the wording is unclear (for example the plan says 'labs' without naming a test); otherwise null.",
     )
 
 

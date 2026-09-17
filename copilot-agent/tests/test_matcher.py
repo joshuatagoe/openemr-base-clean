@@ -272,15 +272,16 @@ def test_identical_duplicates_at_same_timestamp_are_not_a_conflict() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_commitment_without_test_name_returns_verification_unavailable() -> None:
-    """Boundary: 'labs' with no named test cannot be checked; that is unavailability, not absence."""
+def test_commitment_without_test_name_returns_ambiguous_match() -> None:
+    """Boundary (ARCHITECTURE.md section 9): 'labs' with no named test is ambiguous_match - not absence,
+    and not a source failure. Only the note is cited."""
     match = single(load_context(), extraction(hba1c_commitment(test_name=None)))
-    assert match.state is EvidenceState.VERIFICATION_UNAVAILABLE
+    assert match.state is EvidenceState.AMBIGUOUS_MATCH
     assert [c.record_type for c in match.citations] == [RecordType.PRIOR_NOTE]
 
 
-def test_medication_commitment_returns_verification_unavailable() -> None:
-    """Boundary: unsupported kinds are reported as unevaluated, never as 'no matching record'."""
+def test_medication_commitment_without_records_is_no_matching_record_found() -> None:
+    """Boundary: an empty (but available) medications source is a scoped absence claim citing only the note."""
     med = ExtractedCommitment(
         commitment_id="commitment-002",
         kind=CommitmentKind.MEDICATION,
@@ -288,8 +289,8 @@ def test_medication_commitment_returns_verification_unavailable() -> None:
         drug_name="metformin",
     )
     match = single(load_context(), extraction(med))
-    assert match.state is EvidenceState.VERIFICATION_UNAVAILABLE
-    assert "not supported" in match.summary
+    assert match.state is EvidenceState.NO_MATCHING_RECORD_FOUND
+    assert [c.record_type for c in match.citations] == [RecordType.PRIOR_NOTE]
     assert match.commitment.commitment_id == "commitment-002"
 
 
@@ -324,10 +325,10 @@ def test_inputs_are_not_mutated_and_output_is_stable() -> None:
 
 def test_one_match_per_commitment_in_input_order() -> None:
     """Invariant: every commitment gets exactly one match, in the order supplied."""
-    med = ExtractedCommitment(commitment_id="c-med", kind=CommitmentKind.MEDICATION, source_span="Continue metformin.")
+    med = ExtractedCommitment(commitment_id="c-med", kind=CommitmentKind.MEDICATION, source_span="Continue metformin.", drug_name="metformin")
     matches = match_evidence(load_context(), extraction(med, hba1c_commitment()))
     assert [m.commitment.commitment_id for m in matches] == ["c-med", "commitment-001"]
-    assert [m.state for m in matches] == [EvidenceState.VERIFICATION_UNAVAILABLE, EvidenceState.MATCHING_RESULT_FOUND]
+    assert [m.state for m in matches] == [EvidenceState.NO_MATCHING_RECORD_FOUND, EvidenceState.MATCHING_RESULT_FOUND]
 
 
 # --------------------------------------------------------------------------- #

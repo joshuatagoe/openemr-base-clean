@@ -18,7 +18,7 @@ import httpx2
 import pytest
 from pydantic import ValidationError
 
-from app.contracts import BriefingRequest, CommitmentKind, ExtractionOutput
+from app.contracts import BriefingRequest, CommitmentKind, ExtractionOutput, MedicationAction
 from app.extractor import (
     DROPPED_DUE_TEXT_WARNING,
     DUPLICATE_WARNING,
@@ -152,14 +152,30 @@ def test_medication_commitment_is_representable_without_evidence_claims() -> Non
     assert med.source_span == "Continue metformin."
     assert med.drug_name == "metformin"
     assert med.due_text is None
-    assert set(med.model_dump()) == {"commitment_id", "kind", "source_span", "test_name", "drug_name", "due_text"}
+    assert set(med.model_dump()) == {"commitment_id", "kind", "source_span", "test_name", "drug_name", "action", "due_text", "ambiguity_note"}
+    assert med.action is MedicationAction.UNCLEAR  # scripted proposal stated no action
 
 
-def test_lab_commitment_without_test_name_is_rejected() -> None:
-    """Boundary: a lab commitment must name a test; unnamed 'labs' cannot be matched and is not passed through."""
-    out = ground_extraction(PLAN, model_output(hba1c(test_name=None)))
-    assert out.commitments == []
-    assert out.warnings == [REJECTED_LAB_NAME_WARNING]
+def test_lab_commitment_without_test_name_is_kept_for_the_matcher_to_flag() -> None:
+    """Boundary (ARCHITECTURE.md section 8): 'labs' without a test name is kept with test_name None and its
+    ambiguity note; the matcher - not the extractor - turns it into ambiguous_match. Nothing is invented."""
+    out = ground_extraction(PLAN, model_output(hba1c(test_name=None, ambiguity_note="  test not   specified ")))
+    assert len(out.commitments) == 1
+    assert out.commitments[0].test_name is None
+    assert out.commitments[0].ambiguity_note == "test not specified"
+    assert out.warnings == []
+
+
+def test_other_kind_is_kept_with_names_dropped() -> None:
+    """Boundary: kind 'other' is carried for display only; any test/drug name the model attached is dropped."""
+    out = ground_extraction(
+        "Refer to cardiology. Repeat HbA1c in three months.",
+        model_output(hba1c(kind=CommitmentKind.OTHER, source_span="Refer to cardiology.", test_name="cardiology", due_text=None)),
+    )
+    assert len(out.commitments) == 1
+    assert out.commitments[0].kind is CommitmentKind.OTHER
+    assert out.commitments[0].test_name is None and out.commitments[0].drug_name is None
+    assert out.warnings == []
 
 
 def test_lab_test_name_not_in_span_is_rejected() -> None:
