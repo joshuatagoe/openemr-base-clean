@@ -1,0 +1,28 @@
+{
+  "context": {
+    "schema_version": "1.0",
+    "correlation_id": "43626072-05ba-4f94-909e-6e3b47e5c7ed",
+    "patient_uuid": "a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7",
+    "prior_note": {
+      "note_id": "form_soap:1",
+      "encounter_id": "form_encounter:13",
+      "note_date": "2026-06-10T14:30:00Z",
+      "plan_text": "Continue metformin. Repeat HbA1c in three months."
+    },
+    "data_quality": {
+      "sources_unavailable": [],
+      "duplicates_collapsed": 0
+    },
+    "lab_results": [
+      {
+        "result_id": "procedure_result:1",
+        "test_name": "Hemoglobin A1c",
+        "value": "8.9",
+        "units": "%",
+        "abnormal_flag": "high",
+        "status": "final",
+        "observed_at": "2026-09-12T09:15:00Z"
+      }
+    ]
+  }
+}
