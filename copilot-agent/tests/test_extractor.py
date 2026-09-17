@@ -464,14 +464,35 @@ def test_inputs_are_not_mutated() -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     os.environ.get("RUN_ANTHROPIC_INTEGRATION_TEST") != "1" or not os.environ.get("ANTHROPIC_API_KEY"),
     reason="live Anthropic call; set RUN_ANTHROPIC_INTEGRATION_TEST=1 and ANTHROPIC_API_KEY to run",
 )
-async def test_live_anthropic_extracts_hba1c_commitment() -> None:
-    """Single live request on synthetic text only; strict timeout; no retries."""
+async def test_live_anthropic_extracts_hba1c_commitment(capsys: pytest.CaptureFixture[str]) -> None:
+    """Single live request on synthetic text only; strict timeout; no retries.
+
+    Calls the provider once and grounds the result locally (the same steps
+    ``CommitmentExtractor`` performs, minus its retry loop) so usage metadata
+    can be reported. Prints only non-secret, synthetic-data facts.
+    """
     settings = ModelSettings(_env_file=None, anthropic_timeout_seconds=30.0)
-    result = await CommitmentExtractor(AnthropicProvider(settings), max_attempts=1).extract(PLAN)
+    provider = AnthropicProvider(settings)
+    live = await provider.extract_commitments(PLAN)
+    result = ground_extraction(PLAN, live.output)
+
+    with capsys.disabled():
+        print("\nLIVE RESULT")
+        print(f"  model={live.usage.model} latency_ms={live.usage.latency_ms} "
+              f"input_tokens={live.usage.input_tokens} output_tokens={live.usage.output_tokens}")
+        print(f"  proposed={len(live.output.commitments)} grounded={len(result.commitments)} "
+              f"model_notes_withheld={len(live.output.warnings)}")
+        for c in result.commitments:
+            print(f"  {c.commitment_id} kind={c.kind.value} span={c.source_span!r} "
+                  f"test_name={c.test_name!r} drug_name={c.drug_name!r} due_text={c.due_text!r}")
+        for w in result.warnings:
+            print(f"  warning: {w}")
+
     labs = [c for c in result.commitments if c.kind is CommitmentKind.LAB_TEST]
     assert len(labs) == 1
     assert labs[0].source_span == "Repeat HbA1c in three months."

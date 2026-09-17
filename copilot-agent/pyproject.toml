@@ -23,3 +23,4 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["live: opt-in test that makes one real provider request with synthetic data"]

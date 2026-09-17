@@ -29,9 +29,13 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture(autouse=True)
-def _no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def _no_api_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     # An empty value overrides any local .env entry (env vars take precedence
     # over env_file in pydantic-settings) and reads as "not configured".
+    # Tests marked ``live`` (explicitly opted-in integration checks) keep the
+    # environment as supplied.
+    if "live" in request.node.keywords:
+        return
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
 
 
