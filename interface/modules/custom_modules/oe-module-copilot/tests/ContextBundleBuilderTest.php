@@ -67,7 +67,7 @@ final class ContextBundleBuilderTest extends TestCase
     public function testTracerBulletBundleShape(): void
     {
         // Tracer bullet: fixture-equivalent bundle with stable ids, UTC dates, mapped status and flag.
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [$this->labRow()]);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [$this->labRow()], null, [], []);
 
         self::assertSame('1.0', $bundle['schema_version']);
         self::assertSame(self::CID, $bundle['correlation_id']);
@@ -81,19 +81,101 @@ final class ContextBundleBuilderTest extends TestCase
         self::assertSame(['sources_unavailable' => [], 'duplicates_collapsed' => 0], $bundle['data_quality']);
         self::assertSame([[
             'result_id' => 'procedure_result:9001',
+            'order_id' => null,
             'test_name' => 'Hemoglobin A1c',
+            'code' => null,
             'value' => '8.9',
             'units' => '%',
             'abnormal_flag' => 'high',
+            'range' => null,
             'status' => 'final',
             'observed_at' => '2026-09-12T09:15:00Z',
         ]], $bundle['lab_results']);
+        self::assertSame([], $bundle['lab_orders']);
+    }
+
+    public function testOrdersAndResultLinksAreMapped(): void
+    {
+        // Orders map one row per ordered test; results keep their order link, code and range verbatim.
+        $lab = $this->labRow() + ['order_id' => 12, 'code' => '4548-4', 'range' => '4.0-5.6'];
+        $orders = [
+            ['order_id' => 12, 'seq' => 1, 'test_name' => 'Hemoglobin A1c', 'code' => '4548-4', 'order_status' => 'complete', 'ordered_at' => '2026-09-10 08:00:00'],
+            ['order_id' => 13, 'seq' => 2, 'test_name' => 'Lipid Panel', 'code' => '', 'order_status' => 'weird', 'ordered_at' => '2026-09-14 08:00:00'],
+            ['order_id' => 14, 'seq' => 1, 'test_name' => '', 'code' => '', 'order_status' => 'pending', 'ordered_at' => '2026-09-14 08:00:00'],
+            ['order_id' => 15, 'seq' => 1, 'test_name' => 'TSH', 'code' => '', 'order_status' => 'pending', 'ordered_at' => '0000-00-00 00:00:00'],
+        ];
+        $builder = $this->builder();
+        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [$lab], null, $orders, []);
+        self::assertSame('procedure_order:12', $bundle['lab_results'][0]['order_id']);
+        self::assertSame('4548-4', $bundle['lab_results'][0]['code']);
+        self::assertSame('4.0-5.6', $bundle['lab_results'][0]['range']);
+        self::assertSame([
+            ['order_id' => 'procedure_order:12', 'sequence' => 1, 'test_name' => 'Hemoglobin A1c', 'code' => '4548-4', 'status' => 'complete', 'ordered_at' => '2026-09-10T13:00:00Z'],
+            ['order_id' => 'procedure_order:13', 'sequence' => 2, 'test_name' => 'Lipid Panel', 'code' => null, 'status' => 'unknown', 'ordered_at' => '2026-09-14T13:00:00Z'],
+        ], $bundle['lab_orders']);
+        self::assertSame(2, $builder->getOmittedCounts()['orders_omitted']);
+        self::assertSame([], $bundle['data_quality']['sources_unavailable']);
+    }
+
+    public function testMedicationStatusIsDerivedPerDataQualityRules(): void
+    {
+        // AUDIT DATA-003: active iff flag=1 AND (end empty OR end > now); disagreement -> indeterminate (null).
+        $now = '2026-09-17 10:00:00';
+        $rows = [
+            ['source_table' => 'prescriptions', 'id' => 31, 'drug' => 'Metformin 500 mg', 'rxnorm' => '861007', 'dosage' => '1 tab BID', 'active' => 1, 'begdate' => '2026-01-15', 'enddate' => '', 'date_added' => '2026-01-15 09:00:00', 'date_modified' => '2026-06-12 08:00:00'],
+            ['source_table' => 'lists', 'id' => 9, 'drug' => 'Lisinopril', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '2025-02-01 00:00:00', 'enddate' => '2026-03-01 00:00:00', 'date_added' => '2025-02-01 00:00:00', 'date_modified' => ''],
+            ['source_table' => 'prescriptions', 'id' => 40, 'drug' => 'Atorvastatin 20 mg', 'rxnorm' => '', 'dosage' => '', 'active' => 0, 'begdate' => '', 'enddate' => '2027-01-01', 'date_added' => '2026-06-11 09:00:00', 'date_modified' => ''],
+            ['source_table' => 'lists', 'id' => 10, 'drug' => 'Amlodipine', 'rxnorm' => '', 'dosage' => '', 'active' => 0, 'begdate' => '2024-01-01 00:00:00', 'enddate' => '2024-06-01 00:00:00', 'date_added' => '2024-01-01 00:00:00', 'date_modified' => ''],
+            ['source_table' => 'prescriptions', 'id' => 41, 'drug' => '', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '', 'enddate' => '', 'date_added' => '2026-01-01 00:00:00', 'date_modified' => ''],
+            ['source_table' => 'other', 'id' => 42, 'drug' => 'X', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '', 'enddate' => '', 'date_added' => '2026-01-01 00:00:00', 'date_modified' => ''],
+        ];
+        $builder = $this->builder();
+        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, $now);
+        $meds = $bundle['medications'];
+        self::assertCount(4, $meds);
+        self::assertSame(2, $builder->getOmittedCounts()['medications_omitted']);
+
+        self::assertSame('prescriptions:31', $meds[0]['record_id']);
+        self::assertTrue($meds[0]['active']);
+        self::assertSame('861007', $meds[0]['rxnorm_code']);
+        self::assertSame('1 tab BID', $meds[0]['dosage_text']);
+        self::assertSame('2026-01-15T06:00:00Z', $meds[0]['started_at']); // bare DATE -> local midnight (CST) -> UTC
+        self::assertSame('2026-06-12T13:00:00Z', $meds[0]['modified_at']);
+        self::assertSame('2026-06-12T13:00:00Z', $meds[0]['timestamp']);
+        self::assertSame('date_modified', $meds[0]['timestamp_field']);
+        self::assertSame('active,end_date', $meds[0]['status_field']);
+        self::assertSame('active=1,end_date=null', $meds[0]['status_value']);
+
+        self::assertSame('lists:9', $meds[1]['record_id']);
+        self::assertNull($meds[1]['active']); // flag active but ended in the past -> indeterminate
+        self::assertSame('activity,enddate', $meds[1]['status_field']);
+
+        self::assertSame('prescriptions:40', $meds[2]['record_id']);
+        self::assertNull($meds[2]['active']); // flag inactive but end date in the future -> indeterminate
+
+        self::assertSame('lists:10', $meds[3]['record_id']);
+        self::assertFalse($meds[3]['active']);
+        self::assertSame([], $bundle['data_quality']['sources_unavailable']);
+    }
+
+    public function testUnavailableMedicationsSourceIsDeclaredNotEmptied(): void
+    {
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], null);
+        self::assertSame([], $bundle['medications']);
+        self::assertSame(['medications'], $bundle['data_quality']['sources_unavailable']);
+    }
+
+    public function testUnavailableOrdersSourceIsDeclaredNotEmptied(): void
+    {
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, null, []);
+        self::assertSame([], $bundle['lab_orders']);
+        self::assertSame(['lab_orders'], $bundle['data_quality']['sources_unavailable']);
     }
 
     public function testNoResultsIsAnEmptyAvailableList(): void
     {
         // Boundary: checked and empty -> [] with no unavailable sources (the agent reports no_matching_record_found).
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), []);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], []);
         self::assertSame([], $bundle['lab_results']);
         self::assertSame([], $bundle['data_quality']['sources_unavailable']);
     }
@@ -101,7 +183,7 @@ final class ContextBundleBuilderTest extends TestCase
     public function testUnavailableLabSourceIsDeclaredNotEmptied(): void
     {
         // Guards: a failed lab read is declared so the agent returns verification_unavailable, never "nothing found".
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), null);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), null, null, [], []);
         self::assertSame([], $bundle['lab_results']);
         self::assertSame(['lab_results'], $bundle['data_quality']['sources_unavailable']);
     }
@@ -149,6 +231,8 @@ final class ContextBundleBuilderTest extends TestCase
             'unmapped_status' => 2,
             'unmapped_abnormal_flag' => 1,
             'bad_timestamp' => 1,
+            'orders_omitted' => 0,
+            'medications_omitted' => 0,
         ], $builder->getOmittedCounts());
     }
 

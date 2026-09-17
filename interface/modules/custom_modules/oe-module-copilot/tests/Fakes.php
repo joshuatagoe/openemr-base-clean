@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace OpenEMR\Modules\Copilot\Tests;
 
+use OpenEMR\Modules\Copilot\Agent\AgentClientInterface;
+use OpenEMR\Modules\Copilot\Agent\AgentUnavailableException;
+use OpenEMR\Modules\Copilot\Agent\BundleAccepted;
 use OpenEMR\Modules\Copilot\Authorization\AclCheckerInterface;
 use OpenEMR\Modules\Copilot\Authorization\RelationshipRepositoryInterface;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
@@ -13,7 +16,7 @@ use Stringable;
 
 /**
  * @phpstan-type NoteRow array{form_soap_id:int, encounter:int, note_date:string, plan:string}
- * @phpstan-type LabRow array{result_id:int, test_name:string, value:string, units:string, abnormal:string, result_status:string, observed_at:string}
+ * @phpstan-type LabRow array{result_id:int, order_id:int, test_name:string, code:string, value:string, units:string, range:string, abnormal:string, result_status:string, observed_at:string}
  */
 final class FakeAcl implements AclCheckerInterface
 {
@@ -62,6 +65,7 @@ final class FakeReader implements ClinicalReaderInterface
      * @param array<int,list<NoteRow>> $notes  any order; selection follows the reader contract
      * @param array<int,list<LabRow>|SourceUnavailableException> $labs
      * @param array<string,string> $encounterDates keyed "pid:encounter" -> local datetime
+     * @param array<int,string> $userUuids keyed by user id
      */
     public function __construct(
         private readonly array $patients = [],
@@ -69,6 +73,7 @@ final class FakeReader implements ClinicalReaderInterface
         private readonly array $labs = [],
         private readonly ?SourceUnavailableException $notesFailure = null,
         private readonly array $encounterDates = [],
+        private readonly array $userUuids = [],
     ) {
     }
 
@@ -76,6 +81,11 @@ final class FakeReader implements ClinicalReaderInterface
     {
         $this->requestedPids[] = $pid;
         return $this->patients[$pid] ?? null;
+    }
+
+    public function findUserUuid(int $userId): ?string
+    {
+        return $this->userUuids[$userId] ?? null;
     }
 
     public function findEncounterDate(int $pid, int $encounter): ?string
@@ -104,6 +114,76 @@ final class FakeReader implements ClinicalReaderInterface
             throw $labs;
         }
         return $labs;
+    }
+
+    /** @var list<array{order_id:int, seq:int, test_name:string, code:string, order_status:string, ordered_at:string}>|SourceUnavailableException */
+    public array|SourceUnavailableException $orders = [];
+
+    /** @var array{fname:string, lname:string, dob:string, sex:string, pubpid:string}|SourceUnavailableException|null */
+    public array|SourceUnavailableException|null $identity = ['fname' => 'Evelyn', 'lname' => 'Demo', 'dob' => '1958-04-12', 'sex' => 'Female', 'pubpid' => 'P-7'];
+
+    /** @var array{text:string, date:string, source:string}|SourceUnavailableException|null */
+    public array|SourceUnavailableException|null $appointment = null;
+
+    /** @var array{text:string, date:string, source:string}|SourceUnavailableException|null */
+    public array|SourceUnavailableException|null $encounterReason = null;
+
+    /** @var list<array{id:int, title:string, diagnosis:string, reaction:string, severity:string, begdate:string, enddate:string, activity:int}>|SourceUnavailableException */
+    public array|SourceUnavailableException $allergies = [];
+
+    /** @var list<string> local dates passed to findAppointmentReason */
+    public array $appointmentDatesSeen = [];
+
+    /** @var list<array{source_table:string, id:int, drug:string, rxnorm:string, dosage:string, active:int, begdate:string, enddate:string, date_added:string, date_modified:string}>|SourceUnavailableException */
+    public array|SourceUnavailableException $medications = [];
+
+    public function listMedications(int $pid, int $limit): array
+    {
+        if ($this->medications instanceof SourceUnavailableException) {
+            throw $this->medications;
+        }
+        return $this->medications;
+    }
+
+    public function listLabOrders(int $pid, string $sinceLocal, int $limit): array
+    {
+        if ($this->orders instanceof SourceUnavailableException) {
+            throw $this->orders;
+        }
+        return $this->orders;
+    }
+
+    public function findIdentity(int $pid): ?array
+    {
+        if ($this->identity instanceof SourceUnavailableException) {
+            throw $this->identity;
+        }
+        return $this->identity;
+    }
+
+    public function findAppointmentReason(int $pid, string $localDate): ?array
+    {
+        $this->appointmentDatesSeen[] = $localDate;
+        if ($this->appointment instanceof SourceUnavailableException) {
+            throw $this->appointment;
+        }
+        return $this->appointment;
+    }
+
+    public function findEncounterReason(int $pid, int $encounter): ?array
+    {
+        if ($this->encounterReason instanceof SourceUnavailableException) {
+            throw $this->encounterReason;
+        }
+        return $this->encounterReason;
+    }
+
+    public function listAllergies(int $pid): array
+    {
+        if ($this->allergies instanceof SourceUnavailableException) {
+            throw $this->allergies;
+        }
+        return $this->allergies;
     }
 }
 
@@ -136,5 +216,28 @@ final class AuditCapture
     public function __invoke(string $event, string $user, bool $success, string $comment, int $pid): void
     {
         $this->events[] = ['event' => $event, 'user' => $user, 'success' => $success, 'comment' => $comment, 'pid' => $pid];
+    }
+}
+
+final class FakeAgentClient implements AgentClientInterface
+{
+    /** @var list<array{bundle:array<string,mixed>, cid:string}> */
+    public array $posts = [];
+
+    public function __construct(
+        private readonly ?AgentUnavailableException $failure = null,
+        private readonly string $bundleId = 'e6b2abe5-8664-4ebb-bf81-e3d5cca35df4',
+    ) {
+    }
+
+    public function postBundle(array $bundle, string $correlationId): BundleAccepted
+    {
+        $this->posts[] = ['bundle' => $bundle, 'cid' => $correlationId];
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
+        $puuid = $bundle['patient_uuid'];
+        assert(is_string($puuid));
+        return new BundleAccepted($this->bundleId, $correlationId, $puuid, '2026-09-17T15:15:00Z');
     }
 }

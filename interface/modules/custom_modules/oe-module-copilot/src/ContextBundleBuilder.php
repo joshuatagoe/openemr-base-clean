@@ -9,8 +9,8 @@
  *
  * - The baseline note is chosen by the reader (latest non-blank SOAP plan
  *   before the as-of timestamp); this class only shapes it.
- * - Only lab results observed after the baseline note are included; the
- *   agent's matcher re-applies the strict window.
+ * - Only lab results and orders dated after the baseline note are included;
+ *   the agent's matcher re-applies the strict window.
  * - Empty units become null; result status and abnormal flag are mapped to
  *   the contract's closed vocabularies (OpenEMR's `vhigh`/`vlow` collapse to
  *   `high`/`low`); rows the contract cannot represent are omitted and counted.
@@ -37,6 +37,17 @@ final class ContextBundleBuilder
 {
     public const SCHEMA_VERSION = '1.0';
     public const SOURCE_LAB_RESULTS = 'lab_results';
+    public const SOURCE_LAB_ORDERS = 'lab_orders';
+    public const SOURCE_MEDICATIONS = 'medications';
+
+    /** OpenEMR `ord_status` option ids -> contract LabOrderStatus (anything else -> unknown). */
+    private const ORDER_STATUS_MAP = [
+        'pending' => 'pending',
+        'routed' => 'routed',
+        'complete' => 'complete',
+        'canceled' => 'canceled',
+        'cancelled' => 'canceled',
+    ];
 
     /** OpenEMR `proc_res_status` option ids -> contract LabResultStatus. */
     private const STATUS_MAP = [
@@ -61,10 +72,15 @@ final class ContextBundleBuilder
     ];
 
     /** @var array<string,int> counts of rows the contract could not carry (reported, never logged with content) */
-    private array $omitted = ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0];
+    private array $omitted = ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0, 'orders_omitted' => 0, 'medications_omitted' => 0];
 
     public function __construct(private readonly DateTimeZone $localZone)
     {
+    }
+
+    public function getLocalZone(): DateTimeZone
+    {
+        return $this->localZone;
     }
 
     /**
@@ -72,19 +88,26 @@ final class ContextBundleBuilder
      *
      * @param array{pid:int, uuid:string} $patient
      * @param array{form_soap_id:int, encounter:int, note_date:string, plan:string} $note
-     * @param list<array<string,mixed>>|null $labResults
+     * @param list<array<string,mixed>>|null $labResults  null when the lab results source could not be read
+     * @param string|null $userUuid  the authorized user's uuid; omitted from the bundle when unknown
+     * @param list<array<string,mixed>>|null $labOrders  null when the orders source could not be read
+     * @param list<array<string,mixed>>|null $medications  null when the medications source could not be read
+     * @param string|null $nowLocal  local 'Y-m-d H:i:s' used to derive medication status (AUDIT DATA-003)
      * @return array{
-     *   schema_version:string, correlation_id:string, patient_uuid:string,
+     *   schema_version:string, correlation_id:string, patient_uuid:string, user_uuid?:string,
      *   prior_note:array{note_id:string, encounter_id:string, note_date:string, plan_text:string},
      *   data_quality:array{sources_unavailable:list<string>, duplicates_collapsed:int},
-     *   lab_results:list<array<string,mixed>>
+     *   lab_results:list<array<string,mixed>>,
+     *   lab_orders:list<array<string,mixed>>,
+     *   medications:list<array<string,mixed>>
      * }
      */
-    public function build(string $correlationId, array $patient, array $note, ?array $labResults): array
+    public function build(string $correlationId, array $patient, array $note, ?array $labResults, ?string $userUuid = null, ?array $labOrders = null, ?array $medications = null, ?string $nowLocal = null): array
     {
         $noteDateUtc = UtcDate::toIso(Scalar::str($note['note_date']), $this->localZone);
 
         $results = [];
+        $orders = [];
         $sourcesUnavailable = [];
         if ($labResults === null) {
             $sourcesUnavailable[] = self::SOURCE_LAB_RESULTS;
@@ -96,8 +119,30 @@ final class ContextBundleBuilder
                 }
             }
         }
+        if ($labOrders === null) {
+            $sourcesUnavailable[] = self::SOURCE_LAB_ORDERS;
+        } else {
+            foreach ($labOrders as $row) {
+                $mapped = $this->mapOrder($row);
+                if ($mapped !== null) {
+                    $orders[] = $mapped;
+                }
+            }
+        }
+        $meds = [];
+        if ($medications === null) {
+            $sourcesUnavailable[] = self::SOURCE_MEDICATIONS;
+        } else {
+            $nowUtc = $nowLocal === null ? gmdate(UtcDate::FORMAT) : UtcDate::toIso($nowLocal, $this->localZone);
+            foreach ($medications as $row) {
+                $mapped = $this->mapMedication($row, $nowUtc);
+                if ($mapped !== null) {
+                    $meds[] = $mapped;
+                }
+            }
+        }
 
-        return [
+        $bundle = [
             'schema_version' => self::SCHEMA_VERSION,
             'correlation_id' => $correlationId,
             'patient_uuid' => $patient['uuid'],
@@ -112,7 +157,13 @@ final class ContextBundleBuilder
                 'duplicates_collapsed' => 0,
             ],
             'lab_results' => $results,
+            'lab_orders' => $orders,
+            'medications' => $meds,
         ];
+        if ($userUuid !== null) {
+            $bundle['user_uuid'] = $userUuid;
+        }
+        return $bundle;
     }
 
     /** @return array<string,int> */
@@ -159,15 +210,114 @@ final class ContextBundleBuilder
         }
 
         $units = trim(Scalar::str($row['units'] ?? null));
+        $code = trim(Scalar::str($row['code'] ?? null));
+        $range = trim(Scalar::str($row['range'] ?? null));
+        $orderId = Scalar::int($row['order_id'] ?? null);
 
         return [
             'result_id' => 'procedure_result:' . Scalar::int($row['result_id'] ?? null),
+            'order_id' => $orderId > 0 ? 'procedure_order:' . $orderId : null,
             'test_name' => $testName,
+            'code' => $code === '' ? null : $code,
             'value' => $value,
             'units' => $units === '' ? null : $units,
             'abnormal_flag' => $abnormal,
+            'range' => $range === '' ? null : $range,
             'status' => $status,
             'observed_at' => $observedAt,
+        ];
+    }
+
+    /**
+     * Map one medication row from either table; derive status per AUDIT DATA-003:
+     * active iff flag = 1 AND (end empty OR end > now); indeterminate (null) when the
+     * flag says active but the end date has passed, or the flag says inactive but an
+     * end date lies in the future.
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>|null
+     */
+    private function mapMedication(array $row, string $nowUtc): ?array
+    {
+        $source = Scalar::str($row['source_table'] ?? null);
+        $id = Scalar::int($row['id'] ?? null);
+        $drug = trim(Scalar::str($row['drug'] ?? null));
+        if (!in_array($source, ['prescriptions', 'lists'], true) || $id <= 0 || $drug === '') {
+            $this->omitted['medications_omitted']++;
+            return null;
+        }
+        $started = $this->optionalIso(Scalar::str($row['begdate'] ?? null)) ?? $this->optionalIso(Scalar::str($row['date_added'] ?? null));
+        $ended = $this->optionalIso(Scalar::str($row['enddate'] ?? null));
+        $modified = $this->optionalIso(Scalar::str($row['date_modified'] ?? null));
+        $added = $this->optionalIso(Scalar::str($row['date_added'] ?? null));
+        $timestamp = $modified !== null && $added !== null ? max($modified, $added) : ($modified ?? $added ?? $started);
+        $timestampField = $modified !== null && ($added === null || $modified >= $added) ? 'date_modified' : ($added !== null ? 'date_added' : 'begdate');
+        if ($timestamp === null) {
+            $this->omitted['medications_omitted']++;
+            return null;
+        }
+        $flag = Scalar::int($row['active'] ?? null) === 1;
+        $endPassed = $ended !== null && $ended <= $nowUtc;
+        $active = $flag && !$endPassed ? true : (!$flag && ($ended === null || $endPassed) ? false : null);
+        $flagField = $source === 'prescriptions' ? 'active' : 'activity';
+        $endField = $source === 'prescriptions' ? 'end_date' : 'enddate';
+        $rxnorm = trim(Scalar::str($row['rxnorm'] ?? null));
+        $dosage = trim(Scalar::str($row['dosage'] ?? null));
+        return [
+            'record_id' => $source . ':' . $id,
+            'source_table' => $source,
+            'drug_name' => $drug,
+            'rxnorm_code' => $rxnorm === '' ? null : $rxnorm,
+            'dosage_text' => $dosage === '' ? null : $dosage,
+            'active' => $active,
+            'status_field' => $flagField . ',' . $endField,
+            'status_value' => $flagField . '=' . ($flag ? '1' : '0') . ',' . $endField . '=' . ($ended ?? 'null'),
+            'started_at' => $started,
+            'ended_at' => $ended,
+            'modified_at' => $modified,
+            'timestamp' => $timestamp,
+            'timestamp_field' => $timestampField,
+        ];
+    }
+
+    /** UTC ISO for a local date string, or null when empty/zero/unparseable. */
+    private function optionalIso(string $local): ?string
+    {
+        try {
+            return UtcDate::toIso($local, $this->localZone);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>|null
+     */
+    private function mapOrder(array $row): ?array
+    {
+        $testName = trim(Scalar::str($row['test_name'] ?? null));
+        $orderId = Scalar::int($row['order_id'] ?? null);
+        $seq = Scalar::int($row['seq'] ?? null);
+        if ($testName === '' || $orderId <= 0 || $seq <= 0) {
+            $this->omitted['orders_omitted']++;
+            return null;
+        }
+        try {
+            $orderedAt = UtcDate::toIso(Scalar::str($row['ordered_at'] ?? null), $this->localZone);
+        } catch (InvalidArgumentException) {
+            $this->omitted['orders_omitted']++;
+            return null;
+        }
+        $code = trim(Scalar::str($row['code'] ?? null));
+        $status = self::ORDER_STATUS_MAP[strtolower(trim(Scalar::str($row['order_status'] ?? null)))] ?? 'unknown';
+        return [
+            'order_id' => 'procedure_order:' . $orderId,
+            'sequence' => $seq,
+            'test_name' => $testName,
+            'code' => $code === '' ? null : $code,
+            'status' => $status,
+            'ordered_at' => $orderedAt,
         ];
     }
 }

@@ -4,7 +4,7 @@
  * Server-side authorization for a copilot context read.
  *
  * Fail-closed, in this order: authenticated user -> a patient selected in the
- * session -> the three phpGACL sections the bundle draws on -> a care
+ * session -> the phpGACL sections the bundle and sections draw on -> a care
  * relationship between user and patient (or, when the module global
  * `copilot_admin_relationship_override` is on, admin/super with an audited
  * "admin_override" basis). The patient id is never accepted from the client.
@@ -30,8 +30,11 @@ final class CopilotAuthorizer
     /** ACL sections the bundle's sources require (ARCHITECTURE.md section 6). */
     public const REQUIRED_ACLS = [
         ['patients', 'demo'],
+        ['encounters', 'auth_a'],
         ['encounters', 'notes'],
+        ['patients', 'med'],
         ['patients', 'lab'],
+        ['patients', 'appt'],
     ];
 
     public function __construct(

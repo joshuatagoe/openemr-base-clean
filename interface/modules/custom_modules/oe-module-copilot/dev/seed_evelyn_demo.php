@@ -11,6 +11,10 @@
  *     "Continue metformin. Repeat HbA1c in three months."
  *   - one lab order/report/result: final Hemoglobin A1c 8.9 % flagged high,
  *     observed 2026-09-12 09:15 local
+ *   - Phase 1 additions (added on any run if missing): an uncoded penicillin
+ *     allergy, an appointment today with a scheduled reason, and a pending
+ *     lipid panel order dated 2026-09-14 (no result)
+ *   - Phase 2 addition: an active metformin prescription (started 2026-01-15)
  *
  * Safety: CLI only; requires --confirm-local; refuses when
  * OPENEMR__ENVIRONMENT=prod or when the database host is not a local/compose
@@ -155,6 +159,61 @@ if ($existing !== []) {
     );
 
     echo "Seeded Evelyn Demo: pid {$pid}, encounter {$encounter}, form_soap {$soapId}, procedure_report {$reportId}.\n";
+}
+
+// Phase 1 additions, idempotent by natural key.
+if ($pid > 0) {
+    $allergy = QueryUtils::fetchRecords("SELECT id FROM lists WHERE pid = ? AND type = 'allergy' AND title = ? LIMIT 1", [$pid, 'Penicillin']);
+    if ($allergy === []) {
+        QueryUtils::sqlInsert(
+            "INSERT INTO lists SET uuid = ?, type = 'allergy', title = ?, begdate = ?, diagnosis = '', activity = 1, pid = ?, reaction = ?, severity_al = ?, `date` = NOW(), user = 'admin', groupname = 'Default'",
+            [UuidRegistry::getRegistryForTable('lists')->createUuid(), 'Penicillin', '2019-03-01 00:00:00', $pid, 'rash', 'moderate']
+        );
+        echo "Added uncoded penicillin allergy.\n";
+    }
+
+    $appointment = QueryUtils::fetchRecords(
+        "SELECT pc_eid FROM openemr_postcalendar_events WHERE pc_pid = ? AND pc_eventDate = CURDATE() LIMIT 1",
+        [(string) $pid]
+    );
+    if ($appointment === []) {
+        QueryUtils::sqlInsert(
+            "INSERT INTO openemr_postcalendar_events SET uuid = ?, pc_catid = 5, pc_multiple = 0, pc_aid = ?, pc_pid = ?, pc_title = 'Office Visit',
+                pc_hometext = ?, pc_eventDate = CURDATE(), pc_duration = 900, pc_startTime = '10:30:00', pc_endTime = '10:45:00',
+                pc_apptstatus = '-', pc_eventstatus = 1, pc_sharing = 0, pc_facility = 3, pc_billing_location = 3, pc_informant = 'admin'",
+            [UuidRegistry::getRegistryForTable('openemr_postcalendar_events')->createUuid(), (string) ADMIN_USER_ID, (string) $pid, 'Diabetes f/u; review A1c and lipids']
+        );
+        echo "Added today's appointment with a scheduled reason.\n";
+    }
+
+    $metformin = QueryUtils::fetchRecords("SELECT id FROM prescriptions WHERE patient_id = ? AND drug LIKE 'Metformin%' LIMIT 1", [$pid]);
+    if ($metformin === []) {
+        QueryUtils::sqlInsert(
+            "INSERT INTO prescriptions SET uuid = ?, patient_id = ?, date_added = ?, date_modified = ?, provider_id = ?, start_date = ?, drug = ?,
+                rxnorm_drugcode = ?, dosage = ?, quantity = '60', refills = 3, active = 1, txDate = ?, medication = 0",
+            [UuidRegistry::getRegistryForTable('prescriptions')->createUuid(), $pid, '2026-01-15 09:00:00', '2026-01-15 09:00:00', ADMIN_USER_ID, '2026-01-15', 'Metformin HCl 500 mg', '861007', '1 tab BID', '2026-01-15']
+        );
+        echo "Added active metformin prescription.\n";
+    }
+
+    $pending = QueryUtils::fetchRecords(
+        "SELECT po.procedure_order_id FROM procedure_order po JOIN procedure_order_code oc ON oc.procedure_order_id = po.procedure_order_id
+          WHERE po.patient_id = ? AND oc.procedure_name = 'Lipid Panel' LIMIT 1",
+        [$pid]
+    );
+    if ($pending === []) {
+        $lipidOrderId = QueryUtils::sqlInsert(
+            "INSERT INTO procedure_order SET uuid = ?, provider_id = ?, patient_id = ?, encounter_id = 0, date_ordered = ?,
+                order_status = 'pending', activity = 1, procedure_order_type = 'laboratory_test'",
+            [UuidRegistry::getRegistryForTable('procedure_order')->createUuid(), ADMIN_USER_ID, $pid, '2026-09-14 08:00:00']
+        );
+        QueryUtils::sqlInsert(
+            "INSERT INTO procedure_order_code SET procedure_order_id = ?, procedure_order_seq = 1, procedure_code = '24331-1',
+                procedure_name = 'Lipid Panel', procedure_type = 'laboratory_test'",
+            [$lipidOrderId]
+        );
+        echo "Added pending lipid panel order (no result).\n";
+    }
 }
 
 if (in_array('--enable-module', $cliArgs, true)) {
