@@ -28,3 +28,37 @@ class ModelSettings(BaseSettings):
 
     def has_api_key(self) -> bool:
         return self.anthropic_api_key is not None and bool(self.anthropic_api_key.get_secret_value().strip())
+
+
+class ServiceSettings(BaseSettings):
+    """Service configuration (prefix ``COPILOT_``; ARCHITECTURE.md sections 10 and 14).
+
+    ``COPILOT_TICKET_SECRET`` is the shared secret with the OpenEMR module. It
+    is required for ``POST /v1/bundles`` and the ticket-gated routes; when it
+    is missing those routes answer 503 ``not_configured`` and ``/ready`` reports
+    the gap. ``/health`` and the eval path never need it.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="COPILOT_", env_file=".env", extra="ignore", case_sensitive=False)
+
+    app_name: str = "copilot-agent"
+    environment: str = "development"
+    log_level: str = "info"
+
+    ticket_secret: SecretStr | None = Field(default=None, description="Shared HMAC/JWT key; never logged.")
+    ticket_min_secret_length: int = Field(default=32, ge=16)
+    bundle_ttl_seconds: int = Field(default=900, ge=60, le=3600, description="15 minutes by default.")
+    signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
+    briefing_timeout_seconds: float = Field(default=10.0, gt=0, le=60, description="Hard timeout before a degraded event.")
+    allowed_origin: str | None = Field(default=None, description="Browser origin of the OpenEMR panel (CORS). None disables CORS.")
+
+    def ticket_secret_value(self) -> str | None:
+        if self.ticket_secret is None:
+            return None
+        value = self.ticket_secret.get_secret_value().strip()
+        if len(value) < self.ticket_min_secret_length:
+            return None
+        return value
+
+    def has_ticket_secret(self) -> bool:
+        return self.ticket_secret_value() is not None

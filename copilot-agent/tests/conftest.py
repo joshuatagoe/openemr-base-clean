@@ -16,11 +16,26 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, get_provider_factory
+from app.main import app, get_provider_factory, get_settings
 from app.providers.base import ModelExtractionOutput
+from app.settings import ServiceSettings
 from tests.fakes import FakeProvider, hba1c, metformin, model_output
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "lab_followup.json"
+
+# Shared secret used by the configured test client. Long enough for the minimum-length check; not a real value.
+TEST_TICKET_SECRET = "test-only-shared-secret-0123456789abcdef"
+
+
+def configured_settings(**overrides: object) -> ServiceSettings:
+    """Service settings with the ticket secret set and no ``.env`` influence."""
+    values: dict[str, object] = {"ticket_secret": TEST_TICKET_SECRET, "briefing_timeout_seconds": 5.0}
+    values.update(overrides)
+    return ServiceSettings(_env_file=None, **values)  # type: ignore[arg-type]
+
+
+def unconfigured_settings() -> ServiceSettings:
+    return ServiceSettings(_env_file=None, ticket_secret=None)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -58,18 +73,31 @@ def fake_provider(provider_script: list[ModelExtractionOutput | Exception]) -> F
 
 
 @pytest.fixture
-def client(fake_provider: FakeProvider) -> Iterator[TestClient]:
+def service_settings() -> ServiceSettings:
+    """Settings for the configured client; tests may override this fixture."""
+    return configured_settings()
+
+
+@pytest.fixture
+def client(fake_provider: FakeProvider, service_settings: ServiceSettings) -> Iterator[TestClient]:
+    """Configured service (ticket secret set) with a scripted fake provider."""
     app.dependency_overrides[get_provider_factory] = lambda: (lambda: fake_provider)
+    app.dependency_overrides[get_settings] = lambda: service_settings
     try:
         with TestClient(app) as test_client:
             yield test_client
     finally:
         app.dependency_overrides.pop(get_provider_factory, None)
+        app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.fixture
 def unconfigured_client() -> Iterator[TestClient]:
-    """No override: the real provider factory runs with no API key configured."""
+    """No provider override and no ticket secret: the real provider factory runs with no API key configured."""
     app.dependency_overrides.pop(get_provider_factory, None)
-    with TestClient(app) as test_client:
-        yield test_client
+    app.dependency_overrides[get_settings] = unconfigured_settings
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.pop(get_settings, None)

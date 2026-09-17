@@ -180,6 +180,10 @@ class ContextBundle(StrictModel):
     )
     correlation_id: UUID = Field(description="Correlation id minted by the module for this briefing.")
     patient_uuid: UUID = Field(description="OpenEMR patient uuid; the only patient reference allowed.")
+    user_uuid: UUID | None = Field(
+        default=None,
+        description="Authorized user's uuid; when present, a briefing ticket's `sub` must match it.",
+    )
     prior_note: PriorNote
     lab_results: list[LabResult] = Field(default_factory=list)
     data_quality: DataQuality = Field(
@@ -265,6 +269,74 @@ class HealthResponse(StrictModel):
     status: Literal["ok"]
 
 
+class DependencyStatus(StrictModel):
+    """One readiness dependency (ARCHITECTURE.md section 14, "Endpoints")."""
+
+    status: Literal["ok", "degraded", "unavailable", "not_configured"]
+    detail: str | None = Field(default=None, description="Fixed, non-sensitive explanation.")
+
+
+class ReadyResponse(StrictModel):
+    status: Literal["ready", "not_ready"]
+    dependencies: dict[str, DependencyStatus]
+
+
+# --------------------------------------------------------------------------- #
+# Hand-off: bundle store and ticket-gated briefing stream
+# --------------------------------------------------------------------------- #
+
+
+class BundleAccepted(StrictModel):
+    """Response to ``POST /v1/bundles``: the id the module binds into the ticket."""
+
+    bundle_id: UUID
+    correlation_id: UUID
+    patient_uuid: UUID
+    expires_at: AwareDatetime
+
+
+class DegradedStage(StrEnum):
+    EXTRACTION = "extraction"
+    MATCHING = "matching"
+    TURN = "turn"
+
+
+class StreamEnvelope(StrictModel):
+    """Every server-sent event carries the binding identifiers (ARCH-002).
+
+    The panel discards any event whose ``patient_uuid`` or ``correlation_id``
+    differs from the ones it was rendered with.
+    """
+
+    correlation_id: UUID
+    patient_uuid: UUID
+
+
+class CommitmentEvent(StreamEnvelope):
+    """One verified commitment with its evidence state (SSE event ``commitment``)."""
+
+    match: EvidenceMatch
+
+
+class CompleteEvent(StreamEnvelope):
+    """Terminal event (SSE event ``complete``): counts and fixed warnings; never clinical text."""
+
+    commitments: int = Field(ge=0)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DegradedEvent(StreamEnvelope):
+    """Terminal event (SSE event ``degraded``): the plan check could not be produced.
+
+    ``deterministic_sections_intact`` is always true: the module's sections
+    were rendered before the agent was contacted and do not depend on it.
+    """
+
+    stage: DegradedStage
+    reason_code: str = Field(min_length=1)
+    deterministic_sections_intact: Literal[True] = True
+
+
 class ErrorDetail(StrictModel):
     """Structured, non-clinical error body for a briefing that could not be produced.
 
@@ -284,10 +356,16 @@ __all__ = [
     "AbnormalFlag",
     "BriefingRequest",
     "BriefingResponse",
+    "BundleAccepted",
     "Citation",
+    "CommitmentEvent",
     "CommitmentKind",
+    "CompleteEvent",
     "ContextBundle",
     "DataQuality",
+    "DegradedEvent",
+    "DegradedStage",
+    "DependencyStatus",
     "ErrorDetail",
     "EvidenceMatch",
     "EvidenceSource",
@@ -298,6 +376,8 @@ __all__ = [
     "LabResult",
     "LabResultStatus",
     "PriorNote",
+    "ReadyResponse",
     "RecordType",
+    "StreamEnvelope",
     "StrictModel",
 ]
