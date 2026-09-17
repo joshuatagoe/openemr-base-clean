@@ -241,17 +241,30 @@ def test_briefing_stream_delivers_verified_commitments_bound_to_the_patient(clie
     assert headers["cache-control"] == "no-store, private"
 
     names = [name for name, _ in events]
-    assert names == ["commitment", "commitment", "complete"], names
+    assert names == ["commitment", "commitment", "interval_annotation", "complete"], names
     for _, data in events:
         assert data["correlation_id"] == accepted["correlation_id"]
         assert data["patient_uuid"] == accepted["patient_uuid"]
+    annotations = events[2][1]["annotations"]
+    assert annotations == [{"record_id": "procedure_result:9001", "record_type": "lab_result", "explained_by": "c-002"}]
 
     lab = next(d["match"] for n, d in events if n == "commitment" and d["match"]["commitment"]["kind"] == "lab_test")
     assert lab["state"] == EvidenceState.MATCHING_RESULT_FOUND.value
     assert lab["commitment"]["source_span"] == "Repeat HbA1c in three months."
     assert {c["record_id"] for c in lab["citations"]} == {"form_soap:1001", "procedure_result:9001"}
     complete = events[-1][1]
-    assert complete["commitments"] == 2 and complete["warnings"] == []
+    assert complete["commitments"] == 2 and complete["warnings"] == [] and complete["rejected_count"] == 0
+
+
+@pytest.mark.parametrize("provider_script", [[model_output(metformin(), hba1c(source_span="All labs were completed."))]])
+def test_withheld_proposals_are_counted_never_rendered(client: TestClient, fixture_payload: dict) -> None:
+    """Invariant: a fabricated span is dropped; the panel learns only that one proposal was withheld."""
+    accepted = post_bundle(client, fixture_payload)
+    status, _, events = read_events(client, accepted["bundle_id"], ticket_for(accepted))
+    assert status == 200
+    complete = events[-1][1]
+    assert complete["rejected_count"] == 1 and complete["commitments"] == 1
+    assert "All labs were completed." not in json.dumps(events)
 
 
 def test_ticket_is_single_use(client: TestClient, fixture_payload: dict) -> None:

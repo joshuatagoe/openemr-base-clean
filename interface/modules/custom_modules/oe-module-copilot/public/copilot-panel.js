@@ -76,6 +76,8 @@
             this.closed = false;
             this.dropped = 0;
             this.refreshed = false;
+            this.renderedCommitments = 0;
+            this.commitmentLabels = {};
 
             const onLeave = () => this.close();
             window.addEventListener('pagehide', onLeave);
@@ -225,6 +227,7 @@
             }
             results.forEach((r) => {
                 const item = el('li', 'list-group-item py-2');
+                item.dataset.recordId = String(r.result_id || '');
                 item.appendChild(el('strong', null, String(r.test_name || 'unknown test')));
                 item.appendChild(document.createTextNode(' ' + fmtValue(r)));
                 if (r.abnormal_flag) {
@@ -243,6 +246,7 @@
                 olist.setAttribute('data-role', 'interval-orders');
                 orders.forEach((o) => {
                     const item = el('li', 'list-group-item py-2');
+                    item.dataset.recordId = String(o.order_id || '') + ':' + String(o.sequence || '');
                     item.appendChild(el('strong', null, String(o.test_name || 'unknown test')));
                     item.appendChild(el('span', 'badge badge-info ml-2', String(o.status || 'unknown')));
                     item.appendChild(el('div', 'small text-muted', 'ordered ' + fmtDate(o.ordered_at) + ' · ' + String(o.order_id || '') + ':' + String(o.sequence || '')));
@@ -258,6 +262,7 @@
                 mlist.setAttribute('data-role', 'medication-changes');
                 medChanges.forEach((m) => {
                     const item = el('li', 'list-group-item py-2');
+                    item.dataset.recordId = String(m.record_id || '');
                     item.appendChild(el('strong', null, String(m.drug_name || 'unnamed')));
                     const status = m.active === true ? 'active' : (m.active === false ? 'inactive' : 'status indeterminate');
                     item.appendChild(el('span', 'badge badge-light border ml-2', status + ' (' + String(m.status_field || '') + ')'));
@@ -285,6 +290,7 @@
                     const item = el('li', 'list-group-item py-2' + (a.active ? '' : ' text-muted'));
                     item.appendChild(el('strong', null, String(a.title || 'unnamed entry')));
                     item.appendChild(el('span', 'badge badge-light border ml-2', a.coded ? 'coded' : 'as recorded (uncoded)'));
+                    if (a.duplicate_count > 1) { item.appendChild(el('span', 'badge badge-secondary ml-1', '\u00d7' + String(a.duplicate_count))); }
                     if (!a.active) { item.appendChild(el('span', 'badge badge-secondary ml-1', 'inactive')); }
                     const detail = [];
                     if (a.reaction) { detail.push('reaction: ' + String(a.reaction)); }
@@ -300,18 +306,35 @@
             const foot = el('p', 'small text-muted mb-0');
             foot.setAttribute('data-role', 'footer');
             const unavailable = Array.isArray(footer.sources_unavailable) ? footer.sources_unavailable : [];
-            foot.textContent = unavailable.length
+            foot.textContent = (unavailable.length
                 ? 'Sources that could not be read: ' + unavailable.join(', ') + '. Affected commitments are shown as verification unavailable.'
-                : 'All sources read. "No matching record found" means no evidence in this system, not that it was not done.';
+                : 'All sources read. "No matching record found" means no evidence in this system, not that it was not done.')
+                + (footer.duplicates_collapsed ? ' ' + String(footer.duplicates_collapsed) + ' duplicate record(s) collapsed.' : '');
             this.body.appendChild(foot);
         }
 
         renderPlanCheckUnavailable(code) {
             this.setStatus('plan check unavailable', 'badge-warning');
-            while (this.commitments.firstChild) {
-                this.commitments.removeChild(this.commitments.firstChild);
+            if (!this.renderedCommitments) {
+                while (this.commitments.firstChild) {
+                    this.commitments.removeChild(this.commitments.firstChild);
+                }
             }
-            this.commitments.appendChild(el('li', 'list-group-item text-muted', 'Plan check unavailable (' + String(code) + '). The sections above do not depend on it.'));
+            this.commitments.appendChild(el('li', 'list-group-item text-muted', 'Plan check unavailable (' + String(code) + ').' + (this.renderedCommitments ? ' Commitments shown above were verified before the failure.' : ' The sections above do not depend on it.')));
+        }
+
+        annotateInterval(annotations) {
+            annotations.forEach((a) => {
+                const item = this.body.querySelector('[data-record-id="' + String(a.record_id).replace(/"/g, '') + '"]');
+                if (!item) {
+                    return;
+                }
+                const tag = a.explained_by
+                    ? el('span', 'badge badge-light border ml-2', 'explained by ' + (this.commitmentLabels[a.explained_by] || String(a.explained_by)))
+                    : el('span', 'badge badge-warning ml-2', 'unexplained by the plan');
+                tag.setAttribute('data-role', 'annotation');
+                item.firstChild.after(tag);
+            });
         }
 
         async streamBriefing() {
@@ -422,9 +445,14 @@
             }
             if (event === 'commitment') {
                 this.renderCommitment(data.match);
+            } else if (event === 'interval_annotation') {
+                this.annotateInterval(Array.isArray(data.annotations) ? data.annotations : []);
             } else if (event === 'complete') {
                 if (data.commitments === 0) {
                     this.commitments.appendChild(el('li', 'list-group-item text-muted', 'No lab/test or medication commitments were found in the plan.'));
+                }
+                if (data.rejected_count > 0) {
+                    this.commitments.appendChild(el('li', 'list-group-item small text-warning', String(data.rejected_count) + ' statement(s) withheld \u2014 could not be verified against the note.'));
                 }
                 const warnings = Array.isArray(data.warnings) ? data.warnings : [];
                 warnings.forEach((w) => this.commitments.appendChild(el('li', 'list-group-item small text-muted', String(w))));
@@ -441,9 +469,13 @@
             const c = match.commitment;
             const unchecked = c.kind === 'other' || match.state === null || match.state === undefined;
             const state = unchecked ? 'not_checked' : String(match.state);
+            this.renderedCommitments += 1;
+            const label = '#' + this.renderedCommitments;
+            if (c.commitment_id) { this.commitmentLabels[String(c.commitment_id)] = label; }
             const item = el('li', 'list-group-item py-2' + (unchecked ? ' text-muted' : ''));
             const header = el('div', 'd-flex justify-content-between align-items-start');
             const left = el('div');
+            left.appendChild(el('span', 'badge badge-dark mr-1', label));
             left.appendChild(el('span', 'badge badge-light border mr-1', String(c.kind || '').replace('_', '/')));
             left.appendChild(el('span', 'font-italic', '“' + String(c.source_span || '') + '”'));
             header.appendChild(left);

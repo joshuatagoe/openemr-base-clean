@@ -19,6 +19,9 @@
  * - All timestamps are UTC ISO-8601.
  * - An unavailable lab source is declared in data_quality.sources_unavailable;
  *   it is never rendered as an empty list.
+ * - Duplicate medication rows (same source, lower(drug), start date and
+ *   status) collapse to one record carrying `duplicate_count`; the number
+ *   collapsed is reported in data_quality.duplicates_collapsed (AUDIT DATA-004).
  *
  * @package   OpenEMR
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
@@ -130,15 +133,29 @@ final class ContextBundleBuilder
             }
         }
         $meds = [];
+        $duplicatesCollapsed = 0;
         if ($medications === null) {
             $sourcesUnavailable[] = self::SOURCE_MEDICATIONS;
         } else {
             $nowUtc = $nowLocal === null ? gmdate(UtcDate::FORMAT) : UtcDate::toIso($nowLocal, $this->localZone);
+            $byKey = [];
             foreach ($medications as $row) {
                 $mapped = $this->mapMedication($row, $nowUtc);
-                if ($mapped !== null) {
-                    $meds[] = $mapped;
+                if ($mapped === null) {
+                    continue;
                 }
+                $key = implode('|', [
+                    Scalar::str($mapped['source_table']),
+                    strtolower(Scalar::str($mapped['drug_name'])),
+                    Scalar::str($mapped['started_at'] ?? ''),
+                    var_export($mapped['active'], true),
+                ]);
+                if (isset($byKey[$key])) {
+                    $duplicatesCollapsed++;
+                    continue; // first row (earliest, lowest id) is kept
+                }
+                $byKey[$key] = count($meds);
+                $meds[] = $mapped;
             }
         }
 
@@ -154,7 +171,7 @@ final class ContextBundleBuilder
             ],
             'data_quality' => [
                 'sources_unavailable' => $sourcesUnavailable,
-                'duplicates_collapsed' => 0,
+                'duplicates_collapsed' => $duplicatesCollapsed,
             ],
             'lab_results' => $results,
             'lab_orders' => $orders,

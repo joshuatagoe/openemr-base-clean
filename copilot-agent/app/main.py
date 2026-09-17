@@ -51,6 +51,7 @@ from app.contracts import (
     DependencyStatus,
     ErrorDetail,
     HealthResponse,
+    IntervalAnnotationEvent,
     ReadyResponse,
     StreamEnvelope,
 )
@@ -376,8 +377,9 @@ async def _briefing_events(
     ids = {"correlation_id": bundle.correlation_id, "patient_uuid": bundle.patient_uuid}
     cid = bundle.correlation_id
     with span("briefing", cid=cid, bundle_id=str(stored.bundle_id)) as attrs:
+        # Stage 1: extraction (model). Every failure here is a degraded{extraction} frame.
         try:
-            result = await asyncio.wait_for(service.build_briefing(BriefingRequest(context=bundle)), timeout=timeout_seconds)
+            extraction, warnings = await asyncio.wait_for(service.extract(bundle), timeout=timeout_seconds)
         except TimeoutError:
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
@@ -390,7 +392,17 @@ async def _briefing_events(
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code=code))
             return
         except Exception:
-            log_event("briefing.failed", cid=cid, level=logging.ERROR, exc_info=True)
+            log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="extraction", exc_info=True)
+            attrs["outcome"] = "degraded"
+            attrs["reason_code"] = "internal_error"
+            yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="internal_error"))
+            return
+
+        # Stage 2: deterministic matching and annotation. A failure here is degraded{matching}.
+        try:
+            result = service.assemble(bundle, extraction, warnings)
+        except Exception:
+            log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="matching", exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.MATCHING, reason_code="internal_error"))
@@ -398,16 +410,20 @@ async def _briefing_events(
 
         for match in result.matches:
             yield _sse("commitment", CommitmentEvent(**ids, match=match))
+        yield _sse("interval_annotation", IntervalAnnotationEvent(**ids, annotations=result.interval_annotations))
         attrs["commitments"] = len(result.matches)
-        attrs["states"] = sorted({m.state.value for m in result.matches})
-        yield _sse("complete", CompleteEvent(**ids, commitments=len(result.matches), warnings=result.warnings))
+        attrs["states"] = sorted({m.state.value for m in result.matches if m.state is not None})
+        attrs["rejected"] = result.rejected_count
+        attrs["interval_records"] = len(result.interval_annotations)
+        attrs["unexplained"] = sum(1 for a in result.interval_annotations if a.explained_by is None)
+        yield _sse("complete", CompleteEvent(**ids, commitments=len(result.matches), warnings=result.warnings, rejected_count=result.rejected_count))
 
 
 @app.get(
     "/v1/briefings/{bundle_id}",
     tags=["briefings"],
     responses={
-        200: {"content": {"text/event-stream": {}}, "description": "SSE: `commitment`* then `complete` | `degraded`; every event carries correlation_id and patient_uuid."},
+        200: {"content": {"text/event-stream": {}}, "description": "SSE: `commitment`*, `interval_annotation`, then `complete` | `degraded` (stage extraction|matching); every event carries correlation_id and patient_uuid."},
         401: {"model": ErrorDetail},
         403: {"model": ErrorDetail},
         404: {"model": ErrorDetail},

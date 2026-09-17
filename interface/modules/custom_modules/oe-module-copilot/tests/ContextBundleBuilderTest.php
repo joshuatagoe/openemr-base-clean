@@ -158,6 +158,16 @@ final class ContextBundleBuilderTest extends TestCase
         self::assertSame([], $bundle['data_quality']['sources_unavailable']);
     }
 
+    public function testDuplicateMedicationRowsCollapseWithACount(): void
+    {
+        // AUDIT DATA-004: identical rows (same source, drug, start, status) collapse; a differing status does not.
+        $row = ['source_table' => 'lists', 'id' => 1, 'drug' => 'Metformin', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '2026-01-15 00:00:00', 'enddate' => '', 'date_added' => '2026-01-15 00:00:00', 'date_modified' => ''];
+        $rows = [$row, ['id' => 2, 'drug' => 'METFORMIN'] + $row, ['id' => 3, 'active' => 0, 'enddate' => '2026-03-01 00:00:00'] + $row, ['id' => 4, 'source_table' => 'prescriptions'] + $row];
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, '2026-09-17 10:00:00');
+        self::assertSame(['lists:1', 'lists:3', 'prescriptions:4'], array_column($bundle['medications'], 'record_id'));
+        self::assertSame(1, $bundle['data_quality']['duplicates_collapsed']);
+    }
+
     public function testUnavailableMedicationsSourceIsDeclaredNotEmptied(): void
     {
         $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], null);

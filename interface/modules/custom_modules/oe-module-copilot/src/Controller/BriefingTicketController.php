@@ -349,23 +349,37 @@ final class BriefingTicketController
             }
         }
 
+        // Allergies as recorded; exact duplicates (same lower(title) or code, same begdate) collapse with a count (DATA-004).
         $allergyRows = null;
+        $allergyDuplicates = 0;
         if ($allergies !== null) {
             $allergyRows = [];
+            $index = [];
             foreach ($allergies as $a) {
+                $code = trim($a['diagnosis']);
+                $key = ($code !== '' ? 'code:' . strtolower($code) : 'title:' . strtolower(trim($a['title']))) . '|' . substr(trim($a['begdate']), 0, 10);
+                if (isset($index[$key])) {
+                    $allergyRows[$index[$key]]['duplicate_count']++;
+                    $allergyDuplicates++;
+                    continue;
+                }
+                $index[$key] = count($allergyRows);
                 $allergyRows[] = [
                     'record_id' => 'lists:' . $a['id'],
                     'title' => $a['title'],
-                    'coded' => trim($a['diagnosis']) !== '',
-                    'code' => trim($a['diagnosis']) === '' ? null : $a['diagnosis'],
+                    'coded' => $code !== '',
+                    'code' => $code === '' ? null : $a['diagnosis'],
                     'reaction' => trim($a['reaction']) === '' ? null : $a['reaction'],
                     'severity' => trim($a['severity']) === '' ? null : $a['severity'],
                     'active' => $a['activity'] === 1 && (trim($a['enddate']) === '' || str_starts_with($a['enddate'], '0000')),
                     'begdate' => trim($a['begdate']) === '' ? null : $a['begdate'],
                     'enddate' => trim($a['enddate']) === '' || str_starts_with($a['enddate'], '0000') ? null : $a['enddate'],
+                    'duplicate_count' => 1,
                 ];
             }
         }
+        $dataQuality = $bundle['data_quality'];
+        assert(is_array($dataQuality));
 
         return [
             'identity' => $identity === null ? null : [
@@ -401,6 +415,7 @@ final class BriefingTicketController
                 'orders_in_window' => count($labOrders),
                 'medication_changes_in_window' => count($medicationChanges),
                 'medications_on_file' => count($medications),
+                'duplicates_collapsed' => Scalar::int($dataQuality['duplicates_collapsed'] ?? 0) + $allergyDuplicates,
                 'omitted' => $this->builder->getOmittedCounts(),
             ],
         ];

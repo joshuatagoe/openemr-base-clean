@@ -263,7 +263,7 @@ final class BriefingTicketControllerTest extends TestCase
         self::assertSame(['start' => '2026-06-10T14:30:00Z', 'end' => '2026-09-17T10:00:00Z', 'as_of_source' => 'server_time'], $sections['window']);
         self::assertCount(1, self::intervalResults($result));
         self::assertSame('procedure_result:9001', self::intervalResults($result)[0]['result_id']);
-        self::assertSame(['sources_unavailable' => [], 'results_in_window' => 1, 'orders_in_window' => 0, 'medication_changes_in_window' => 0, 'medications_on_file' => 0, 'omitted' => ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0, 'orders_omitted' => 0, 'medications_omitted' => 0]], $sections['footer']);
+        self::assertSame(['sources_unavailable' => [], 'results_in_window' => 1, 'orders_in_window' => 0, 'medication_changes_in_window' => 0, 'medications_on_file' => 0, 'duplicates_collapsed' => 0, 'omitted' => ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0, 'orders_omitted' => 0, 'medications_omitted' => 0]], $sections['footer']);
         self::assertStringNotContainsString('metformin', json_encode($body, JSON_THROW_ON_ERROR));
         // Identity is panel-only: the bundle sent to the agent never carries it.
         self::assertStringNotContainsString('Evelyn', json_encode($bundle, JSON_THROW_ON_ERROR));
@@ -603,8 +603,8 @@ final class BriefingTicketControllerTest extends TestCase
         $allergies = self::section($result, 'allergies');
         self::assertSame('2 allergy entries as recorded', $allergies['statement']);
         self::assertSame([
-            ['record_id' => 'lists:5', 'title' => 'Penicillin', 'coded' => false, 'code' => null, 'reaction' => 'rash', 'severity' => 'moderate', 'active' => true, 'begdate' => '2020-01-01 00:00:00', 'enddate' => null],
-            ['record_id' => 'lists:6', 'title' => 'Sulfa', 'coded' => true, 'code' => 'RXNORM:10831', 'reaction' => null, 'severity' => null, 'active' => false, 'begdate' => null, 'enddate' => '2024-01-01 00:00:00'],
+            ['record_id' => 'lists:5', 'title' => 'Penicillin', 'coded' => false, 'code' => null, 'reaction' => 'rash', 'severity' => 'moderate', 'active' => true, 'begdate' => '2020-01-01 00:00:00', 'enddate' => null, 'duplicate_count' => 1],
+            ['record_id' => 'lists:6', 'title' => 'Sulfa', 'coded' => true, 'code' => 'RXNORM:10831', 'reaction' => null, 'severity' => null, 'active' => false, 'begdate' => null, 'enddate' => '2024-01-01 00:00:00', 'duplicate_count' => 1],
         ], $allergies['entries']);
         // Allergies are panel-only in this phase: not in the bundle.
         self::assertStringNotContainsString('Penicillin', json_encode($this->agent->posts[0]['bundle'], JSON_THROW_ON_ERROR));
@@ -629,6 +629,25 @@ final class BriefingTicketControllerTest extends TestCase
         self::assertSame('prescriptions:50', $change['record_id']);
         self::assertSame(1, self::section($result, 'footer')['medication_changes_in_window']);
         self::assertSame(2, self::section($result, 'footer')['medications_on_file']);
+    }
+
+    public function testDuplicateAllergyEntriesCollapseWithACountAndAreReportedInTheFooter(): void
+    {
+        // AUDIT DATA-004: same title (case-insensitive) and begdate collapse; a different begdate stays separate.
+        $reader = $this->reader([]);
+        $reader->allergies = [
+            ['id' => 5, 'title' => 'Penicillin', 'diagnosis' => '', 'reaction' => 'rash', 'severity' => '', 'begdate' => '2020-01-01 00:00:00', 'enddate' => '', 'activity' => 1],
+            ['id' => 7, 'title' => 'PENICILLIN', 'diagnosis' => '', 'reaction' => 'rash', 'severity' => '', 'begdate' => '2020-01-01 00:00:00', 'enddate' => '', 'activity' => 1],
+            ['id' => 8, 'title' => 'Penicillin', 'diagnosis' => '', 'reaction' => '', 'severity' => '', 'begdate' => '2021-05-05 00:00:00', 'enddate' => '', 'activity' => 1],
+        ];
+        $result = $this->controller($reader)->handleForSession($this->session());
+        $entries = self::section($result, 'allergies')['entries'];
+        self::assertIsArray($entries);
+        self::assertCount(2, $entries);
+        self::assertIsArray($entries[0]);
+        self::assertSame('lists:5', $entries[0]['record_id']);
+        self::assertSame(2, $entries[0]['duplicate_count']);
+        self::assertSame(1, self::section($result, 'footer')['duplicates_collapsed']);
     }
 
     public function testPanelOnlySourceFailuresAreNamedNotEmptied(): void

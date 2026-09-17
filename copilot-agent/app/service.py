@@ -19,10 +19,23 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from app.contracts import BriefingRequest, BriefingResponse, ContextBundle
-from app.extractor import CommitmentExtractor
+from app.annotations import annotate_interval
+from app.contracts import BriefingRequest, BriefingResponse, ContextBundle, ExtractionOutput
+from app.extractor import (
+    REJECTED_DRUG_NAME_WARNING,
+    REJECTED_LAB_NAME_WARNING,
+    REJECTED_SPAN_WARNING,
+    CommitmentExtractor,
+)
 from app.matcher import match_evidence
 from app.providers.base import ModelProvider
+
+_REJECTION_WARNINGS = frozenset({REJECTED_SPAN_WARNING, REJECTED_LAB_NAME_WARNING, REJECTED_DRUG_NAME_WARNING})
+
+
+def rejected_count(extraction: ExtractionOutput) -> int:
+    """How many model proposals the verifier withheld (rendered as 'n withheld', never as content)."""
+    return sum(1 for w in extraction.warnings if w in _REJECTION_WARNINGS)
 
 NO_USABLE_PLAN_WARNING = (
     "No usable prior plan text was found in the supplied note; no commitments were evaluated."
@@ -66,27 +79,43 @@ class BriefingService:
         self._provider_factory = provider_factory
         self._max_plan_chars = max_plan_chars
 
-    async def build_briefing(self, request: BriefingRequest) -> BriefingResponse:
-        context = request.context
+    async def extract(self, context: ContextBundle) -> tuple[ExtractionOutput | None, list[str]]:
+        """Stage 1 (model): grounded commitments, or ``None`` with a fixed warning when there is no usable plan.
+
+        Raises ``ProviderError`` on provider failure.
+        """
         plan_text, warnings = select_plan_text(context, max_chars=self._max_plan_chars)
         if plan_text is None:
-            return BriefingResponse(
-                correlation_id=context.correlation_id,
-                patient_uuid=context.patient_uuid,
-                matches=[],
-                warnings=warnings,
-            )
-
+            return None, warnings
         extractor = CommitmentExtractor(self._provider_factory())
-        extraction = await extractor.extract(plan_text)  # raises ProviderError on failure
-        matches = match_evidence(context, extraction)
+        return await extractor.extract(plan_text), warnings
 
+    @staticmethod
+    def assemble(context: ContextBundle, extraction: ExtractionOutput | None, warnings: list[str]) -> BriefingResponse:
+        """Stage 2 (deterministic): match, annotate the interval layer, count withheld proposals."""
+        if extraction is None:
+            matches = []
+            annotations = annotate_interval(context, [])
+            all_warnings = list(warnings)
+            rejected = 0
+        else:
+            matches = match_evidence(context, extraction)
+            annotations = annotate_interval(context, matches)
+            all_warnings = [*warnings, *extraction.warnings]
+            rejected = rejected_count(extraction)
         return BriefingResponse(
             correlation_id=context.correlation_id,
             patient_uuid=context.patient_uuid,
             matches=matches,
-            warnings=[*warnings, *extraction.warnings],
+            interval_annotations=annotations,
+            warnings=all_warnings,
+            rejected_count=rejected,
         )
+
+    async def build_briefing(self, request: BriefingRequest) -> BriefingResponse:
+        context = request.context
+        extraction, warnings = await self.extract(context)
+        return self.assemble(context, extraction, warnings)
 
 
 __all__ = [
@@ -95,5 +124,6 @@ __all__ = [
     "PLAN_TOO_LONG_WARNING",
     "BriefingService",
     "ProviderFactory",
+    "rejected_count",
     "select_plan_text",
 ]

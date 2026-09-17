@@ -335,6 +335,14 @@ class EvidenceMatch(StrictModel):
         return self
 
 
+class IntervalAnnotation(StrictModel):
+    """Which verified commitment, if any, accounts for one interval record (ARCHITECTURE.md section 7)."""
+
+    record_id: str = Field(min_length=1)
+    record_type: RecordType
+    explained_by: str | None = Field(default=None, description="commitment_id of the match that cites or lists the record; None = unexplained.")
+
+
 # --------------------------------------------------------------------------- #
 # API request / response
 # --------------------------------------------------------------------------- #
@@ -348,7 +356,9 @@ class BriefingResponse(StrictModel):
     correlation_id: UUID
     patient_uuid: UUID
     matches: list[EvidenceMatch] = Field(default_factory=list)
+    interval_annotations: list[IntervalAnnotation] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    rejected_count: int = Field(default=0, ge=0, description="Model proposals withheld by the verifier (span, name or fabrication checks).")
 
 
 class HealthResponse(StrictModel):
@@ -404,11 +414,18 @@ class CommitmentEvent(StreamEnvelope):
     match: EvidenceMatch
 
 
+class IntervalAnnotationEvent(StreamEnvelope):
+    """SSE event ``interval_annotation``: every interval record with its ``explained_by``."""
+
+    annotations: list[IntervalAnnotation] = Field(default_factory=list)
+
+
 class CompleteEvent(StreamEnvelope):
     """Terminal event (SSE event ``complete``): counts and fixed warnings; never clinical text."""
 
     commitments: int = Field(ge=0)
     warnings: list[str] = Field(default_factory=list)
+    rejected_count: int = Field(default=0, ge=0, description="Model proposals withheld by the verifier; the panel shows the count.")
 
 
 class DegradedEvent(StreamEnvelope):
@@ -459,6 +476,8 @@ __all__ = [
     "ExtractedCommitment",
     "ExtractionOutput",
     "HealthResponse",
+    "IntervalAnnotation",
+    "IntervalAnnotationEvent",
     "LabOrder",
     "LabOrderStatus",
     "LabResult",
