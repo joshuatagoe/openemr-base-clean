@@ -4,6 +4,9 @@
  * Clinical Co-Pilot module bootstrap.
  *
  * Registers:
+ *  - The panel mount point on the Patient Summary (RenderEvent
+ *    EVENT_SECTION_LIST_RENDER_TOP): a container plus one external script
+ *    tag; no data access at render time (AUDIT ARCH-005).
  *  - `POST /api/copilot/briefing-ticket` on the standard REST route map. Called
  *    from the panel with the APICSRFTOKEN header it runs under the physician's
  *    own session (local API bridge), authorizes, builds the ContextBundle,
@@ -28,9 +31,12 @@ declare(strict_types=1);
 
 namespace OpenEMR\Modules\Copilot;
 
+use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Http\HttpRestRequest;
+use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\OEGlobalsBag;
 use OpenEMR\Events\Globals\GlobalsInitializedEvent;
+use OpenEMR\Events\PatientDemographics\RenderEvent;
 use OpenEMR\Events\RestApiExtend\RestApiCreateEvent;
 use OpenEMR\Modules\Copilot\Agent\GuzzleAgentClient;
 use OpenEMR\Modules\Copilot\Authorization\AclMainChecker;
@@ -39,6 +45,7 @@ use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
+use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
 use OpenEMR\Modules\Copilot\Support\UtcDate;
 use OpenEMR\Services\Globals\GlobalSetting;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -49,6 +56,8 @@ final class Bootstrap
     public const GLOBALS_SECTION = 'Clinical Co-Pilot';
     public const GLOBAL_ADMIN_OVERRIDE = 'copilot_admin_relationship_override';
     public const ROUTE_BRIEFING_TICKET = 'POST /api/copilot/briefing-ticket';
+    public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
+    public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
     public function __construct(private readonly EventDispatcherInterface $eventDispatcher)
     {
@@ -58,8 +67,32 @@ final class Bootstrap
     {
         $this->eventDispatcher->addListener(RestApiCreateEvent::EVENT_HANDLE, $this->addRoutes(...));
         $this->eventDispatcher->addListener(GlobalsInitializedEvent::EVENT_HANDLE, $this->addGlobals(...));
+        $this->eventDispatcher->addListener(RenderEvent::EVENT_SECTION_LIST_RENDER_TOP, $this->renderPanel(...));
     }
 
+    /**
+     * Emit the panel mount point. Only rendering: the pid is passed to the
+     * panel for a staleness check, never used for authorization here.
+     */
+    public function renderPanel(RenderEvent $event): void
+    {
+        $pid = $event->getPid();
+        if (!is_int($pid) || $pid <= 0) {
+            return;
+        }
+        $session = SessionWrapperFactory::getInstance()->getActiveSession();
+        $siteId = $session->get('site_id');
+        if (!is_string($siteId) || $siteId === '') {
+            $siteId = 'default';
+        }
+        $webroot = OEGlobalsBag::getInstance()->getWebRoot();
+        echo (new PanelRenderer())->render(
+            $pid,
+            CsrfUtils::collectCsrfToken($session, 'api'),
+            $webroot . '/apis/' . rawurlencode($siteId) . '/api/copilot/briefing-ticket',
+            $webroot . self::MODULE_PATH . self::PANEL_SCRIPT,
+        );
+    }
 
     public function addRoutes(RestApiCreateEvent $event): RestApiCreateEvent
     {
