@@ -1,0 +1,20 @@
+{
+    "name": "openemr/oe-module-copilot",
+    "description": "Clinical Co-Pilot: read-only ContextBundle adapter for the selected patient",
+    "type": "openemr-module",
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenEMR\Modules\Copilot\\": "src/"
+        }
+    },
+    "extra": {
+        "openemr": {
+            "type": "custom-module",
+            "directory": "oe-module-copilot"
+        }
+    }
+}
