@@ -42,6 +42,7 @@ final class ContextBundleBuilder
     public const SOURCE_LAB_RESULTS = 'lab_results';
     public const SOURCE_LAB_ORDERS = 'lab_orders';
     public const SOURCE_MEDICATIONS = 'medications';
+    public const SOURCE_ALLERGIES = 'allergies';
 
     /** OpenEMR `ord_status` option ids -> contract LabOrderStatus (anything else -> unknown). */
     private const ORDER_STATUS_MAP = [
@@ -96,16 +97,18 @@ final class ContextBundleBuilder
      * @param list<array<string,mixed>>|null $labOrders  null when the orders source could not be read
      * @param list<array<string,mixed>>|null $medications  null when the medications source could not be read
      * @param string|null $nowLocal  local 'Y-m-d H:i:s' used to derive medication status (AUDIT DATA-003)
+     * @param list<array<string,mixed>>|null $allergies  null when the allergies source could not be read
      * @return array{
      *   schema_version:string, correlation_id:string, patient_uuid:string, user_uuid?:string,
      *   prior_note:array{note_id:string, encounter_id:string, note_date:string, plan_text:string},
      *   data_quality:array{sources_unavailable:list<string>, duplicates_collapsed:int},
      *   lab_results:list<array<string,mixed>>,
      *   lab_orders:list<array<string,mixed>>,
-     *   medications:list<array<string,mixed>>
+     *   medications:list<array<string,mixed>>,
+     *   allergies:list<array<string,mixed>>
      * }
      */
-    public function build(string $correlationId, array $patient, array $note, ?array $labResults, ?string $userUuid = null, ?array $labOrders = null, ?array $medications = null, ?string $nowLocal = null): array
+    public function build(string $correlationId, array $patient, array $note, ?array $labResults, ?string $userUuid = null, ?array $labOrders = null, ?array $medications = null, ?string $nowLocal = null, ?array $allergies = null): array
     {
         $noteDateUtc = UtcDate::toIso(Scalar::str($note['note_date']), $this->localZone);
 
@@ -159,6 +162,13 @@ final class ContextBundleBuilder
             }
         }
 
+        $allergyRows = [];
+        if ($allergies === null) {
+            $sourcesUnavailable[] = self::SOURCE_ALLERGIES;
+        } else {
+            $allergyRows = $this->collapseAllergies($allergies, $duplicatesCollapsed);
+        }
+
         $bundle = [
             'schema_version' => self::SCHEMA_VERSION,
             'correlation_id' => $correlationId,
@@ -176,6 +186,7 @@ final class ContextBundleBuilder
             'lab_results' => $results,
             'lab_orders' => $orders,
             'medications' => $meds,
+            'allergies' => $allergyRows,
         ];
         if ($userUuid !== null) {
             $bundle['user_uuid'] = $userUuid;
@@ -295,6 +306,52 @@ final class ContextBundleBuilder
             'timestamp' => $timestamp,
             'timestamp_field' => $timestampField,
         ];
+    }
+
+    /**
+     * Allergy entries as recorded; exact duplicates (same code or lower(title), same begdate)
+     * collapse with a count (AUDIT DATA-004). Uncoded stays uncoded; nothing is inferred.
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    public function collapseAllergies(array $rows, int &$duplicatesCollapsed): array
+    {
+        $out = [];
+        $index = [];
+        foreach ($rows as $a) {
+            $title = trim(Scalar::str($a['title'] ?? null));
+            $id = Scalar::int($a['id'] ?? null);
+            if ($title === '' || $id <= 0) {
+                continue;
+            }
+            $code = trim(Scalar::str($a['diagnosis'] ?? null));
+            $begRaw = trim(Scalar::str($a['begdate'] ?? null));
+            $endRaw = trim(Scalar::str($a['enddate'] ?? null));
+            $key = ($code !== '' ? 'code:' . strtolower($code) : 'title:' . strtolower($title)) . '|' . substr($begRaw, 0, 10);
+            if (isset($index[$key])) {
+                $out[$index[$key]]['duplicate_count'] = Scalar::int($out[$index[$key]]['duplicate_count'] ?? 1) + 1;
+                $duplicatesCollapsed++;
+                continue;
+            }
+            $ended = $this->optionalIso($endRaw);
+            $reaction = trim(Scalar::str($a['reaction'] ?? null));
+            $severity = trim(Scalar::str($a['severity'] ?? null));
+            $index[$key] = count($out);
+            $out[] = [
+                'record_id' => 'lists:' . $id,
+                'title' => $title,
+                'coded' => $code !== '',
+                'code' => $code === '' ? null : $code,
+                'reaction' => $reaction === '' ? null : $reaction,
+                'severity' => $severity === '' ? null : $severity,
+                'active' => Scalar::int($a['activity'] ?? null) === 1 && $ended === null,
+                'begdate' => $this->optionalIso($begRaw),
+                'enddate' => $ended,
+                'duplicate_count' => 1,
+            ];
+        }
+        return $out;
     }
 
     /** UTC ISO for a local date string, or null when empty/zero/unparseable. */

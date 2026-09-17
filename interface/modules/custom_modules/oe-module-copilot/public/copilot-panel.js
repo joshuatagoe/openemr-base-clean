@@ -9,9 +9,12 @@
  * delete the bundle.
  *
  * Trust rules enforced here: every rendered string goes through textContent
- * (never innerHTML); any stream event whose correlation_id or patient_uuid
- * differs from the ticket response is dropped; values are rendered from the
- * cited records/sections, and the panel never invents a state.
+ * (never innerHTML); any stream event or turn answer whose correlation_id or
+ * patient_uuid differs from the ticket response is dropped; values are
+ * rendered from the cited records/sections, and the panel never invents a
+ * state. Follow-up questions (UC-04) go to the agent with the same ticket;
+ * on 401 the panel silently re-requests a ticket for the same bundle from the
+ * module (which re-authorizes) and retries once.
  *
  * @package   OpenEMR
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
@@ -27,6 +30,12 @@
         ambiguous_match: 'Ambiguous match',
         conflicting_records: 'Conflicting records',
         verification_unavailable: 'Verification unavailable'
+    };
+    const KIND_BADGES = {
+        fact: 'badge-success',
+        no_record_found: 'badge-warning',
+        clarification: 'badge-info',
+        refusal: 'badge-secondary'
     };
     const STATE_BADGES = {
         matching_result_found: 'badge-success',
@@ -131,14 +140,19 @@
             await this.streamBriefing();
         }
 
-        async requestTicket() {
+        async requestTicket(refresh) {
+            const payload = { pid: Number(this.pid) };
+            if (refresh && this.bound && this.bound.bundle_id) {
+                payload.refresh_bundle_id = this.bound.bundle_id;
+                payload.refresh_correlation_id = this.bound.correlation_id;
+            }
             const resp = await fetch(this.ticketUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
                 cache: 'no-store',
                 signal: this.abort.signal,
                 headers: { 'APICSRFTOKEN': this.csrf, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ pid: Number(this.pid) })
+                body: JSON.stringify(payload)
             });
             let json = null;
             try {
@@ -358,13 +372,9 @@
                     return;
                 }
                 if (resp.status === 401 && attempt === 1 && !this.refreshed) {
-                    // Ticket expired between issue and use: one silent re-authorization.
+                    // Ticket expired between issue and use: one silent re-authorization for the same bundle.
                     this.refreshed = true;
-                    const fresh = await this.requestTicket().catch(() => null);
-                    if (fresh && fresh.ok && fresh.data.ticket && fresh.data.patient_uuid === this.bound.patient_uuid && fresh.data.bundle_id) {
-                        this.bound.ticket = fresh.data.ticket;
-                        this.bound.bundle_id = fresh.data.bundle_id;
-                        this.bound.correlation_id = fresh.data.correlation_id;
+                    if (await this.refreshTicket()) {
                         continue;
                     }
                     this.renderPlanCheckUnavailable('ticket_expired');
@@ -376,6 +386,121 @@
                 }
                 await this.consumeStream(resp.body);
                 return;
+            }
+        }
+
+        async refreshTicket() {
+            const fresh = await this.requestTicket(true).catch(() => null);
+            if (fresh && fresh.ok && fresh.data.ticket && fresh.data.patient_uuid === this.bound.patient_uuid
+                && fresh.data.bundle_id === this.bound.bundle_id && fresh.data.correlation_id === this.bound.correlation_id) {
+                this.bound.ticket = fresh.data.ticket;
+                return true;
+            }
+            return false;
+        }
+
+        renderQuestionBox() {
+            if (!this.bound || !this.bound.ticket || !this.bound.bundle_id) {
+                return;
+            }
+            const box = el('div', 'mt-3');
+            box.setAttribute('data-role', 'followup');
+            box.appendChild(el('h6', 'mb-2', 'Ask about this patient\u2019s record'));
+            const form = el('form', 'form-inline mb-2');
+            const input = el('input', 'form-control mr-2 flex-grow-1');
+            input.type = 'text';
+            input.maxLength = 1000;
+            input.placeholder = 'e.g. When was the last potassium?';
+            input.setAttribute('aria-label', 'Question about this patient\u2019s record');
+            const button = el('button', 'btn btn-primary btn-sm', 'Ask');
+            button.type = 'submit';
+            form.appendChild(input);
+            form.appendChild(button);
+            const answers = el('ul', 'list-group');
+            answers.setAttribute('data-role', 'answers');
+            form.addEventListener('submit', (ev) => {
+                ev.preventDefault();
+                const q = input.value.trim();
+                if (!q || button.disabled) {
+                    return;
+                }
+                button.disabled = true;
+                this.askQuestion(q, answers).finally(() => { button.disabled = false; input.value = ''; });
+            });
+            box.appendChild(form);
+            box.appendChild(answers);
+            this.body.appendChild(box);
+        }
+
+        async askQuestion(question, answers) {
+            const item = el('li', 'list-group-item py-2');
+            item.appendChild(el('div', 'font-italic small mb-1', 'Q: ' + question));
+            const pending = el('div', 'small text-muted', 'Checking the record\u2026');
+            item.appendChild(pending);
+            answers.appendChild(item);
+            let body = null;
+            for (let attempt = 1; attempt <= 2; attempt += 1) {
+                let resp;
+                try {
+                    resp = await fetch(this.bound.agent_url + '/v1/conversations/' + encodeURIComponent(this.bound.bundle_id) + '/turns', {
+                        method: 'POST',
+                        cache: 'no-store',
+                        signal: this.abort.signal,
+                        headers: { 'Authorization': 'Bearer ' + this.bound.ticket, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ question: question })
+                    });
+                } catch {
+                    pending.textContent = 'The agent could not be reached.';
+                    return;
+                }
+                if (resp.status === 401 && attempt === 1 && await this.refreshTicket()) {
+                    continue;
+                }
+                if (!resp.ok) {
+                    pending.textContent = 'The question could not be answered (agent_http_' + resp.status + ').';
+                    return;
+                }
+                try {
+                    body = await resp.json();
+                } catch {
+                    body = null;
+                }
+                break;
+            }
+            item.removeChild(pending);
+            if (!this.isBound(body)) {
+                this.dropped += 1;
+                item.appendChild(el('div', 'small text-muted', 'The answer did not match this patient and was discarded.'));
+                return;
+            }
+            this.renderTurn(body, item);
+        }
+
+        renderTurn(turn, item) {
+            if (turn.degraded) {
+                item.appendChild(el('div', 'small text-warning', 'The answer could not be produced (' + String(turn.degraded.reason_code || 'degraded') + ').'));
+                return;
+            }
+            const statements = Array.isArray(turn.statements) ? turn.statements : [];
+            if (statements.length === 0) {
+                item.appendChild(el('div', 'small text-muted', 'No verified statements could be made for this question.'));
+            }
+            statements.forEach((s) => {
+                const line = el('div', 'mb-1');
+                line.appendChild(el('span', 'badge ' + (KIND_BADGES[s.kind] || 'badge-secondary') + ' mr-1', String(s.kind || '').replace('_', ' ')));
+                line.appendChild(document.createTextNode(String(s.text || '')));
+                const cites = Array.isArray(s.citations) ? s.citations : [];
+                if (cites.length) {
+                    line.appendChild(el('div', 'small text-muted', 'Sources: ' + cites.map((c) => String(c.record_id) + ' (' + fmtDate(c.timestamp) + ')').join('; ')));
+                }
+                item.appendChild(line);
+            });
+            if (turn.rejected_count > 0) {
+                item.appendChild(el('div', 'small text-warning', String(turn.rejected_count) + ' statement(s) withheld \u2014 could not be verified.'));
+            }
+            const tools = Array.isArray(turn.tool_calls) ? turn.tool_calls : [];
+            if (tools.length) {
+                item.appendChild(el('div', 'small text-muted', 'Searched: ' + tools.map((t) => String(t.tool) + (t.error ? ' (' + String(t.error) + ')' : ' (' + String(t.records) + ')')).join(', ')));
             }
         }
 
@@ -457,6 +582,7 @@
                 const warnings = Array.isArray(data.warnings) ? data.warnings : [];
                 warnings.forEach((w) => this.commitments.appendChild(el('li', 'list-group-item small text-muted', String(w))));
                 this.setStatus('plan check complete', 'badge-success');
+                this.renderQuestionBox();
             } else if (event === 'degraded') {
                 this.renderPlanCheckUnavailable(String(data.reason_code || data.stage || 'degraded'));
             }

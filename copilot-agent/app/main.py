@@ -52,9 +52,12 @@ from app.contracts import (
     ErrorDetail,
     HealthResponse,
     IntervalAnnotationEvent,
+    TurnRequest,
+    VerifiedTurn,
     ReadyResponse,
     StreamEnvelope,
 )
+from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, log_event, span
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import (
@@ -266,6 +269,20 @@ async def require_briefing_ticket(
     return claims, stored
 
 
+async def require_turn_ticket(
+    bundle_id: UUID,
+    authorization: Annotated[str | None, Header()] = None,
+    cfg: ServiceSettings = Depends(get_settings),
+    store: BundleStore = Depends(get_store),
+) -> tuple[TicketClaims, StoredBundle]:
+    """Same binding checks as the briefing stream; the jti is not consumed because a physician asks
+    several questions within one ticket lifetime. Replay across bundles or patients still fails closed."""
+    secret = _require_secret(cfg)
+    claims = _verify_ticket_or_401(secret, authorization, check_expiry=True)
+    stored = _bind_ticket_to_bundle(claims, bundle_id, await store.get(bundle_id))
+    return claims, stored
+
+
 async def require_delete_ticket(
     bundle_id: UUID,
     authorization: Annotated[str | None, Header()] = None,
@@ -408,6 +425,7 @@ async def _briefing_events(
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.MATCHING, reason_code="internal_error"))
             return
 
+        stored.matches = result.matches
         for match in result.matches:
             yield _sse("commitment", CommitmentEvent(**ids, match=match))
         yield _sse("interval_annotation", IntervalAnnotationEvent(**ids, annotations=result.interval_annotations))
@@ -448,6 +466,60 @@ async def stream_briefing(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up turns (UC-04)
+# --------------------------------------------------------------------------- #
+
+
+@app.post(
+    "/v1/conversations/{bundle_id}/turns",
+    response_model=VerifiedTurn,
+    tags=["conversations"],
+    responses={401: {"model": ErrorDetail}, 403: {"model": ErrorDetail}, 404: {"model": ErrorDetail}, 503: {"model": ErrorDetail}},
+)
+async def conversation_turn(
+    request: TurnRequest,
+    response: Response,
+    ticket: tuple[TicketClaims, StoredBundle] = Depends(require_turn_ticket),
+    service: BriefingService = Depends(get_briefing_service),
+    cfg: ServiceSettings = Depends(get_settings),
+) -> VerifiedTurn:
+    """Answer one scoped question over the stored bundle. Statements are verified; failures are a degraded turn."""
+    claims, stored = ticket
+    bundle = stored.bundle
+    ids = {"correlation_id": bundle.correlation_id, "patient_uuid": bundle.patient_uuid}
+    response.headers[CORRELATION_HEADER] = str(claims.cid)
+    matches = stored.matches if stored.matches is not None else []
+    turn_index = len(stored.turns) + 1
+    with span("turn", cid=claims.cid, bundle_id=str(stored.bundle_id), turn_index=turn_index) as attrs:
+        try:
+            outcome = await asyncio.wait_for(
+                run_turn(service.provider(), bundle, matches, list(stored.turns), request.question),
+                timeout=cfg.briefing_timeout_seconds,
+            )
+        except TimeoutError:
+            attrs["outcome"] = "degraded"
+            attrs["reason_code"] = "timeout"
+            return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="timeout"))
+        except ProviderError as exc:
+            _, code, _ = _provider_error_code(exc)
+            attrs["outcome"] = "degraded"
+            attrs["reason_code"] = code
+            return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code=code))
+        except Exception:
+            log_event("turn.failed", cid=claims.cid, level=logging.ERROR, exc_info=True)
+            attrs["outcome"] = "degraded"
+            attrs["reason_code"] = "internal_error"
+            return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="internal_error"))
+        attrs["statements"] = len(outcome.statements)
+        attrs["rejected"] = outcome.rejected_count
+        attrs["rejection_codes"] = outcome.rejection_codes
+        attrs["tool_calls"] = [t.tool for t in outcome.tool_calls]
+        attrs["iterations"] = outcome.iterations
+    stored.add_turn(ConversationTurn(question=request.question, statements=outcome.statements))
+    return VerifiedTurn(**ids, turn_index=turn_index, statements=outcome.statements, rejected_count=outcome.rejected_count, tool_calls=outcome.tool_calls)
 
 
 # --------------------------------------------------------------------------- #

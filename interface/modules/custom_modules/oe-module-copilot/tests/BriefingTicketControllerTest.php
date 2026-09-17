@@ -255,6 +255,7 @@ final class BriefingTicketControllerTest extends TestCase
         self::assertSame(['identity', 'reasons', 'baseline', 'window', 'interval_results', 'interval_orders', 'medication_changes', 'allergies', 'footer'], array_keys($sections));
         self::assertSame([], $sections['medication_changes']);
         self::assertSame([], $bundle['medications']);
+        self::assertSame([], $bundle['allergies']);
         self::assertSame(['name' => 'Evelyn Demo', 'dob' => '1958-04-12', 'sex' => 'Female', 'pubpid' => 'P-7'], $sections['identity']);
         self::assertSame(['scheduled' => null, 'encounter' => null], $sections['reasons']);
         self::assertSame([], self::intervalOrders($result));
@@ -603,11 +604,11 @@ final class BriefingTicketControllerTest extends TestCase
         $allergies = self::section($result, 'allergies');
         self::assertSame('2 allergy entries as recorded', $allergies['statement']);
         self::assertSame([
-            ['record_id' => 'lists:5', 'title' => 'Penicillin', 'coded' => false, 'code' => null, 'reaction' => 'rash', 'severity' => 'moderate', 'active' => true, 'begdate' => '2020-01-01 00:00:00', 'enddate' => null, 'duplicate_count' => 1],
-            ['record_id' => 'lists:6', 'title' => 'Sulfa', 'coded' => true, 'code' => 'RXNORM:10831', 'reaction' => null, 'severity' => null, 'active' => false, 'begdate' => null, 'enddate' => '2024-01-01 00:00:00', 'duplicate_count' => 1],
+            ['record_id' => 'lists:5', 'title' => 'Penicillin', 'coded' => false, 'code' => null, 'reaction' => 'rash', 'severity' => 'moderate', 'active' => true, 'begdate' => '2020-01-01T00:00:00Z', 'enddate' => null, 'duplicate_count' => 1],
+            ['record_id' => 'lists:6', 'title' => 'Sulfa', 'coded' => true, 'code' => 'RXNORM:10831', 'reaction' => null, 'severity' => null, 'active' => false, 'begdate' => null, 'enddate' => '2024-01-01T00:00:00Z', 'duplicate_count' => 1],
         ], $allergies['entries']);
-        // Allergies are panel-only in this phase: not in the bundle.
-        self::assertStringNotContainsString('Penicillin', json_encode($this->agent->posts[0]['bundle'], JSON_THROW_ON_ERROR));
+        // The same rows go to the agent so follow-up questions can cite them (UC-04 list_allergies).
+        self::assertSame($allergies['entries'], $this->agent->posts[0]['bundle']['allergies']);
     }
 
     public function testMedicationsGoToTheAgentAndOnlyChangesSinceBaselineAreASection(): void
@@ -664,11 +665,53 @@ final class BriefingTicketControllerTest extends TestCase
         self::assertNull($sections['identity']);
         self::assertSame([], $sections['interval_orders']);
         self::assertSame(['lab_orders', 'identity', 'allergies', 'medications'], self::section($result, 'footer')['sources_unavailable']);
-        // The agent is told about the orders and medications gaps so the matcher never asserts absence for them.
+        // The agent is told about every failed evidence source so tools and the matcher never assert absence for them.
         $quality = $this->agent->posts[0]['bundle']['data_quality'];
         self::assertIsArray($quality);
-        self::assertSame(['lab_orders', 'medications'], $quality['sources_unavailable']);
+        self::assertSame(['lab_orders', 'medications', 'allergies'], $quality['sources_unavailable']);
         self::assertCount(1, self::intervalResults($result));
+    }
+
+    // ------------------------------------------------------------------ //
+    // Ticket refresh for follow-up turns
+    // ------------------------------------------------------------------ //
+
+    public function testRefreshMintsATicketForTheGivenBundleWithoutReadingTheChartOrPostingABundle(): void
+    {
+        $reader = $this->reader([self::hba1c()]);
+        $bundleId = 'e6b2abe5-8664-4ebb-bf81-e3d5cca35df4';
+        $bundleCid = '7f0e6b2a-3c4d-4e5f-9a1b-2c3d4e5f6a7b';
+        $result = $this->controller($reader)->handleForSession($this->session(), self::PID, $bundleId, $bundleCid);
+        self::assertSame(200, $result['status']);
+        $body = $result['body'];
+        self::assertSame($bundleId, $body['bundle_id']);
+        self::assertSame($bundleCid, $body['correlation_id']);
+        self::assertNull($body['sections']);
+        $ticket = $body['ticket'];
+        self::assertIsString($ticket);
+        $claims = self::claims($ticket);
+        self::assertSame($bundleId, $claims['bundle_id']);
+        self::assertSame($bundleCid, $claims['cid']);
+        self::assertSame(self::PUUID, $claims['puuid']);
+        self::assertSame(self::USER_UUID, $claims['sub']);
+        self::assertSame([], $this->agent->posts); // no bundle rebuilt or re-posted
+        self::assertSame([], $reader->asOfSeen); // no note or evidence read
+        self::assertStringContainsString('outcome=ticket_refresh', $this->audit->events[0]['comment']);
+    }
+
+    public function testRefreshStillRequiresAuthorizationAndValidIds(): void
+    {
+        $bundleId = 'e6b2abe5-8664-4ebb-bf81-e3d5cca35df4';
+        $cid = '7f0e6b2a-3c4d-4e5f-9a1b-2c3d4e5f6a7b';
+        $denied = $this->controller($this->reader([]), self::FULL_ACL, [])->handleForSession($this->session(), self::PID, $bundleId, $cid);
+        self::assertSame(403, $denied['status']);
+        $bad = $this->controller($this->reader([]))->handleForSession($this->session(), self::PID, 'not-a-uuid', $cid);
+        self::assertSame(400, $bad['status']);
+        self::assertSame('invalid_bundle_id', self::detail($bad)['code']);
+        $noCid = $this->controller($this->reader([]))->handleForSession($this->session(), self::PID, $bundleId, null);
+        self::assertSame(400, $noCid['status']);
+        $stale = $this->controller($this->reader([]))->handleForSession($this->session(), self::OTHER_PID, $bundleId, $cid);
+        self::assertSame(409, $stale['status']);
     }
 
     // ------------------------------------------------------------------ //

@@ -85,6 +85,8 @@ final class BriefingTicketController
         CopilotAuthorizer::CODE_ACL_DENIED => [403, 'Your role does not permit reading this patient context.'],
         CopilotAuthorizer::CODE_NO_CARE_RELATIONSHIP => [403, 'No care relationship with the selected patient was found.'],
         'patient_mismatch' => [409, 'The selected patient changed; reload the patient summary.'],
+        'invalid_bundle_id' => [400, 'The bundle id to refresh is not valid.'],
+        'agent_not_configured' => [503, 'The Co-Pilot agent is not configured.'],
         'patient_not_found' => [404, 'The selected patient record could not be found.'],
         'no_prior_note' => [404, 'No prior note with plan text is on file for the selected patient.'],
         'source_unavailable' => [503, 'A required clinical source could not be read.'],
@@ -124,11 +126,19 @@ final class BriefingTicketController
     /**
      * Framework-neutral entry point used by the REST route and by tests.
      *
+     * With `$refreshBundleId` the call re-authorizes and mints a new ticket for
+     * an existing agent bundle (follow-up turns after the previous ticket
+     * expired) without re-reading the chart or re-posting a bundle. The
+     * bundle id is not trusted: the agent enforces that it belongs to the
+     * ticket's patient and user.
+     *
      * @param array{authUserID?:mixed, authUser?:mixed, pid?:mixed, encounter?:mixed} $session
      * @param int|null $requestedPid  the pid the panel was rendered with, if it sent one
+     * @param string|null $refreshBundleId  an existing bundle id to re-ticket, or null for a new briefing
+     * @param string|null $refreshCorrelationId  that bundle's original correlation id (the agent requires it to match)
      * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
      */
-    public function handleForSession(array $session, ?int $requestedPid = null): array
+    public function handleForSession(array $session, ?int $requestedPid = null, ?string $refreshBundleId = null, ?string $refreshCorrelationId = null): array
     {
         $correlationId = Uuid::uuid4()->toString();
         $headers = self::RESPONSE_HEADERS + [self::CORRELATION_HEADER => $correlationId];
@@ -153,6 +163,10 @@ final class BriefingTicketController
             $this->logger->info('copilot briefing denied', ['cid' => $correlationId, 'code' => 'patient_mismatch']);
             ($this->auditWriter)(self::AUDIT_EVENT, $username, false, "cid={$correlationId}; code=patient_mismatch", $pid);
             return $this->error('patient_mismatch', $correlationId, $headers);
+        }
+
+        if ($refreshBundleId !== null) {
+            return $this->refreshTicket($refreshBundleId, $refreshCorrelationId ?? '', $correlationId, $headers, $userId, $username, $pid, $decision['basis']);
         }
 
         try {
@@ -185,7 +199,7 @@ final class BriefingTicketController
             $allergies = $this->readOptional($correlationId, 'allergies', $sectionSourcesUnavailable, fn(): array => $this->reader->listAllergies($pid));
             $medications = $this->readOptional($correlationId, 'medications', $sectionSourcesUnavailable, fn(): array => $this->reader->listMedications($pid, self::LAB_RESULT_LIMIT));
 
-            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf);
+            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf, $allergies);
             $asOfUtc = UtcDate::toIso($asOf, $this->builder->getLocalZone());
             $sections = $this->sections($bundle, $asOfUtc, $asOfSource, $identity, $scheduled, $encounterReason, $allergies, $sectionSourcesUnavailable);
         } catch (SourceUnavailableException $e) {
@@ -272,21 +286,80 @@ final class BriefingTicketController
     {
         $session = $request->getSession();
         $requestedPid = null;
+        $refreshBundleId = null;
+        $refreshCorrelationId = null;
         $json = json_decode($request->getContent(), true, 4);
         if (is_array($json)) {
             $requestedPid = Scalar::positiveIntOrNull($json['pid'] ?? null);
+            $raw = $json['refresh_bundle_id'] ?? null;
+            $refreshBundleId = is_string($raw) && $raw !== '' ? $raw : null;
+            $rawCid = $json['refresh_correlation_id'] ?? null;
+            $refreshCorrelationId = is_string($rawCid) && $rawCid !== '' ? $rawCid : null;
         }
         $result = $this->handleForSession([
             'authUserID' => $session->get('authUserID'),
             'authUser' => $session->get('authUser'),
             'pid' => $session->get('pid'),
             'encounter' => $session->get('encounter'),
-        ], $requestedPid);
+        ], $requestedPid, $refreshBundleId, $refreshCorrelationId);
         if (!headers_sent()) {
             // PHP's session cache limiter pre-sets a weaker Cache-Control; ensure no-store is the only one sent.
             header_remove('Cache-Control');
         }
         return new JsonResponse($result['body'], $result['status'], $result['headers']);
+    }
+
+    /**
+     * Mint a fresh ticket for an existing bundle (authorization already passed).
+     *
+     * @param array<string,string> $headers
+     * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
+     */
+    private function refreshTicket(string $bundleId, string $bundleCid, string $correlationId, array $headers, int $userId, string $username, int $pid, ?string $basis): array
+    {
+        if (!preg_match('/^[0-9a-f-]{36}$/', $bundleId) || !preg_match('/^[0-9a-f-]{36}$/', $bundleCid)) {
+            return $this->error('invalid_bundle_id', $correlationId, $headers);
+        }
+        $secret = $this->config->ticketSecret;
+        if ($secret === null) {
+            return $this->error('agent_not_configured', $correlationId, $headers);
+        }
+        try {
+            $patient = $this->reader->findPatient($pid);
+            if ($patient === null) {
+                return $this->error('patient_not_found', $correlationId, $headers);
+            }
+            $userUuid = $this->reader->findUserUuid($userId);
+        } catch (SourceUnavailableException $e) {
+            $this->logger->error('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
+            return $this->error('source_unavailable', $correlationId, $headers);
+        }
+        $issuedAt = $this->issuedAt();
+        // The ticket carries the bundle's original cid (supplied by the panel); the agent binds tickets by
+        // bundle + patient + user and checks that cid against the stored bundle, so a wrong pair fails there.
+        $ticket = (new TicketSigner($secret))->mint(
+            $userUuid ?? 'user:' . $userId,
+            $patient['uuid'],
+            $bundleId,
+            $bundleCid,
+            Uuid::uuid4()->toString(),
+            $issuedAt,
+            $this->config->ticketTtlSeconds,
+        );
+        ($this->auditWriter)(self::AUDIT_EVENT, $username, true, "cid={$correlationId}; basis={$basis}; outcome=ticket_refresh; bundle_cid={$bundleCid}", $pid);
+        $this->logger->info('copilot ticket refreshed', ['cid' => $correlationId, 'basis' => $basis]);
+        return ['status' => 200, 'body' => [
+            'schema_version' => self::SCHEMA_VERSION,
+            'correlation_id' => $bundleCid,
+            'patient_uuid' => $patient['uuid'],
+            'agent_url' => $this->config->agentBaseUrl(),
+            'bundle_id' => $bundleId,
+            'ticket' => $ticket,
+            'ticket_expires_at' => gmdate(UtcDate::FORMAT, $issuedAt + $this->config->ticketTtlSeconds),
+            'sections' => null,
+            'degraded' => null,
+            'warnings' => [],
+        ], 'headers' => $headers];
     }
 
     /**
@@ -349,35 +422,9 @@ final class BriefingTicketController
             }
         }
 
-        // Allergies as recorded; exact duplicates (same lower(title) or code, same begdate) collapse with a count (DATA-004).
-        $allergyRows = null;
-        $allergyDuplicates = 0;
-        if ($allergies !== null) {
-            $allergyRows = [];
-            $index = [];
-            foreach ($allergies as $a) {
-                $code = trim($a['diagnosis']);
-                $key = ($code !== '' ? 'code:' . strtolower($code) : 'title:' . strtolower(trim($a['title']))) . '|' . substr(trim($a['begdate']), 0, 10);
-                if (isset($index[$key])) {
-                    $allergyRows[$index[$key]]['duplicate_count']++;
-                    $allergyDuplicates++;
-                    continue;
-                }
-                $index[$key] = count($allergyRows);
-                $allergyRows[] = [
-                    'record_id' => 'lists:' . $a['id'],
-                    'title' => $a['title'],
-                    'coded' => $code !== '',
-                    'code' => $code === '' ? null : $a['diagnosis'],
-                    'reaction' => trim($a['reaction']) === '' ? null : $a['reaction'],
-                    'severity' => trim($a['severity']) === '' ? null : $a['severity'],
-                    'active' => $a['activity'] === 1 && (trim($a['enddate']) === '' || str_starts_with($a['enddate'], '0000')),
-                    'begdate' => trim($a['begdate']) === '' ? null : $a['begdate'],
-                    'enddate' => trim($a['enddate']) === '' || str_starts_with($a['enddate'], '0000') ? null : $a['enddate'],
-                    'duplicate_count' => 1,
-                ];
-            }
-        }
+        // Allergies as recorded come from the bundle (collapsed there, DATA-004); null when the source failed.
+        $allergyRows = $allergies === null ? null : $bundle['allergies'];
+        assert($allergyRows === null || is_array($allergyRows));
         $dataQuality = $bundle['data_quality'];
         assert(is_array($dataQuality));
 
@@ -415,7 +462,7 @@ final class BriefingTicketController
                 'orders_in_window' => count($labOrders),
                 'medication_changes_in_window' => count($medicationChanges),
                 'medications_on_file' => count($medications),
-                'duplicates_collapsed' => Scalar::int($dataQuality['duplicates_collapsed'] ?? 0) + $allergyDuplicates,
+                'duplicates_collapsed' => Scalar::int($dataQuality['duplicates_collapsed'] ?? 0),
                 'omitted' => $this->builder->getOmittedCounts(),
             ],
         ];

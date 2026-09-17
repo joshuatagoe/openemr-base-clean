@@ -79,6 +79,10 @@ class BriefingService:
         self._provider_factory = provider_factory
         self._max_plan_chars = max_plan_chars
 
+    def provider(self) -> ModelProvider:
+        """Build the configured provider (lazily; raises ProviderConfigurationError when unconfigured)."""
+        return self._provider_factory()
+
     async def extract(self, context: ContextBundle) -> tuple[ExtractionOutput | None, list[str]]:
         """Stage 1 (model): grounded commitments, or ``None`` with a fixed warning when there is no usable plan.
 

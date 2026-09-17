@@ -67,7 +67,7 @@ final class ContextBundleBuilderTest extends TestCase
     public function testTracerBulletBundleShape(): void
     {
         // Tracer bullet: fixture-equivalent bundle with stable ids, UTC dates, mapped status and flag.
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [$this->labRow()], null, [], []);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [$this->labRow()], null, [], [], null, []);
 
         self::assertSame('1.0', $bundle['schema_version']);
         self::assertSame(self::CID, $bundle['correlation_id']);
@@ -105,7 +105,7 @@ final class ContextBundleBuilderTest extends TestCase
             ['order_id' => 15, 'seq' => 1, 'test_name' => 'TSH', 'code' => '', 'order_status' => 'pending', 'ordered_at' => '0000-00-00 00:00:00'],
         ];
         $builder = $this->builder();
-        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [$lab], null, $orders, []);
+        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [$lab], null, $orders, [], null, []);
         self::assertSame('procedure_order:12', $bundle['lab_results'][0]['order_id']);
         self::assertSame('4548-4', $bundle['lab_results'][0]['code']);
         self::assertSame('4.0-5.6', $bundle['lab_results'][0]['range']);
@@ -130,7 +130,7 @@ final class ContextBundleBuilderTest extends TestCase
             ['source_table' => 'other', 'id' => 42, 'drug' => 'X', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '', 'enddate' => '', 'date_added' => '2026-01-01 00:00:00', 'date_modified' => ''],
         ];
         $builder = $this->builder();
-        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, $now);
+        $bundle = $builder->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, $now, []);
         $meds = $bundle['medications'];
         self::assertCount(4, $meds);
         self::assertSame(2, $builder->getOmittedCounts()['medications_omitted']);
@@ -163,21 +163,41 @@ final class ContextBundleBuilderTest extends TestCase
         // AUDIT DATA-004: identical rows (same source, drug, start, status) collapse; a differing status does not.
         $row = ['source_table' => 'lists', 'id' => 1, 'drug' => 'Metformin', 'rxnorm' => '', 'dosage' => '', 'active' => 1, 'begdate' => '2026-01-15 00:00:00', 'enddate' => '', 'date_added' => '2026-01-15 00:00:00', 'date_modified' => ''];
         $rows = [$row, ['id' => 2, 'drug' => 'METFORMIN'] + $row, ['id' => 3, 'active' => 0, 'enddate' => '2026-03-01 00:00:00'] + $row, ['id' => 4, 'source_table' => 'prescriptions'] + $row];
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, '2026-09-17 10:00:00');
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], $rows, '2026-09-17 10:00:00', []);
         self::assertSame(['lists:1', 'lists:3', 'prescriptions:4'], array_column($bundle['medications'], 'record_id'));
         self::assertSame(1, $bundle['data_quality']['duplicates_collapsed']);
     }
 
+    public function testAllergiesAreCarriedAsRecordedAndUnavailableIsDeclared(): void
+    {
+        $rows = [
+            ['id' => 5, 'title' => 'Penicillin', 'diagnosis' => '', 'reaction' => 'rash', 'severity' => 'moderate', 'begdate' => '2020-01-01 00:00:00', 'enddate' => '', 'activity' => 1],
+            ['id' => 6, 'title' => 'penicillin', 'diagnosis' => '', 'reaction' => '', 'severity' => '', 'begdate' => '2020-01-01 00:00:00', 'enddate' => '', 'activity' => 1],
+            ['id' => 7, 'title' => '', 'diagnosis' => '', 'reaction' => '', 'severity' => '', 'begdate' => '', 'enddate' => '', 'activity' => 1],
+        ];
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], [], '2026-09-17 10:00:00', $rows);
+        self::assertSame([[
+            'record_id' => 'lists:5', 'title' => 'Penicillin', 'coded' => false, 'code' => null, 'reaction' => 'rash', 'severity' => 'moderate',
+            'active' => true, 'begdate' => '2020-01-01T06:00:00Z', 'enddate' => null, 'duplicate_count' => 2,
+        ]], $bundle['allergies']);
+        self::assertSame(1, $bundle['data_quality']['duplicates_collapsed']);
+        self::assertSame([], $bundle['data_quality']['sources_unavailable']);
+
+        $missing = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], [], '2026-09-17 10:00:00', null);
+        self::assertSame([], $missing['allergies']);
+        self::assertSame(['allergies'], $missing['data_quality']['sources_unavailable']);
+    }
+
     public function testUnavailableMedicationsSourceIsDeclaredNotEmptied(): void
     {
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], null);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], null, null, []);
         self::assertSame([], $bundle['medications']);
         self::assertSame(['medications'], $bundle['data_quality']['sources_unavailable']);
     }
 
     public function testUnavailableOrdersSourceIsDeclaredNotEmptied(): void
     {
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, null, []);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, null, [], null, []);
         self::assertSame([], $bundle['lab_orders']);
         self::assertSame(['lab_orders'], $bundle['data_quality']['sources_unavailable']);
     }
@@ -185,7 +205,7 @@ final class ContextBundleBuilderTest extends TestCase
     public function testNoResultsIsAnEmptyAvailableList(): void
     {
         // Boundary: checked and empty -> [] with no unavailable sources (the agent reports no_matching_record_found).
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], []);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), [], null, [], [], null, []);
         self::assertSame([], $bundle['lab_results']);
         self::assertSame([], $bundle['data_quality']['sources_unavailable']);
     }
@@ -193,7 +213,7 @@ final class ContextBundleBuilderTest extends TestCase
     public function testUnavailableLabSourceIsDeclaredNotEmptied(): void
     {
         // Guards: a failed lab read is declared so the agent returns verification_unavailable, never "nothing found".
-        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), null, null, [], []);
+        $bundle = $this->builder()->build(self::CID, self::PATIENT, $this->note(), null, null, [], [], null, []);
         self::assertSame([], $bundle['lab_results']);
         self::assertSame(['lab_results'], $bundle['data_quality']['sources_unavailable']);
     }

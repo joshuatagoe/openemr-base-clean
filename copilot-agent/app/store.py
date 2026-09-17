@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from app.contracts import ContextBundle
+from app.contracts import ContextBundle, EvidenceMatch
+from app.followup import MAX_HISTORY_TURNS, ConversationTurn
 
 
 @dataclass
@@ -26,6 +27,15 @@ class StoredBundle:
     bundle: ContextBundle
     created_at: float
     expires_at: float
+    matches: list[EvidenceMatch] | None = None
+    """Verified commitments from the briefing; None until the briefing has run."""
+    turns: list[ConversationTurn] = field(default_factory=list)
+    """Completed follow-up turns for this bundle only; die with the bundle."""
+
+    def add_turn(self, turn: ConversationTurn) -> int:
+        self.turns.append(turn)
+        del self.turns[:-MAX_HISTORY_TURNS]
+        return len(self.turns)
 
     @property
     def expires_at_datetime(self) -> datetime:

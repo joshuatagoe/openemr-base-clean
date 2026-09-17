@@ -23,14 +23,21 @@ from app.providers.base import (
     MalformedModelOutputError,
     ModelExtractionOutput,
     ModelExtractionResult,
+    ModelTurnAnswer,
     ModelUsage,
     ProviderAuthenticationError,
     ProviderConfigurationError,
+    ProviderError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    ToolCall,
+    TurnStep,
 )
 from app.providers.prompt import EXTRACTION_SYSTEM_PROMPT, build_user_content
+from app.tools import strict_schema
+
+SUBMIT_ANSWER_TOOL = "submit_answer"
 from app.settings import ModelSettings
 
 
@@ -71,23 +78,8 @@ class AnthropicProvider:
         started = time.perf_counter()
         try:
             response = await self._client.messages.parse(**request)
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
-            raise ProviderAuthenticationError("provider rejected the credentials") from exc
-        except anthropic.APITimeoutError as exc:
-            raise ProviderTimeoutError("provider request timed out") from exc
-        except anthropic.RateLimitError as exc:
-            raise ProviderRateLimitError("provider rate limit reached") from exc
-        except (anthropic.APIConnectionError, anthropic.InternalServerError) as exc:
-            raise ProviderUnavailableError("provider unavailable") from exc
-        except anthropic.APIStatusError as exc:
-            if exc.status_code >= 500:
-                raise ProviderUnavailableError("provider unavailable") from exc
-            raise ProviderConfigurationError("provider rejected the request") from exc
-        except anthropic.APIResponseValidationError:
-            raise MalformedModelOutputError("provider response did not match the expected shape") from None
-        except (ValidationError, json.JSONDecodeError):
-            # Pydantic errors carry the offending values; do not chain them.
-            raise MalformedModelOutputError("model output did not match the extraction schema") from None
+        except Exception as exc:  # noqa: BLE001 - mapped below
+            self._raise_mapped(exc)
         latency_ms = int((time.perf_counter() - started) * 1000)
 
         if response.stop_reason != "end_turn":
@@ -107,6 +99,109 @@ class AnthropicProvider:
                 latency_ms=latency_ms,
             ),
         )
+
+    @staticmethod
+    def _raise_mapped(exc: Exception) -> None:
+        """Map SDK exceptions to the port's typed errors (fixed messages, nothing from the response)."""
+        if isinstance(exc, ProviderError):
+            raise exc
+        try:
+            raise exc
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
+            raise ProviderAuthenticationError("provider rejected the credentials") from exc
+        except anthropic.APITimeoutError as exc:
+            raise ProviderTimeoutError("provider request timed out") from exc
+        except anthropic.RateLimitError as exc:
+            raise ProviderRateLimitError("provider rate limit reached") from exc
+        except (anthropic.APIConnectionError, anthropic.InternalServerError) as exc:
+            raise ProviderUnavailableError("provider unavailable") from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise ProviderUnavailableError("provider unavailable") from exc
+            raise ProviderConfigurationError("provider rejected the request") from exc
+        except anthropic.APIResponseValidationError:
+            raise MalformedModelOutputError("provider response did not match the expected shape") from None
+        except (ValidationError, json.JSONDecodeError):
+            # Pydantic errors carry the offending values; do not chain them.
+            raise MalformedModelOutputError("model output did not match the extraction schema") from None
+
+    # ------------------------------------------------------------------ #
+    # Follow-up turn step: native tool use; the answer is itself a strict tool call
+    # ------------------------------------------------------------------ #
+
+    def build_turn_request(self, system: str, transcript: list[Any], tools: list[dict[str, Any]], *, force_answer: bool) -> dict[str, Any]:
+        answer_schema = strict_schema(ModelTurnAnswer.model_json_schema())
+        tool_params: list[dict[str, Any]] = [
+            {"name": t["name"], "description": t["description"], "input_schema": t["input_schema"], "strict": True} for t in tools
+        ] + [
+            {
+                "name": SUBMIT_ANSWER_TOOL,
+                "description": "Submit the final answer: a list of short statements, each with its kind and the record_id values it cites.",
+                "input_schema": answer_schema,
+                "strict": True,
+            }
+        ]
+        return {
+            "model": self._settings.model_id_turn,
+            "max_tokens": self._settings.turn_max_output_tokens,
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "messages": transcript,
+            "tools": tool_params,
+            "tool_choice": {"type": "tool", "name": SUBMIT_ANSWER_TOOL} if force_answer else {"type": "auto"},
+            "output_config": {"effort": self._settings.turn_effort},
+        }
+
+    async def turn_step(self, system: str, transcript: list[Any], tools: list[dict[str, Any]], *, force_answer: bool) -> TurnStep:
+        request = self.build_turn_request(system, transcript, tools, force_answer=force_answer)
+        started = time.perf_counter()
+        try:
+            response = await self._client.messages.create(**request)
+        except Exception as exc:  # noqa: BLE001 - mapped below
+            self._raise_mapped(exc)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        usage_obj = getattr(response, "usage", None)
+        usage = ModelUsage(
+            provider=self.name,
+            model=str(getattr(response, "model", self._settings.model_id_turn)),
+            input_tokens=getattr(usage_obj, "input_tokens", None),
+            output_tokens=getattr(usage_obj, "output_tokens", None),
+            latency_ms=latency_ms,
+        )
+        content = list(getattr(response, "content", []) or [])
+        assistant_content = [self._block_to_param(b) for b in content]
+        tool_calls: list[ToolCall] = []
+        answer: ModelTurnAnswer | None = None
+        for block in content:
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            raw_input = getattr(block, "input", {})
+            if getattr(block, "name", "") == SUBMIT_ANSWER_TOOL:
+                try:
+                    answer = ModelTurnAnswer.model_validate(raw_input)
+                except ValidationError:
+                    raise MalformedModelOutputError("model answer did not match the turn schema") from None
+            else:
+                tool_calls.append(ToolCall(call_id=str(getattr(block, "id", "")), name=str(getattr(block, "name", "")), arguments=dict(raw_input) if isinstance(raw_input, dict) else {}))
+        if answer is None and not tool_calls:
+            if force_answer:
+                raise MalformedModelOutputError("model did not submit an answer when required")
+            answer = ModelTurnAnswer(statements=[])  # plain text with no tools and no answer: treated as nothing to say
+        return TurnStep(tool_calls=tool_calls, answer=answer, usage=usage, assistant_content=assistant_content)
+
+    @staticmethod
+    def _block_to_param(block: Any) -> dict[str, Any]:
+        btype = getattr(block, "type", None)
+        if btype == "text":
+            return {"type": "text", "text": getattr(block, "text", "")}
+        if btype == "tool_use":
+            return {"type": "tool_use", "id": getattr(block, "id", ""), "name": getattr(block, "name", ""), "input": getattr(block, "input", {})}
+        dump = getattr(block, "model_dump", None)
+        return dump() if callable(dump) else {"type": "text", "text": ""}
+
+    @staticmethod
+    def tool_results_message(results: list[tuple[str, str]]) -> dict[str, Any]:
+        """User message carrying tool results (provider-shaped)."""
+        return {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id, "content": content} for call_id, content in results]}
 
 
 __all__ = ["AnthropicProvider"]

@@ -14,14 +14,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ModelSettings(BaseSettings):
-    """Environment variables: ANTHROPIC_API_KEY, MODEL_PROVIDER, MODEL_ID_EXTRACTION,
-    ANTHROPIC_TIMEOUT_SECONDS, EXTRACTION_MAX_OUTPUT_TOKENS, EXTRACTION_EFFORT."""
+    """Environment variables: ANTHROPIC_API_KEY, MODEL_PROVIDER, MODEL_ID_EXTRACTION, MODEL_ID_TURN,
+    ANTHROPIC_TIMEOUT_SECONDS, EXTRACTION_MAX_OUTPUT_TOKENS, EXTRACTION_EFFORT, TURN_MAX_OUTPUT_TOKENS, TURN_EFFORT."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     anthropic_api_key: SecretStr | None = Field(default=None, description="Never logged; never a default.")
     model_provider: Literal["anthropic"] = "anthropic"
     model_id_extraction: str = Field(default="claude-opus-5", min_length=1)
+    model_id_turn: str = Field(default="claude-opus-5", min_length=1)
+    turn_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
+    turn_effort: Literal["low", "medium", "high"] = "low"
     anthropic_timeout_seconds: float = Field(default=20.0, gt=0)
     extraction_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
     extraction_effort: Literal["low", "medium", "high"] = "low"

@@ -123,6 +123,7 @@ class EvidenceSource(StrEnum):
     LAB_RESULTS = "lab_results"
     LAB_ORDERS = "lab_orders"
     MEDICATIONS = "medications"
+    ALLERGIES = "allergies"
 
 
 class MedicationAction(StrEnum):
@@ -231,6 +232,21 @@ class MedicationRecord(StrictModel):
     timestamp_field: str = Field(min_length=1)
 
 
+class AllergyRecord(StrictModel):
+    """One allergy entry as recorded (AUDIT DATA-002): uncoded stays uncoded; absence is never inferred."""
+
+    record_id: str = Field(min_length=1, description="'lists:<id>'.")
+    title: str = Field(min_length=1)
+    coded: bool
+    code: str | None = Field(default=None, min_length=1)
+    reaction: str | None = Field(default=None, min_length=1)
+    severity: str | None = Field(default=None, min_length=1)
+    active: bool
+    begdate: AwareDatetime | None = None
+    enddate: AwareDatetime | None = None
+    duplicate_count: int = Field(default=1, ge=1)
+
+
 class DataQuality(StrictModel):
     """What the module could and could not load (ARCHITECTURE.md sections 11-12).
 
@@ -262,6 +278,7 @@ class ContextBundle(StrictModel):
     lab_results: list[LabResult] = Field(default_factory=list)
     lab_orders: list[LabOrder] = Field(default_factory=list)
     medications: list[MedicationRecord] = Field(default_factory=list, description="All medication rows from both sources (not windowed: 'continue' needs older records).")
+    allergies: list[AllergyRecord] = Field(default_factory=list, description="Allergy entries as recorded; empty means 'no entries on file', never NKA.")
     data_quality: DataQuality = Field(
         default_factory=DataQuality,
         description="Source availability and normalization notes; defaults to 'all sources available'.",
@@ -440,6 +457,52 @@ class DegradedEvent(StreamEnvelope):
     deterministic_sections_intact: Literal[True] = True
 
 
+# --------------------------------------------------------------------------- #
+# Follow-up turns (UC-04)
+# --------------------------------------------------------------------------- #
+
+
+class StatementKind(StrEnum):
+    """Kinds of statement a follow-up answer may contain (ARCHITECTURE.md section 7)."""
+
+    FACT = "fact"
+    NO_RECORD_FOUND = "no_record_found"
+    CLARIFICATION = "clarification"
+    REFUSAL = "refusal"
+
+
+class ToolCallRecord(StrictModel):
+    """One tool invocation in a turn (logged as a span; returned so the panel can show what was searched)."""
+
+    tool: str = Field(min_length=1)
+    args: dict[str, str | int | bool | None] = Field(default_factory=dict)
+    records: int = Field(ge=0)
+    truncated: bool = False
+    error: str | None = Field(default=None, description="Fixed, non-clinical error code when the tool failed.")
+
+
+class VerifiedStatement(StrictModel):
+    """A statement that survived the verifier, with the records it is attributed to."""
+
+    text: str = Field(min_length=1)
+    kind: StatementKind
+    citations: list[Citation] = Field(default_factory=list)
+
+
+class TurnRequest(StrictModel):
+    question: str = Field(min_length=1, max_length=1000, description="Physician's typed question about the bound patient.")
+
+
+class VerifiedTurn(StreamEnvelope):
+    """Agent -> panel: verified statements only, plus what was withheld and searched."""
+
+    turn_index: int = Field(ge=1)
+    statements: list[VerifiedStatement] = Field(default_factory=list)
+    rejected_count: int = Field(default=0, ge=0)
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
+    degraded: DegradedEvent | None = Field(default=None, description="Set when the turn could not be produced; statements is then empty.")
+
+
 class ErrorDetail(StrictModel):
     """Structured, non-clinical error body for a briefing that could not be produced.
 
@@ -456,7 +519,13 @@ class ErrorDetail(StrictModel):
 __all__ = [
     "SCHEMA_VERSION",
     "STATES_REQUIRING_CITATIONS",
+    "StatementKind",
+    "ToolCallRecord",
+    "TurnRequest",
+    "VerifiedStatement",
+    "VerifiedTurn",
     "AbnormalFlag",
+    "AllergyRecord",
     "BriefingRequest",
     "BriefingResponse",
     "BundleAccepted",
