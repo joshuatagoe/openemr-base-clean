@@ -1,4 +1,7 @@
-"""API and contract tests for the agent service scaffold.
+"""API and contract tests for the agent service.
+
+The ``client`` and ``fixture_payload`` fixtures come from ``conftest.py``; the
+client's model provider is a scripted fake, so no test here reaches the network.
 
 Every test names the failure mode it guards against (AgentForge engineering
 requirement: boundary, invariant or regression - no happy-path-only suites).
@@ -24,21 +27,9 @@ from app.contracts import (
     ExtractedCommitment,
     RecordType,
 )
-from app.main import CORRELATION_HEADER, app
+from app.main import CORRELATION_HEADER
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "lab_followup.json"
-
-
-@pytest.fixture(scope="module")
-def client() -> TestClient:
-    return TestClient(app)
-
-
-@pytest.fixture()
-def fixture_payload() -> dict:
-    """A fresh copy per test so mutations never leak between cases."""
-    with FIXTURE_PATH.open(encoding="utf-8") as fh:
-        return json.load(fh)
 
 
 # --------------------------------------------------------------------------- #
@@ -76,13 +67,11 @@ def test_briefing_accepts_fixture_and_echoes_identifiers(client: TestClient, fix
     assert resp.headers[CORRELATION_HEADER] == fixture_payload["context"]["correlation_id"]
 
 
-def test_briefing_scaffold_returns_no_matches_and_an_explicit_warning(
-    client: TestClient, fixture_payload: dict
-) -> None:
-    """Guards: the scaffold must not fabricate a clinical conclusion; absence of matches is labelled as unwired."""
+def test_briefing_returns_matches_for_the_fixture(client: TestClient, fixture_payload: dict) -> None:
+    """Regression guard: the wired endpoint evaluates the fixture (full scenarios live in test_briefing.py)."""
     body = client.post("/v1/briefings", json=fixture_payload).json()
-    assert body["matches"] == []
-    assert any("not wired" in w for w in body["warnings"])
+    assert len(body["matches"]) == 2
+    assert not any("not wired" in w for w in body["warnings"])
 
 
 # --------------------------------------------------------------------------- #

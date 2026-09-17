@@ -265,6 +265,19 @@ class HealthResponse(StrictModel):
     status: Literal["ok"]
 
 
+class ErrorDetail(StrictModel):
+    """Structured, non-clinical error body for a briefing that could not be produced.
+
+    Returned (wrapped as ``{"detail": ...}``) instead of a briefing so that a
+    provider outage is never mistaken for "no commitments found".
+    """
+
+    code: str = Field(min_length=1, description="Stable machine-readable category, e.g. 'provider_unavailable'.")
+    message: str = Field(min_length=1, description="Fixed, non-clinical explanation.")
+    correlation_id: UUID | None = None
+    patient_uuid: UUID | None = None
+
+
 __all__ = [
     "SCHEMA_VERSION",
     "STATES_REQUIRING_CITATIONS",
@@ -275,6 +288,7 @@ __all__ = [
     "CommitmentKind",
     "ContextBundle",
     "DataQuality",
+    "ErrorDetail",
     "EvidenceMatch",
     "EvidenceSource",
     "EvidenceState",
