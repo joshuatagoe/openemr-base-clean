@@ -26,8 +26,19 @@ from app.providers.base import (
     ModelCommitment,
     ModelExtractionOutput,
     ModelProvider,
+    ModelUsage,
     ProviderError,
 )
+
+
+def record_usage(usage: ModelUsage) -> None:
+    """Token and estimated-cost accounting for one model call (PHI-free)."""
+    from app.metrics import metrics
+    from app.observability import log_event
+    from app.settings import ModelSettings
+
+    cost = metrics.add_usage(usage.model, usage.input_tokens, usage.cached_input_tokens, usage.output_tokens, ModelSettings().price_table())
+    log_event("model.usage", provider=usage.provider, model=usage.model, input_tokens=usage.input_tokens, cached_input_tokens=usage.cached_input_tokens, output_tokens=usage.output_tokens, latency_ms=usage.latency_ms, estimated_cost_usd=round(cost, 6))
 
 REJECTED_SPAN_WARNING = (
     "A model-generated commitment was rejected because its source span was not grounded in the supplied plan."
@@ -179,6 +190,7 @@ class CommitmentExtractor:
                 if exc.retryable and attempt < self._max_attempts:
                     continue
                 raise
+            record_usage(result.usage)
             return ground_extraction(plan_text, result.output)
 
 

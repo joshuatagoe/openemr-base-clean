@@ -89,6 +89,9 @@ class FakeProvider:
     def tool_results_message(results: list[tuple[str, str]]) -> dict[str, Any]:
         return {"role": "user", "content": [{"type": "tool_result", "tool_use_id": cid, "content": content} for cid, content in results]}
 
+    async def ping(self) -> bool:
+        return True
+
     async def extract_commitments(self, plan_text: str) -> ModelExtractionResult:
         self.calls.append(plan_text)
         item = self._script.pop(0) if len(self._script) > 1 else self._script[0]

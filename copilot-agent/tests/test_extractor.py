@@ -41,6 +41,7 @@ from app.providers.base import (
     ProviderConfigurationError,
     ProviderError,
     ProviderRateLimitError,
+    ProviderRejectedRequestError,
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
@@ -427,7 +428,7 @@ def _status_error(cls: type[anthropic.APIStatusError], status: int) -> anthropic
         (_status_error(anthropic.PermissionDeniedError, 403), ProviderAuthenticationError),
         (_status_error(anthropic.RateLimitError, 429), ProviderRateLimitError),
         (_status_error(anthropic.InternalServerError, 500), ProviderUnavailableError),
-        (_status_error(anthropic.BadRequestError, 400), ProviderConfigurationError),
+        (_status_error(anthropic.BadRequestError, 400), ProviderRejectedRequestError),
         (anthropic.APITimeoutError(httpx2.Request("POST", "https://api.anthropic.com/v1/messages")), ProviderTimeoutError),
         (anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages")), ProviderUnavailableError),
     ],

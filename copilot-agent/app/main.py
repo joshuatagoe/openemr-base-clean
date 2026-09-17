@@ -59,6 +59,7 @@ from app.contracts import (
 )
 from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, log_event, span
+from app.metrics import metrics
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import (
     MalformedModelOutputError,
@@ -67,9 +68,11 @@ from app.providers.base import (
     ProviderConfigurationError,
     ProviderError,
     ProviderRateLimitError,
+    ProviderRejectedRequestError,
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
+from app.providers.stub_provider import StubProvider
 from app.security import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
@@ -136,13 +139,20 @@ def get_store(request: Request) -> BundleStore:
     return request.app.state.store
 
 
+def build_provider(model_settings: ModelSettings) -> ModelProvider:
+    """The configured provider: the stub (no network, no spend) or Anthropic."""
+    if model_settings.model_provider == "stub":
+        return StubProvider()
+    return AnthropicProvider(model_settings)
+
+
 def get_provider_factory() -> Callable[[], ModelProvider]:
     """Return a factory that builds the configured provider on demand.
 
     Construction is deferred to the briefing call so a missing API key
     surfaces as an explicit error for that request, not as an import-time failure.
     """
-    return lambda: AnthropicProvider(ModelSettings())
+    return lambda: build_provider(ModelSettings())
 
 
 def get_briefing_service(
@@ -158,6 +168,7 @@ def get_briefing_service(
 _PROVIDER_ERROR_MAP: list[tuple[type[ProviderError], int, str, str]] = [
     (ProviderConfigurationError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_not_configured", "The model provider is not configured; the briefing could not be produced."),
     (ProviderAuthenticationError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_authentication_failed", "The model provider rejected the service credentials; the briefing could not be produced."),
+    (ProviderRejectedRequestError, status.HTTP_502_BAD_GATEWAY, "provider_rejected_request", "The model provider rejected the request; the briefing could not be produced."),
     (ProviderTimeoutError, status.HTTP_504_GATEWAY_TIMEOUT, "provider_timeout", "The model provider did not respond in time; the briefing could not be produced."),
     (ProviderRateLimitError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_rate_limited", "The model provider is rate limiting requests; the briefing could not be produced."),
     (ProviderUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_unavailable", "The model provider is unavailable; the briefing could not be produced."),
@@ -308,19 +319,68 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+_ready_cache: dict[str, tuple[float, DependencyStatus]] = {}
+
+
+async def _probe_http(name: str, url: str, timeout: float) -> DependencyStatus:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.get(url)
+        return DependencyStatus(status="ok", detail=f"HTTP {r.status_code}") if r.status_code < 500 else DependencyStatus(status="unavailable", detail=f"HTTP {r.status_code}")
+    except Exception as exc:  # noqa: BLE001 - readiness must never raise
+        return DependencyStatus(status="unavailable", detail=type(exc).__name__)
+
+
+async def _cached(name: str, ttl: int, compute: Callable[[], Any]) -> DependencyStatus:
+    import time as _time
+
+    now = _time.time()
+    hit = _ready_cache.get(name)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    value = await compute()
+    _ready_cache[name] = (now, value)
+    return value
+
+
+async def _probe_provider(model: ModelSettings) -> DependencyStatus:
+    if not model.is_configured():
+        return DependencyStatus(status="not_configured", detail="ANTHROPIC_API_KEY missing")
+    if model.model_provider == "stub":
+        return DependencyStatus(status="degraded", detail="stub provider: no model calls are made")
+    try:
+        ok = await build_provider(model).ping()
+    except Exception as exc:  # noqa: BLE001
+        return DependencyStatus(status="unavailable", detail=type(exc).__name__)
+    return DependencyStatus(status="ok", detail=f"{model.model_provider}:{model.model_id_extraction}") if ok else DependencyStatus(status="unavailable", detail="models lookup failed")
+
+
 @app.get("/ready", response_model=ReadyResponse, tags=["operations"], responses={503: {"model": ReadyResponse}})
 async def ready(response: Response, cfg: ServiceSettings = Depends(get_settings), store: BundleStore = Depends(get_store)) -> ReadyResponse:
-    """Readiness: every dependency the briefing path needs, with per-dependency status."""
+    """Readiness (ARCHITECTURE.md section 14): secret, model provider (cheap models lookup, cached), store,
+    and - when configured - OpenEMR's unauthenticated FHIR metadata and Langfuse's health endpoint."""
     model = ModelSettings()
-    deps = {
+    deps: dict[str, DependencyStatus] = {
         "ticket_secret": DependencyStatus(status="ok") if cfg.has_ticket_secret() else DependencyStatus(status="not_configured", detail="COPILOT_TICKET_SECRET missing or too short"),
-        "model_provider": DependencyStatus(status="ok", detail=f"{model.model_provider}:{model.model_id_extraction}") if model.has_api_key() else DependencyStatus(status="not_configured", detail="ANTHROPIC_API_KEY missing"),
+        "model_provider": await _cached("model_provider", cfg.ready_cache_seconds, lambda: _probe_provider(model)),
         "bundle_store": DependencyStatus(status="ok", detail=f"{await store.count()} bundle(s) held"),
     }
-    all_ok = all(d.status == "ok" for d in deps.values())
+    if cfg.openemr_base_url:
+        deps["openemr"] = await _cached("openemr", cfg.ready_cache_seconds, lambda: _probe_http("openemr", cfg.openemr_base_url.rstrip("/") + "/apis/default/fhir/metadata", cfg.ready_probe_timeout_seconds))
+    if cfg.langfuse_host:
+        deps["langfuse"] = await _cached("langfuse", cfg.ready_cache_seconds, lambda: _probe_http("langfuse", cfg.langfuse_host.rstrip("/") + "/api/public/health", cfg.ready_probe_timeout_seconds))
+    all_ok = all(d.status in ("ok", "degraded") for d in deps.values())
     if not all_ok:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return ReadyResponse(status="ready" if all_ok else "not_ready", dependencies=deps)
+
+
+@app.get("/metrics", tags=["operations"])
+async def metrics_snapshot() -> dict[str, Any]:
+    """Process-local counters, latency percentiles per stage, token totals and estimated cost. No clinical data."""
+    return metrics.snapshot()
 
 
 # --------------------------------------------------------------------------- #
@@ -394,21 +454,25 @@ async def _briefing_events(
     ids = {"correlation_id": bundle.correlation_id, "patient_uuid": bundle.patient_uuid}
     cid = bundle.correlation_id
     with span("briefing", cid=cid, bundle_id=str(stored.bundle_id)) as attrs:
+        metrics.inc("briefings_started")
         # Stage 1: extraction (model). Every failure here is a degraded{extraction} frame.
         try:
             extraction, warnings = await asyncio.wait_for(service.extract(bundle), timeout=timeout_seconds)
         except TimeoutError:
+            metrics.inc("briefings_degraded", stage="extraction", reason="timeout")
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="timeout"))
             return
         except ProviderError as exc:
             _, code, _ = _provider_error_code(exc)
+            metrics.inc("briefings_degraded", stage="extraction", reason=code)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = code
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code=code))
             return
         except Exception:
+            metrics.inc("briefings_degraded", stage="extraction", reason="internal_error")
             log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="extraction", exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
@@ -419,6 +483,7 @@ async def _briefing_events(
         try:
             result = service.assemble(bundle, extraction, warnings)
         except Exception:
+            metrics.inc("briefings_degraded", stage="matching", reason="internal_error")
             log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="matching", exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
@@ -434,6 +499,11 @@ async def _briefing_events(
         attrs["rejected"] = result.rejected_count
         attrs["interval_records"] = len(result.interval_annotations)
         attrs["unexplained"] = sum(1 for a in result.interval_annotations if a.explained_by is None)
+        metrics.inc("briefings_completed")
+        for m in result.matches:
+            metrics.inc("evidence_states", state=m.state.value if m.state is not None else "not_checked")
+        if result.rejected_count:
+            metrics.inc("verification_rejected", stage="extraction")
         yield _sse("complete", CompleteEvent(**ids, commitments=len(result.matches), warnings=result.warnings, rejected_count=result.rejected_count))
 
 

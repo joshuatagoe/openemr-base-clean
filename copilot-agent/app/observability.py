@@ -85,6 +85,12 @@ def span(name: str, *, cid: UUID | str | None = None, **fields: Any) -> Iterator
     finally:
         attrs["duration_ms"] = int((time.perf_counter() - started) * 1000)
         log_event(f"span.{name}", cid=cid, **attrs)
+        try:  # local metrics; never let accounting break the request
+            from app.metrics import metrics as _metrics
+
+            _metrics.observe(name, attrs["duration_ms"])
+        except Exception:  # noqa: BLE001
+            pass
 
 
 __all__ = ["JsonFormatter", "LOGGER_NAME", "configure_logging", "get_logger", "log_event", "span"]

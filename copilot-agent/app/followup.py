@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.contracts import ContextBundle, EvidenceMatch, ToolCallRecord, VerifiedStatement
+from app.extractor import record_usage
 from app.providers.base import ModelProvider, ModelTurnAnswer
 from app.providers.prompt import FOLLOWUP_SYSTEM_PROMPT, build_question_content
 from app.tools import ToolOutput, run_tool, serialize_output, tool_definitions
@@ -77,6 +78,7 @@ async def run_turn(
     for step_index in range(max_iterations + 1):
         force = step_index >= max_iterations
         step = await provider.turn_step(FOLLOWUP_SYSTEM_PROMPT, transcript, tools, force_answer=force)
+        record_usage(step.usage)
         if step.answer is not None:
             answer = step.answer
             break

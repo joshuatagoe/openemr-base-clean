@@ -20,7 +20,7 @@ class ModelSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     anthropic_api_key: SecretStr | None = Field(default=None, description="Never logged; never a default.")
-    model_provider: Literal["anthropic"] = "anthropic"
+    model_provider: Literal["anthropic", "stub"] = "anthropic"
     model_id_extraction: str = Field(default="claude-opus-5", min_length=1)
     model_id_turn: str = Field(default="claude-opus-5", min_length=1)
     turn_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
@@ -29,8 +29,21 @@ class ModelSettings(BaseSettings):
     extraction_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
     extraction_effort: Literal["low", "medium", "high"] = "low"
 
+    price_input_per_mtok: float | None = Field(default=None, ge=0, description="Override: USD per million uncached input tokens for the configured model.")
+    price_cached_per_mtok: float | None = Field(default=None, ge=0)
+    price_output_per_mtok: float | None = Field(default=None, ge=0)
+
     def has_api_key(self) -> bool:
         return self.anthropic_api_key is not None and bool(self.anthropic_api_key.get_secret_value().strip())
+
+    def is_configured(self) -> bool:
+        return self.model_provider == "stub" or self.has_api_key()
+
+    def price_table(self) -> dict[str, tuple[float, float, float]] | None:
+        if self.price_input_per_mtok is None or self.price_output_per_mtok is None:
+            return None
+        cached = self.price_cached_per_mtok if self.price_cached_per_mtok is not None else self.price_input_per_mtok / 10
+        return {self.model_id_extraction: (self.price_input_per_mtok, cached, self.price_output_per_mtok), self.model_id_turn: (self.price_input_per_mtok, cached, self.price_output_per_mtok)}
 
 
 class ServiceSettings(BaseSettings):
@@ -54,6 +67,10 @@ class ServiceSettings(BaseSettings):
     signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
     briefing_timeout_seconds: float = Field(default=10.0, gt=0, le=60, description="Hard timeout before a degraded event.")
     allowed_origin: str | None = Field(default=None, description="Browser origin of the OpenEMR panel (CORS). None disables CORS.")
+    openemr_base_url: str | None = Field(default=None, description="For /ready: GET {url}/apis/default/fhir/metadata must answer. None skips the probe.")
+    langfuse_host: str | None = Field(default=None, description="For /ready: GET {host}/api/public/health must answer. None skips the probe.")
+    ready_probe_timeout_seconds: float = Field(default=5.0, gt=0, le=30, description="Per-probe HTTP timeout; the dev stack answers FHIR metadata in ~5.5 s with Xdebug on.")
+    ready_cache_seconds: int = Field(default=60, ge=0, le=600)
 
     def ticket_secret_value(self) -> str | None:
         if self.ticket_secret is None:

@@ -112,6 +112,7 @@ class ModelUsage(StrictModel):
     provider: str
     model: str
     input_tokens: int | None = None
+    cached_input_tokens: int | None = None
     output_tokens: int | None = None
     latency_ms: int = Field(ge=0)
 
@@ -138,6 +139,10 @@ class ProviderConfigurationError(ProviderError):
 
 class ProviderAuthenticationError(ProviderError):
     """Credentials rejected. Not retryable."""
+
+
+class ProviderRejectedRequestError(ProviderError):
+    """The provider answered 4xx to a well-formed call (schema/parameter problem). Not retryable; a code bug, not an outage."""
 
 
 class ProviderTimeoutError(ProviderError):
@@ -196,6 +201,10 @@ class ModelProvider(Protocol):
         """Provider-shaped message carrying (call_id, serialized output) pairs back to the model."""
         ...
 
+    async def ping(self) -> bool:
+        """Cheap reachability check for /ready (a models lookup, never a completion)."""
+        ...
+
 
 TurnStep.model_rebuild()
 
@@ -216,6 +225,7 @@ __all__ = [
     "ProviderConfigurationError",
     "ProviderError",
     "ProviderRateLimitError",
+    "ProviderRejectedRequestError",
     "ProviderTimeoutError",
     "ProviderUnavailableError",
 ]

@@ -29,6 +29,7 @@ from app.providers.base import (
     ProviderConfigurationError,
     ProviderError,
     ProviderRateLimitError,
+    ProviderRejectedRequestError,
     ProviderTimeoutError,
     ProviderUnavailableError,
     ToolCall,
@@ -95,6 +96,7 @@ class AnthropicProvider:
                 provider=self.name,
                 model=str(getattr(response, "model", self.model)),
                 input_tokens=getattr(usage, "input_tokens", None),
+                cached_input_tokens=getattr(usage, "cache_read_input_tokens", None),
                 output_tokens=getattr(usage, "output_tokens", None),
                 latency_ms=latency_ms,
             ),
@@ -118,7 +120,7 @@ class AnthropicProvider:
         except anthropic.APIStatusError as exc:
             if exc.status_code >= 500:
                 raise ProviderUnavailableError("provider unavailable") from exc
-            raise ProviderConfigurationError("provider rejected the request") from exc
+            raise ProviderRejectedRequestError("provider rejected the request") from exc
         except anthropic.APIResponseValidationError:
             raise MalformedModelOutputError("provider response did not match the expected shape") from None
         except (ValidationError, json.JSONDecodeError):
@@ -164,6 +166,7 @@ class AnthropicProvider:
             provider=self.name,
             model=str(getattr(response, "model", self._settings.model_id_turn)),
             input_tokens=getattr(usage_obj, "input_tokens", None),
+            cached_input_tokens=getattr(usage_obj, "cache_read_input_tokens", None),
             output_tokens=getattr(usage_obj, "output_tokens", None),
             latency_ms=latency_ms,
         )
@@ -187,6 +190,18 @@ class AnthropicProvider:
                 raise MalformedModelOutputError("model did not submit an answer when required")
             answer = ModelTurnAnswer(statements=[])  # plain text with no tools and no answer: treated as nothing to say
         return TurnStep(tool_calls=tool_calls, answer=answer, usage=usage, assistant_content=assistant_content)
+
+    async def ping(self) -> bool:
+        """Models lookup for the configured extraction model: proves credentials and reachability without a completion."""
+        try:
+            await self._client.models.retrieve(self._settings.model_id_extraction)
+            return True
+        except Exception as exc:  # noqa: BLE001 - readiness must never raise
+            try:
+                self._raise_mapped(exc)
+            except ProviderError:
+                return False
+            return False
 
     @staticmethod
     def _block_to_param(block: Any) -> dict[str, Any]:

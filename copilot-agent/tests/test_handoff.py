@@ -431,6 +431,9 @@ def test_delete_accepts_an_expired_or_used_ticket_but_not_another_bundles(client
 
 def test_ready_reports_each_dependency_and_503_when_any_is_missing(client: TestClient) -> None:
     """Operability: /ready names what is missing (the API key is blanked by conftest) and returns 503."""
+    from app.main import _ready_cache
+
+    _ready_cache.clear()
     resp = client.get("/ready")
     assert resp.status_code == 503
     body = resp.json()
@@ -442,14 +445,23 @@ def test_ready_reports_each_dependency_and_503_when_any_is_missing(client: TestC
 
 
 def test_ready_is_200_when_everything_is_configured(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With a provider that answers its ping (the stub here, so no network), every dependency is satisfied."""
+    from app.main import _ready_cache
+
+    _ready_cache.clear()
+    monkeypatch.setenv("MODEL_PROVIDER", "stub")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
     resp = client.get("/ready")
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "ready"
     assert "test-key-not-real" not in resp.text
+    _ready_cache.clear()
 
 
 def test_ready_without_secret_names_the_gap(unconfigured_client: TestClient) -> None:
+    from app.main import _ready_cache
+
+    _ready_cache.clear()
     body = unconfigured_client.get("/ready").json()
     assert body["dependencies"]["ticket_secret"]["status"] == "not_configured"
 
