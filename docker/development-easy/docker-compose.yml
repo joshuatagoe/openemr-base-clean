@@ -87,6 +87,12 @@ services:
       OPENEMR_SETTING_rest_fhir_api: 1
       OPENEMR_SETTING_rest_portal_api: 1
       OPENEMR_SETTING_portal_onsite_two_enable: 1
+      # Clinical Co-Pilot module (oe-module-copilot): agent hand-off URL and the shared
+      # ticket secret (>= 32 chars, same value as the agent's COPILOT_TICKET_SECRET).
+      # Set them in the shell or a docker/development-easy/.env file; when empty the
+      # module renders its deterministic sections and reports the plan check unavailable.
+      COPILOT_AGENT_URL: "${COPILOT_AGENT_URL:-}"
+      COPILOT_TICKET_SECRET: "${COPILOT_TICKET_SECRET:-}"
       OPENEMR_SETTING_ccda_alt_service_enable: 3
       OPENEMR_SETTING_couchdb_host: couchdb
       OPENEMR_SETTING_couchdb_port: 6984
