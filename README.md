@@ -16,6 +16,43 @@
 
 [![Backers on Open Collective](https://opencollective.com/openemr/backers/badge.svg)](#backers) [![Sponsors on Open Collective](https://opencollective.com/openemr/sponsors/badge.svg)](#sponsors)
 
+# Clinical Co-Pilot (AgentForge fork)
+
+This fork adds a Clinical Co-Pilot for a primary-care physician's 90 seconds before an established-patient visit: which commitments in the last plan have evidence in the record, which are pending, which have none, plus scoped follow-up questions. Every clinical claim cites a record; a missing record is never rendered as "not done".
+
+**Deployed**
+
+| Service | URL |
+|---|---|
+| OpenEMR with the Co-Pilot panel (Patient Summary) | https://openemr-base-clean-production.up.railway.app/ |
+| Co-Pilot agent ([`/health`](https://copilot-agent-production-0395.up.railway.app/health), [`/ready`](https://copilot-agent-production-0395.up.railway.app/ready), [`/docs`](https://copilot-agent-production-0395.up.railway.app/docs)) | https://copilot-agent-production-0395.up.railway.app/ |
+
+**Documents**
+
+| Document | Purpose |
+|---|---|
+| [AUDIT.md](AUDIT.md) | Audit of OpenEMR as found, before any Co-Pilot changes |
+| [USERS.md](USERS.md) | Target user, workflow and use cases |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the Co-Pilot is built: summary, glossary, end-to-end flow, verification, tradeoffs, status |
+| [KEY_METRICS.md](KEY_METRICS.md) | What success means and how each metric is measured |
+
+**Where the code lives**
+
+- `interface/modules/custom_modules/oe-module-copilot/` — PHP module: authorization, clinical reads, bundle building, ticket signing, panel ([README](interface/modules/custom_modules/oe-module-copilot/README.md))
+- `copilot-agent/` — Python service: commitment extraction, deterministic matching, verification, SSE streaming, follow-up turns, `/metrics` ([README](copilot-agent/README.md))
+
+**Run locally**
+
+1. Start OpenEMR: `cd docker/development-easy && docker compose up --detach --wait` (app at http://localhost:8300/, login `admin` / `pass`).
+2. Start the agent: `cd copilot-agent && cp .env.example .env` (set `ANTHROPIC_API_KEY`, `COPILOT_TICKET_SECRET`), then `uv sync && uv run uvicorn app.main:app --port 8765`.
+3. Give OpenEMR the agent: set `COPILOT_AGENT_URL` (for the container, `http://host.docker.internal:8765`) and the same `COPILOT_TICKET_SECRET` in `docker/development-easy/.env`, then recreate the `openemr` service.
+4. Enable the module: Administration → Modules → Manage Modules → install/enable `oe-module-copilot`.
+5. Seed a demo patient with a prior plan and a later result (dev database only): run `interface/modules/custom_modules/oe-module-copilot/dev/seed_evelyn_demo.php --confirm-local` inside the OpenEMR container, then open that patient's summary.
+
+Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container per the module README.
+
+---
+
 # OpenEMR
 
 [OpenEMR](https://open-emr.org) is a Free and Open Source electronic health records and medical practice management application. It features fully integrated electronic health records, practice management, scheduling, electronic billing, internationalization, free support, a vibrant community, and a whole lot more. It runs on Windows, Linux, Mac OS X, and many other platforms.
