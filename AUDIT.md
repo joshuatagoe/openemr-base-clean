@@ -21,6 +21,45 @@ This audit examined the OpenEMR 8.2.0-dev fork at commit `6933fda` that will hos
 
 **Remediation order.** Verify Railway durability and configuration → fix or bypass the pre-ACL PHI emission → build a service-layer read path with ACL caching → define minimum-necessary fields and normalization rules → resolve provider contractual questions → only then route PHI.
 
+## Findings at a Glance
+
+Thirty-four findings follow in Sections 3–7, each with severity, verification status, evidence and recommendation. This index groups them by what they mean for a copilot on the audited data path, so a reader can go straight to the ones that constrain the design. Findings are unchanged from the audit as conducted; how the design responded to them is recorded in [ARCHITECTURE.md](ARCHITECTURE.md), not here.
+
+**Constrain the copilot's design** — read these first.
+
+| ID | One line | Consequence for a copilot |
+|---|---|---|
+| ARCH-001 | Clinical pages are legacy inline SQL; a parallel service layer exists | Do not call or scrape legacy pages; read through the audited data layer |
+| ARCH-002 | Patient context is mutable session state set by a query parameter | Bind every request and response to a patient identifier and verify it on both ends |
+| ARCH-004 | Events and the local API bridge are the only sanctioned hooks | Build as a custom module; UI via render events, endpoints via `RestApiCreateEvent` |
+| ARCH-005 | No scheduler; background work rides on UI traffic | Nothing expensive at bootstrap or render time; compute on demand |
+| SEC-001 | `demographics.php` emits PHI before its ACL check | The copilot path must not depend on that page's data path |
+| SEC-002 | Authorization is role-only; no patient-level check | Add a care-relationship check server-side, fail closed, audited |
+| SEC-005 | Twig autoescaping is off | Render model output as text nodes only |
+| PERF-001, PERF-003 | 112 uncached ACL queries per summary load; legacy pages already exceed the latency budget | Memoize ACL checks per request; never wait on the summary page |
+| PERF-006 | No timeout, retry, cancellation or degraded mode exists for an LLM dependency | Design all four in from the start |
+| DATA-001, DATA-003 | Medications live in two tables with ambiguous active status | Keep both sources with provenance; surface disagreement, never resolve it silently |
+| DATA-002, DATA-004, DATA-005, DATA-007 | Uncoded allergies and problems; duplicate rows; empty-string units and free-text result status; free-text reasons with weak note linkage | Normalize explicitly; state absence as "no entry on file", never as negation |
+| COMP-004, COMP-006 | No evidence for the conditions under which PHI may reach an LLM; minimum-necessary not enforced at the data layer | Field allow-lists per resource; demo data only until Section 7.4 conditions are met |
+
+**Block production, not the prototype** — verify or fix before real PHI or real users.
+
+| ID | One line |
+|---|---|
+| ARCH-006 | Site data (documents, OAuth keys, per-site config) is not durably stored in the Railway image |
+| SEC-003, COMP-001 | Audit and API logs are PHI stores (base64, not encryption; full response bodies) with no retention mechanism |
+| SEC-004, COMP-003 | Session cookie not HttpOnly/Secure; TLS terminates at the edge; encryption evidence partial |
+| SEC-006 | Dependency advisories in the shipped image |
+| SEC-007 | Production security configuration unverified; local defaults permissive |
+| PERF-002 | Two audit rows per SQL statement, including SELECTs |
+| PERF-005 | Index gaps on `form_clinical_notes(pid, encounter)` and `pc_pid` |
+| PERF-007 | Single-container, file-session deployment limits scaling |
+| COMP-002 | Automatic logoff defaults to two hours |
+| COMP-005 | Disclosure accounting does not cover copilot-mediated disclosures |
+| COMP-007 | Backup and recovery of site data is manual and unverified on Railway |
+
+**Verified, lower relevance to the chosen scope.** ARCH-003 (the same concept in multiple tables — handled where it intersects DATA-001), PERF-004 (Visit History defaults), DATA-006 (vitals store `0.00` — vitals are not on the initial copilot path).
+
 ## 1. Scope, Methodology and Limitations
 
 ### 1.1 Baseline
