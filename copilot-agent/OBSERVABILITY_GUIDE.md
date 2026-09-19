@@ -180,6 +180,6 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 - [x] Scores: `verification_rejected`, `hallucinated_span`, `degraded`, `state.*`
 - [x] Agent env vars set; `/ready` shows `langfuse: ok` (public URL; the private hostname gave `ConnectError` from the agent container — revisit)
 - [x] PHI check passed on a real trace from the deployed stack (2026-09-19): briefing + three turns with claude-opus-5, tokens and cost per generation, no clinical string or patient identifier anywhere in the trace
-- [ ] Dashboard saved (UI; see the widget recipe in Part E)
-- [ ] Four native v4 alert rules in the UI (primary channel), runbook text in each description
+- [x] Dashboard created: [Clinical Co-Pilot](https://langfuse-web-production-818f.up.railway.app/project/cmu8ny4ie0006ok02zd0nib5e/dashboards/cmu8tudy10001ql02y7yb0i7r); widgets per Part E
+- [x] Four native v4 alert rules in the UI, runbook text in each description, Slack incoming-webhook automation
 - [x] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone
