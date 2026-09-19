@@ -145,8 +145,11 @@ def configure_tracing(
     if not enabled:
         _langfuse = None
         return False
+    import os
+
     from langfuse import Langfuse
 
+    os.environ.setdefault("OTEL_SERVICE_NAME", "copilot-agent")  # resource attribute on every exported span
     extra: dict[str, Any] = {"span_exporter": span_exporter} if span_exporter is not None else {}
     _langfuse = Langfuse(public_key=public_key, secret_key=secret_key, base_url=base_url, environment=environment, mask=mask_for_tracing, **extra)
     log_event("tracing.configured", environment=environment, capture_io=capture_io)

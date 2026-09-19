@@ -172,13 +172,13 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 
 ## Checklist
 
-- [ ] Langfuse services green on Railway; `/api/public/health` OK
+- [x] Langfuse services green on Railway; `/api/public/health` OK (2026-09-19; redis → `bitnamilegacy/redis:7.2.5`, minio → `quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z`, worker `NEXTAUTH_URL` → `https://${{langfuse-web.RAILWAY_PUBLIC_DOMAIN}}`, S3 credentials → `${{minio.MINIO_ROOT_USER}}`/`${{minio.MINIO_ROOT_PASSWORD}}` on web and worker)
 - [ ] v4 images + `LANGFUSE_MIGRATION_V4_WRITE_MODE=events_only` (or fallback recorded)
 - [ ] Sign-up disabled; only `langfuse-web` public
 - [x] `langfuse` dependency; `configure_tracing` in lifespan; mask allow-list; mask unit test
 - [x] `span()` → observation with trace id = `cid`; tool spans; generations with usage/cost; `attempt` on retries
 - [x] Scores: `verification_rejected`, `hallucinated_span`, `degraded`, `state.*`
 - [ ] Agent env vars set; `/ready` shows `langfuse`
-- [ ] PHI check on a real trace passed
+- [x] PHI check passed on a trace exported from a local agent run (stub provider, 2026-09-19); repeat on the deployed stack per Part D
 - [ ] Dashboard saved; four alerts with automation; runbook text in descriptions
 - [ ] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone
