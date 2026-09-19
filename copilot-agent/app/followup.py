@@ -18,6 +18,7 @@ from typing import Any
 
 from app.contracts import ContextBundle, EvidenceMatch, ToolCallRecord, VerifiedStatement
 from app.extractor import record_usage
+from app.observability import generation, span
 from app.providers.base import ModelProvider, ModelTurnAnswer
 from app.providers.prompt import FOLLOWUP_SYSTEM_PROMPT, build_question_content
 from app.tools import ToolOutput, run_tool, serialize_output, tool_definitions
@@ -77,7 +78,12 @@ async def run_turn(
 
     for step_index in range(max_iterations + 1):
         force = step_index >= max_iterations
-        step = await provider.turn_step(FOLLOWUP_SYSTEM_PROMPT, transcript, tools, force_answer=force)
+        with generation("turn_step", step=step_index + 1) as gen:
+            step = await provider.turn_step(FOLLOWUP_SYSTEM_PROMPT, transcript, tools, force_answer=force)
+            gen["usage"] = step.usage
+            # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
+            gen["input"] = {"question": question, "history_turns": len(history), "force_answer": force}
+            gen["output"] = step.answer.model_dump(mode="json") if step.answer is not None else {"tool_calls": [c.name for c in step.tool_calls]}
         record_usage(step.usage)
         if step.answer is not None:
             answer = step.answer
@@ -86,7 +92,11 @@ async def run_turn(
         transcript.append({"role": "assistant", "content": step.assistant_content})
         results: list[tuple[str, str]] = []
         for call in step.tool_calls:
-            output = run_tool(bundle, matches, call.name, call.arguments)
+            with span("tool", tool=call.name) as t:  # nests under the turn; arguments and records are never attached
+                output = run_tool(bundle, matches, call.name, call.arguments)
+                t["records"] = len(output.records)
+                t["truncated"] = output.truncated
+                t["error"] = output.error
             outputs.append(output)
             records.append(_record(call.name, call.arguments, output))
             results.append((call.call_id, serialize_output(output)))

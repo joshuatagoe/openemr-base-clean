@@ -81,9 +81,35 @@ counts, outcome codes; never clinical values, prompts or completions).
 `/metrics` exposes counters (`briefings_started`, `briefings_completed`,
 `briefings_degraded{stage,reason}`, `evidence_states{state}`,
 `verification_rejected{stage}`), latency percentiles per span (`briefing`,
-`briefing.sync`, `turn`), token totals and an estimated cost. The `span`
-seam in `app/observability.py` is where the self-hosted Langfuse exporter
-attaches (masking on; raw I/O never leaves the process).
+`briefing.sync`, `turn`), token totals and an estimated cost.
+
+### Tracing (self-hosted Langfuse)
+
+With `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL` set
+(`.env` locally; Railway variables in production) the agent exports one trace
+per correlation id — the trace id *is* the `cid`, so a panel's
+`X-Correlation-Id` finds its trace directly. Shape: `briefing` → `extract`
+(generation, one per provider attempt with `attempt` in metadata);
+`turn` → `turn_step` (generation) → `tool` (one per tool call: `tool`,
+`records`, `truncated`, `error`). Generations carry `usage_details` and
+`cost_details`. Scores on the trace: `degraded` (boolean),
+`verification_rejected` (count), `hallucinated_span` (boolean), and
+`state.<evidence_state>` counts after a completed briefing.
+
+PHI control: the SDK `mask` hook in `app/observability.py` is an allow-list
+(`TRACE_ALLOWED_KEYS`): identifiers, counts, codes and timings pass; every
+other value — plan text, statements, drug and test names, tool arguments,
+the patient uuid — is replaced with `<masked>` inside the agent process
+before export. Model inputs and outputs are attached only when
+`COPILOT_LANGFUSE_CAPTURE_IO=true`, which is for synthetic-data evaluation
+runs and must stay `false` in production. `tests/test_tracing.py` runs a
+briefing and a turn through the real SDK with an in-memory exporter and
+asserts no clinical string reaches any span.
+
+`COPILOT_LANGFUSE_HOST` (readiness probe) and `LANGFUSE_BASE_URL` (exporter)
+are separate settings that carry the same URL. Tracing is off when either
+key is absent; the test suite forces `LANGFUSE_TRACING_ENABLED=false` so a
+developer's `.env` keys never export test traces.
 
 ### Alerts (ARCHITECTURE.md §14) and what to do
 

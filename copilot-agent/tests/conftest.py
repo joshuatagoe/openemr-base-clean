@@ -1,8 +1,8 @@
 """Shared test configuration.
 
 * Async tests run on asyncio through the ``anyio`` pytest plugin.
-* ``ANTHROPIC_API_KEY`` is removed from the environment for every test so no
-  suite can construct the real provider by accident.
+* ``ANTHROPIC_API_KEY`` is removed and ``LANGFUSE_TRACING_ENABLED`` forced off for every test so no
+  suite can construct the real provider or export traces by accident.
 * ``client`` is a ``TestClient`` whose model provider is a scripted
   ``FakeProvider``; set the script with the ``provider_script`` fixture.
 """
@@ -52,6 +52,7 @@ def _no_api_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
     if "live" in request.node.keywords:
         return
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")  # never send test traces to the real Langfuse
 
 
 @pytest.fixture

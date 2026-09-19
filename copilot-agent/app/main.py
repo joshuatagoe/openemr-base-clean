@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
@@ -58,7 +59,7 @@ from app.contracts import (
     StreamEnvelope,
 )
 from app.followup import ConversationTurn, run_turn
-from app.observability import configure_logging, log_event, span
+from app.observability import configure_logging, configure_tracing, log_event, score, shutdown_tracing, span
 from app.metrics import metrics
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import (
@@ -86,7 +87,7 @@ from app.security import (
     verify_ticket,
 )
 from app.service import BriefingService
-from app.settings import ModelSettings, ServiceSettings
+from app.settings import ModelSettings, ServiceSettings, TracingSettings
 from app.store import BundleStore, StoredBundle
 
 CORRELATION_HEADER = "X-Correlation-Id"
@@ -97,10 +98,20 @@ settings = ServiceSettings()
 @asynccontextmanager
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
+    tracing = TracingSettings()
+    traced = configure_tracing(
+        enabled=tracing.is_enabled(),
+        public_key=tracing.langfuse_public_key.get_secret_value() if tracing.langfuse_public_key else None,
+        secret_key=tracing.langfuse_secret_key.get_secret_value() if tracing.langfuse_secret_key else None,
+        base_url=tracing.langfuse_base_url,
+        environment=settings.environment,
+        capture_io=settings.langfuse_capture_io,
+    )
     application.state.store = BundleStore(ttl_seconds=settings.bundle_ttl_seconds)
-    log_event("service.start", environment=settings.environment, bundle_ttl_seconds=settings.bundle_ttl_seconds)
+    log_event("service.start", environment=settings.environment, bundle_ttl_seconds=settings.bundle_ttl_seconds, tracing=traced)
     yield
     log_event("service.stop")
+    shutdown_tracing()
 
 
 app = FastAPI(
@@ -462,6 +473,7 @@ async def _briefing_events(
             metrics.inc("briefings_degraded", stage="extraction", reason="timeout")
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
+            score("degraded", 1, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="timeout"))
             return
         except ProviderError as exc:
@@ -469,6 +481,7 @@ async def _briefing_events(
             metrics.inc("briefings_degraded", stage="extraction", reason=code)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = code
+            score("degraded", 1, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code=code))
             return
         except Exception:
@@ -476,6 +489,7 @@ async def _briefing_events(
             log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="extraction", exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
+            score("degraded", 1, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="internal_error"))
             return
 
@@ -487,6 +501,7 @@ async def _briefing_events(
             log_event("briefing.failed", cid=cid, level=logging.ERROR, stage="matching", exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
+            score("degraded", 1, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.MATCHING, reason_code="internal_error"))
             return
 
@@ -504,6 +519,11 @@ async def _briefing_events(
             metrics.inc("evidence_states", state=m.state.value if m.state is not None else "not_checked")
         if result.rejected_count:
             metrics.inc("verification_rejected", stage="extraction")
+        score("degraded", 0, data_type="BOOLEAN")
+        score("verification_rejected", result.rejected_count)
+        score("hallucinated_span", 1 if result.rejected_count else 0, data_type="BOOLEAN")
+        for state, n in Counter(m.state.value for m in result.matches if m.state is not None).items():
+            score(f"state.{state}", n)
         yield _sse("complete", CompleteEvent(**ids, commitments=len(result.matches), warnings=result.warnings, rejected_count=result.rejected_count))
 
 
@@ -572,22 +592,28 @@ async def conversation_turn(
         except TimeoutError:
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
+            score("degraded", 1, data_type="BOOLEAN")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="timeout"))
         except ProviderError as exc:
             _, code, _ = _provider_error_code(exc)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = code
+            score("degraded", 1, data_type="BOOLEAN")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code=code))
         except Exception:
             log_event("turn.failed", cid=claims.cid, level=logging.ERROR, exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
+            score("degraded", 1, data_type="BOOLEAN")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="internal_error"))
         attrs["statements"] = len(outcome.statements)
         attrs["rejected"] = outcome.rejected_count
         attrs["rejection_codes"] = outcome.rejection_codes
         attrs["tool_calls"] = [t.tool for t in outcome.tool_calls]
         attrs["iterations"] = outcome.iterations
+        score("degraded", 0, data_type="BOOLEAN")
+        score("verification_rejected", outcome.rejected_count)
+        score("hallucinated_span", 1 if outcome.rejected_count else 0, data_type="BOOLEAN")
     stored.add_turn(ConversationTurn(question=request.question, statements=outcome.statements))
     return VerifiedTurn(**ids, turn_index=turn_index, statements=outcome.statements, rejected_count=outcome.rejected_count, tool_calls=outcome.tool_calls)
 

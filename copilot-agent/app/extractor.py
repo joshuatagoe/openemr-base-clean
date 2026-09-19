@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.contracts import CommitmentKind, ExtractedCommitment, ExtractionOutput, MedicationAction
+from app.observability import generation
 from app.providers.base import (
     ModelCommitment,
     ModelExtractionOutput,
@@ -185,7 +186,11 @@ class CommitmentExtractor:
         while True:
             attempt += 1
             try:
-                result = await self._provider.extract_commitments(plan_text)
+                with generation("extract", attempt=attempt) as gen:
+                    result = await self._provider.extract_commitments(plan_text)
+                    gen["usage"] = result.usage
+                    # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
+                    gen["input"], gen["output"] = plan_text, result.output.model_dump(mode="json")
             except ProviderError as exc:
                 if exc.retryable and attempt < self._max_attempts:
                     continue

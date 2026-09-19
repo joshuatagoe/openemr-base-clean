@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "anthropic>=1.6.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.115",
+    "langfuse>=4.15.4",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "uvicorn[standard]>=0.30",

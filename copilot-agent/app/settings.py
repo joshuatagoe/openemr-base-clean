@@ -69,6 +69,7 @@ class ServiceSettings(BaseSettings):
     allowed_origin: str | None = Field(default=None, description="Browser origin of the OpenEMR panel (CORS). None disables CORS.")
     openemr_base_url: str | None = Field(default=None, description="For /ready: GET {url}/apis/default/fhir/metadata must answer. None skips the probe.")
     langfuse_host: str | None = Field(default=None, description="For /ready: GET {host}/api/public/health must answer. None skips the probe.")
+    langfuse_capture_io: bool = Field(default=False, description="Record model inputs/outputs in traces. Synthetic-data evaluation runs only; never in production.")
     ready_probe_timeout_seconds: float = Field(default=5.0, gt=0, le=30, description="Per-probe HTTP timeout; the dev stack answers FHIR metadata in ~5.5 s with Xdebug on.")
     ready_cache_seconds: int = Field(default=60, ge=0, le=600)
 
@@ -82,3 +83,25 @@ class ServiceSettings(BaseSettings):
 
     def has_ticket_secret(self) -> bool:
         return self.ticket_secret_value() is not None
+
+
+class TracingSettings(BaseSettings):
+    """Langfuse client credentials (no prefix: ``LANGFUSE_PUBLIC_KEY``, ``LANGFUSE_SECRET_KEY``,
+    ``LANGFUSE_BASE_URL``, ``LANGFUSE_TRACING_ENABLED``). Tracing is off when either key is absent,
+    so tests and local runs need no Langfuse. Keys are never logged."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+
+    langfuse_public_key: SecretStr | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_base_url: str | None = None
+    langfuse_tracing_enabled: bool = True
+
+    def is_enabled(self) -> bool:
+        return (
+            self.langfuse_tracing_enabled
+            and self.langfuse_public_key is not None
+            and bool(self.langfuse_public_key.get_secret_value().strip())
+            and self.langfuse_secret_key is not None
+            and bool(self.langfuse_secret_key.get_secret_value().strip())
+        )
