@@ -149,9 +149,12 @@ score > 0 over 5 min. The on-call response for each is in the script's
 ## Cost
 
 Estimated from token usage with a per-million price table (override with
-`PRICE_*`). On `claude-opus-5` a briefing is ~4 K input (mostly cached
-system prompt) + ~0.5 K output ≈ $0.03; a follow-up turn with two tool calls
-is 2–3 model steps. `/metrics` reports the running total.
+`PRICE_*`); `/metrics` reports the running total and Langfuse the per-call
+figure. Measured on the deployed agent (`claude-opus-5`, 2026-09-19): a
+briefing's extraction is $0.0042 (~630 input + ~150 output tokens, p50 2.4 s);
+a follow-up turn averages 1.7 model steps at $0.0035 each, $0.0058 per turn.
+Projections and the architectural changes per scale tier are in
+[COST_ANALYSIS.md](../COST_ANALYSIS.md).
 
 ## Layout
 

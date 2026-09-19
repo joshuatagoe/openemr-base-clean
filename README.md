@@ -36,6 +36,7 @@ This fork adds a Clinical Co-Pilot for a primary-care physician's 90 seconds bef
 | [USERS.md](USERS.md) | Target user, workflow and use cases |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the Co-Pilot is built: summary, glossary, end-to-end flow, verification, tradeoffs, status |
 | [KEY_METRICS.md](KEY_METRICS.md) | What success means and how each metric is measured |
+| [COST_ANALYSIS.md](COST_ANALYSIS.md) | Measured unit costs, development spend, projections at 100 / 1K / 10K / 100K physicians and the architectural changes each level needs |
 
 **Where the code lives**
 
