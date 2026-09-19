@@ -113,13 +113,10 @@ developer's `.env` keys never export test traces.
 
 ### Alerts (ARCHITECTURE.md §14) and what to do
 
-The four rules below are native Langfuse v4 alert rules (Langfuse →
-Alerts, delivered through a Slack/webhook automation). `ops/langfuse_alerts.py`
-is their versioned, tested copy for on-demand checks: with the `LANGFUSE_*`
-variables in the environment, `uv run python ops/langfuse_alerts.py`
-evaluates the same rules against the Metrics API v2 (aggregates only),
-prints one line per rule, and exits non-zero on a breach. "No data" in a
-window is OK.
+The rules live in Langfuse (Alerts, delivered through a Slack/webhook
+automation) and nowhere else; this section documents them so the on-call
+response travels with the definition. Keep the two in step when a
+threshold changes.
 The rules, in the same order as below: briefing p95 > 8 s (warn > 6 s)
 over 5 min; `degraded` score average > 5 % over 5 min; `tool` observations
 at level `ERROR` > 10 % of tool spans over 10 min; any `hallucinated_span`
