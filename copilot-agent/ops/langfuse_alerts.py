@@ -1,12 +1,11 @@
 """Alert rules over the self-hosted Langfuse Metrics API v2 (ARCHITECTURE.md section 14; OBSERVABILITY_GUIDE.md Part F).
 
-The same four rules exist as native Langfuse v4 alert rules (the primary
-channel); this script is the versioned, tested copy and the backup channel:
-run on a schedule (``.github/workflows/copilot-alerts.yml``, every 5
-minutes), it evaluates the four rules over their trailing windows,
-prints one line per rule, posts breaches to ``ALERT_WEBHOOK_URL`` when set
-(Slack-compatible ``{"text": ...}``), and exits non-zero on any breach so
-the scheduled run itself fails and notifies.
+The four rules are native Langfuse v4 alert rules (the alerting channel);
+this script is their versioned, tested copy for on-demand checks from a
+terminal: it evaluates the four rules over their trailing windows, prints
+one line per rule with the on-call response on a breach, posts breaches to
+``ALERT_WEBHOOK_URL`` when set (Slack-compatible ``{"text": ...}``), and
+exits non-zero on any breach so it can also run under any scheduler.
 
 Only aggregates leave Langfuse (counts, percentiles, averages); no trace
 content is read. "No data" in a window is OK - quiet clinic hours are not an
