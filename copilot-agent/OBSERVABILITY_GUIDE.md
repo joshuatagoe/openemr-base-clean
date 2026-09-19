@@ -173,7 +173,7 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 ## Checklist
 
 - [x] Langfuse services green on Railway; `/api/public/health` OK (2026-09-19; redis → `bitnamilegacy/redis:7.2.5`, minio → `quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z`, worker `NEXTAUTH_URL` → `https://${{langfuse-web.RAILWAY_PUBLIC_DOMAIN}}`, S3 credentials → `${{minio.MINIO_ROOT_USER}}`/`${{minio.MINIO_ROOT_PASSWORD}}` on web and worker)
-- [ ] v4 images + `LANGFUSE_MIGRATION_V4_WRITE_MODE=events_only` (or fallback recorded)
+- [x] v4.38 (2026-09-19): ClickHouse `clickhouse/clickhouse-server:26.4`, `langfuse/langfuse-worker:4`, `langfuse/langfuse:4`; on BOTH web and worker: `LANGFUSE_MIGRATION_V4_WRITE_MODE=events_only`, `LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR=direct`, `LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN=true` (the image defaults are not the documented ones: without the last two the worker dual-writes OTel to legacy tables and web reads stay on legacy tables, so traces ingest but never show)
 - [ ] Sign-up disabled; only `langfuse-web` public
 - [x] `langfuse` dependency; `configure_tracing` in lifespan; mask allow-list; mask unit test
 - [x] `span()` → observation with trace id = `cid`; tool spans; generations with usage/cost; `attempt` on retries
@@ -181,5 +181,6 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 - [x] Agent env vars set; `/ready` shows `langfuse: ok` (public URL; the private hostname gave `ConnectError` from the agent container — revisit)
 - [x] PHI check passed on a real trace from the deployed stack (2026-09-19): briefing + three turns with claude-opus-5, tokens and cost per generation, no clinical string or patient identifier anywhere in the trace
 - [ ] Dashboard saved (UI; see the widget recipe in Part E)
-- [x] Four alerts: `ops/langfuse_alerts.py` + `copilot-alerts.yml` (v3 fallback); runbook text in the notification — needs the GitHub repository secrets set
+- [x] Four alerts as code: `ops/langfuse_alerts.py` (v2 Metrics API) + `copilot-alerts.yml`; runbook text in the notification — needs the GitHub repository secrets set
+- [ ] Four native v4 alert rules in the UI (primary channel), runbook text in each description
 - [x] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone

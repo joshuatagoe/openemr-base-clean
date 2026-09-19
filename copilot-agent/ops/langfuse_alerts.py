@@ -1,8 +1,9 @@
-"""Alert rules over the self-hosted Langfuse Metrics API (ARCHITECTURE.md section 14; OBSERVABILITY_GUIDE.md Part F).
+"""Alert rules over the self-hosted Langfuse Metrics API v2 (ARCHITECTURE.md section 14; OBSERVABILITY_GUIDE.md Part F).
 
-Langfuse v3 has no alert rules of its own, so this script is the alerting
-mechanism: run it on a schedule (``.github/workflows/copilot-alerts.yml``,
-every 5 minutes), it evaluates the four rules over their trailing windows,
+The same four rules exist as native Langfuse v4 alert rules (the primary
+channel); this script is the versioned, tested copy and the backup channel:
+run on a schedule (``.github/workflows/copilot-alerts.yml``, every 5
+minutes), it evaluates the four rules over their trailing windows,
 prints one line per rule, posts breaches to ``ALERT_WEBHOOK_URL`` when set
 (Slack-compatible ``{"text": ...}``), and exits non-zero on any breach so
 the scheduled run itself fails and notifies.
@@ -13,6 +14,7 @@ outage.
 
 Environment: ``LANGFUSE_BASE_URL``, ``LANGFUSE_PUBLIC_KEY``, ``LANGFUSE_SECRET_KEY``;
 optional ``ALERT_WEBHOOK_URL``. Standard library only so a CI runner needs no install.
+Uses ``/api/public/v2/metrics`` (the v1 endpoint is unavailable in v4 ``events_only`` mode).
 """
 
 from __future__ import annotations
@@ -91,7 +93,7 @@ class Result:
 
 class MetricsClient:
     def __init__(self, base_url: str, public_key: str, secret_key: str, timeout: float = 20.0) -> None:
-        self._url = base_url.rstrip("/") + "/api/public/metrics"
+        self._url = base_url.rstrip("/") + "/api/public/v2/metrics"
         self._auth = "Basic " + base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()
         self._timeout = timeout
 

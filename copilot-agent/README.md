@@ -113,9 +113,9 @@ developer's `.env` keys never export test traces.
 
 ### Alerts (ARCHITECTURE.md §14) and what to do
 
-Langfuse v3 has no alert rules, so `ops/langfuse_alerts.py` is the alerting
-mechanism: `.github/workflows/copilot-alerts.yml` runs it every 5 minutes
-against the Langfuse Metrics API (aggregates only), prints one line per
+The four rules below are native Langfuse v4 alert rules (primary channel);
+`ops/langfuse_alerts.py` is the versioned, tested copy and backup channel: `.github/workflows/copilot-alerts.yml` runs it every 5 minutes
+against the Langfuse Metrics API v2 (aggregates only), prints one line per
 rule, posts breaches to `ALERT_WEBHOOK_URL` (Slack-compatible) when set,
 and exits non-zero on a breach so the run fails and notifies. Run it by
 hand with the `LANGFUSE_*` variables in the environment:

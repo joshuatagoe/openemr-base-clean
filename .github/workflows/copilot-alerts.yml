@@ -1,8 +1,8 @@
 # Clinical Co-Pilot alerting (ARCHITECTURE.md section 14; copilot-agent/OBSERVABILITY_GUIDE.md Part F).
 #
-# Self-hosted Langfuse v3 has no alert rules, so this scheduled job is the
-# alerting mechanism: every 5 minutes it evaluates the four rules against the
-# Langfuse Metrics API (aggregates only, no trace content) and fails on a
+# The four rules also exist as native Langfuse v4 alert rules; this scheduled job is the
+# versioned backup: every 5 minutes it evaluates the four rules against the
+# Langfuse Metrics API v2 (aggregates only, no trace content) and fails on a
 # breach, which notifies through GitHub's workflow-failure notifications and,
 # when ALERT_WEBHOOK_URL is set, a Slack-compatible webhook.
 #
