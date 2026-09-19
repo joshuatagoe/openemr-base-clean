@@ -157,7 +157,7 @@ Langfuse → Alerts → New Alert (v4). First create an **Automation** (Settings
 
 Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) and to *OK* for 4.
 
-**Implemented for v3 (2026-09-19):** `copilot-agent/ops/langfuse_alerts.py` evaluates the four rules above against the Metrics API and `.github/workflows/copilot-alerts.yml` runs it every 5 minutes, failing (→ GitHub failure notification, plus `ALERT_WEBHOOK_URL` when set) on a breach. Set the repository secrets `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` (and optionally `ALERT_WEBHOOK_URL`) on the GitHub repo Railway deploys from. Rule 2 uses the `degraded` score average across briefings and turns (the scores view cannot filter by observation name). Rule 3 counts `tool` observations at level `ERROR`, which the agent sets when a tool returns an error code. Recorded in ARCHITECTURE.md §14.
+**As code:** `copilot-agent/ops/langfuse_alerts.py` evaluates the same four rules against the v2 Metrics API for on-demand checks (`uv run python ops/langfuse_alerts.py`); the native v4 rules above are the alerting channel. Rule 2 uses the `degraded` score average across briefings and turns (the scores view cannot filter by observation name). Rule 3 counts `tool` observations at level `ERROR`, which the agent sets when a tool returns an error code. Recorded in ARCHITECTURE.md §14.
 
 ---
 
@@ -181,6 +181,6 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 - [x] Agent env vars set; `/ready` shows `langfuse: ok` (public URL; the private hostname gave `ConnectError` from the agent container — revisit)
 - [x] PHI check passed on a real trace from the deployed stack (2026-09-19): briefing + three turns with claude-opus-5, tokens and cost per generation, no clinical string or patient identifier anywhere in the trace
 - [ ] Dashboard saved (UI; see the widget recipe in Part E)
-- [x] Four alerts as code: `ops/langfuse_alerts.py` (v2 Metrics API) + `copilot-alerts.yml`; runbook text in the notification — needs the GitHub repository secrets set
+- [x] Four alerts as code for on-demand checks: `ops/langfuse_alerts.py` (v2 Metrics API)
 - [ ] Four native v4 alert rules in the UI (primary channel), runbook text in each description
 - [x] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone
