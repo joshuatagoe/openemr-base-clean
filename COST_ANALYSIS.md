@@ -96,9 +96,11 @@ latency and cost side by side, so this is a measured decision per stage (`MODEL_
 
 ### Infrastructure and architectural changes per tier
 
-**100 physicians — what runs today.** One agent replica (Railway, ~$5–20/mo), the OpenEMR instance, the
-Langfuse stack (six services, ~$40–80/mo incl. volumes). Peak 9 briefings/min is nothing. In-memory
-bundle store is fine because there is one replica. Cost per physician: ~$3/month all-in. Nothing to change;
+**100 physicians — what runs today.** One agent replica, the OpenEMR instance and the six-service
+Langfuse stack, all on the $20/month Railway Pro plan today; at 100 real users expect usage billing of
+roughly $50–100/mo on top (the Langfuse volumes and a second agent replica). Peak 9 briefings/min is
+nothing. The in-memory bundle store is fine because there is one replica. Cost per physician: ~$3/month
+all-in. Nothing to change;
 the open items are safety, not scale (BAA on file, Railway TLS/backup verification, `api_log` retention).
 
 **1K physicians — make the agent stateless, fix OpenEMR's hot path.** Peak ~90 briefings/min is well
