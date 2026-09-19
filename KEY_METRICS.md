@@ -139,7 +139,7 @@ grep '"event": "span.turn"' <agent stderr log> | jq '{outcome, statements, rejec
 
 ## 11. Limitations and next instrumentation steps
 
-- **`/metrics` is a JSON snapshot**, not a dashboard; the planned self-hosted Langfuse (ARCHITECTURE.md §14) is not deployed, and the `span` seam it would attach to emits JSON log lines to stderr only.
+- **`/metrics` is a JSON snapshot**, not a dashboard. Self-hosted Langfuse (ARCHITECTURE.md §14) now receives one masked trace per `cid` from the deployed agent with per-generation tokens and cost, per-tool spans and the verification scores, so degraded rate, latency by stage, tool calls and failures, retries (`extract` generations with `attempt > 1`), withhold counts and cost per briefing are queryable there; the dashboard that renders them (`copilot-agent/OBSERVABILITY_GUIDE.md` Part E) is not yet built.
 - **The module and panel have no timing and no counters.** Physician-side time to first content, and a full denominator for §3 (refused, `no_prior_note`, `agent_unavailable`, `source_unavailable`), need module counters `tickets_requested`, `tickets_issued{agent}`, `tickets_refused{code}` and a `duration_ms` on the "ticket issued" log line, plus a panel timing beacon.
 - **Turn outcomes, tool calls and provider retries are log attributes, not counters.** `turns_started`, `turns_completed{empty}`, `turns_degraded{reason}`, `tool_calls{tool}`, `tool_errors{tool,error}`, `provider_retries{stage}` would make §7 and the retry column dashboard-ready.
 - **Ticket rejections are not logged with their reason code**; adding a `log_event("ticket.rejected", code=…)` in `_error` callers and a `ticket_rejected{code}` counter makes patient-binding rejections investigable by reason.

@@ -178,7 +178,7 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 - [x] `langfuse` dependency; `configure_tracing` in lifespan; mask allow-list; mask unit test
 - [x] `span()` → observation with trace id = `cid`; tool spans; generations with usage/cost; `attempt` on retries
 - [x] Scores: `verification_rejected`, `hallucinated_span`, `degraded`, `state.*`
-- [ ] Agent env vars set; `/ready` shows `langfuse`
-- [x] PHI check passed on a trace exported from a local agent run (stub provider, 2026-09-19); repeat on the deployed stack per Part D
+- [x] Agent env vars set; `/ready` shows `langfuse: ok` (public URL; the private hostname gave `ConnectError` from the agent container — revisit)
+- [x] PHI check passed on a real trace from the deployed stack (2026-09-19): briefing + three turns with claude-opus-5, tokens and cost per generation, no clinical string or patient identifier anywhere in the trace
 - [ ] Dashboard saved; four alerts with automation; runbook text in descriptions
-- [ ] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone
+- [x] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone

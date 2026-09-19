@@ -25,7 +25,8 @@ This fork adds a Clinical Co-Pilot for a primary-care physician's 90 seconds bef
 | Service | URL |
 |---|---|
 | OpenEMR with the Co-Pilot panel (Patient Summary) | https://openemr-base-clean-production.up.railway.app/ |
-| Co-Pilot agent ([`/health`](https://copilot-agent-production-0395.up.railway.app/health), [`/ready`](https://copilot-agent-production-0395.up.railway.app/ready), [`/docs`](https://copilot-agent-production-0395.up.railway.app/docs)) | https://copilot-agent-production-0395.up.railway.app/ |
+| Co-Pilot agent ([`/health`](https://copilot-agent-production-0395.up.railway.app/health), [`/ready`](https://copilot-agent-production-0395.up.railway.app/ready) — checks the ticket secret, model provider, bundle store, OpenEMR and Langfuse, [`/docs`](https://copilot-agent-production-0395.up.railway.app/docs)) | https://copilot-agent-production-0395.up.railway.app/ |
+| Langfuse (self-hosted; traces, scores, cost — PHI masked at the agent) | https://langfuse-web-production-818f.up.railway.app/ (login required) |
 
 **Documents**
 
