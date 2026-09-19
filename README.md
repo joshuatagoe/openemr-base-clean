@@ -41,12 +41,22 @@ This fork adds a Clinical Co-Pilot for a primary-care physician's 90 seconds bef
 - `interface/modules/custom_modules/oe-module-copilot/` — PHP module: authorization, clinical reads, bundle building, ticket signing, panel ([README](interface/modules/custom_modules/oe-module-copilot/README.md))
 - `copilot-agent/` — Python service: commitment extraction, deterministic matching, verification, SSE streaming, follow-up turns, `/metrics` ([README](copilot-agent/README.md))
 
+**Turn on the Co-Pilot** (any deployment: local dev stack or Railway)
+
+The module ships in this repository but is off until it is enabled, and the plan check needs a running agent that OpenEMR can reach.
+
+1. Run the agent (`copilot-agent/`) with `ANTHROPIC_API_KEY` and a `COPILOT_TICKET_SECRET` of at least 32 characters in its environment.
+2. Give OpenEMR the agent: set `COPILOT_AGENT_URL` (the agent's base URL as reachable from the OpenEMR container) and the same `COPILOT_TICKET_SECRET` in OpenEMR's environment, then restart OpenEMR. These are environment variables, never Globals.
+3. Enable the module: log in as an administrator → Administration → Modules → Manage Modules → install/enable `oe-module-copilot`. The panel then appears on the Patient Summary of every patient.
+
+Without steps 1–2 the panel still renders the deterministic sections and reports the plan check unavailable; without step 3 there is no panel. Details and the one module global (admin relationship override) are in the [module README](interface/modules/custom_modules/oe-module-copilot/README.md).
+
 **Run locally**
 
 1. Start OpenEMR: `cd docker/development-easy && docker compose up --detach --wait` (app at http://localhost:8300/, login `admin` / `pass`).
 2. Start the agent: `cd copilot-agent && cp .env.example .env` (set `ANTHROPIC_API_KEY`, `COPILOT_TICKET_SECRET`), then `uv sync && uv run uvicorn app.main:app --port 8765`.
-3. Give OpenEMR the agent: set `COPILOT_AGENT_URL` (for the container, `http://host.docker.internal:8765`) and the same `COPILOT_TICKET_SECRET` in `docker/development-easy/.env`, then recreate the `openemr` service.
-4. Enable the module: Administration → Modules → Manage Modules → install/enable `oe-module-copilot`.
+3. Point OpenEMR at it: set `COPILOT_AGENT_URL=http://host.docker.internal:8765` and the same `COPILOT_TICKET_SECRET` in `docker/development-easy/.env`, then recreate the `openemr` service.
+4. Enable the module as above (or `dev/seed_evelyn_demo.php --confirm-local --enable-module` in the next step does it for you).
 5. Seed a demo patient with a prior plan and a later result (dev database only): run `interface/modules/custom_modules/oe-module-copilot/dev/seed_evelyn_demo.php --confirm-local` inside the OpenEMR container, then open that patient's summary.
 
 Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container per the module README.
