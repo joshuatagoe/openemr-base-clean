@@ -64,7 +64,8 @@ duplicate collapse) and declares any source that failed in
 renders everything with `textContent`, opens the agent stream with a fetch
 and an `AbortController`, drops any event whose ids differ from its own,
 shows verified commitments, interval annotations, withheld counts and a
-question box, and deletes the bundle on unload.
+question box (with the scope statement and example questions from USERS.md UC-04),
+and deletes the bundle on unload.
 
 ## Tests and checks
 

@@ -158,7 +158,7 @@ IDs are stable. Retired IDs are not reused.
 
 **Required data.** Whichever record type the question names, for the selected patient only; the current patient's conversation history only.
 
-**Agent behaviour.** Interpret the question; retrieve matching records for the selected patient; answer only from what was retrieved, citing each record; state "no record found" when applicable; decline clinical recommendations; decline questions about any other patient.
+**Agent behaviour.** Interpret the question; retrieve matching records for the selected patient; answer only from what was retrieved, citing each record; state "no record found" when applicable; decline clinical recommendations; decline questions about any other patient. The scope is fixed and visible: results, orders, medications, allergies, the last plan and the plan check. "What changed since the last visit" is answered from the plan check with citations; a question none of those sources can answer (vitals, imaging, problems, other notes, a history summary) is declined immediately, naming the scope, without searching — so the physician learns in two seconds what the tool can do rather than waiting for a timeout. The panel states the scope and offers example questions before the physician types.
 
 **Expected output.** At most three sentences with citations.
 

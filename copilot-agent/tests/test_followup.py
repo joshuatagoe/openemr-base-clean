@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+import os
 from decimal import Decimal
 from uuid import uuid4
 
@@ -29,6 +30,7 @@ from app.contracts import (
     StatementKind,
 )
 from app.followup import MAX_TOOL_ITERATIONS, ConversationTurn, run_turn
+from app.main import app, get_provider_factory, get_settings
 from app.matcher import match_evidence
 from app.providers.base import ProviderUnavailableError
 from app.tools import ToolOutput, run_tool, tool_definitions
@@ -318,3 +320,83 @@ def test_conversations_do_not_leak_between_bundles(client: TestClient, fixture_p
     turn(client, b["bundle_id"], ticket_for(b), "Question for B")
     first_b_transcript = scripted_provider.turn_transcripts[0]
     assert "Question for A" not in json.dumps(first_b_transcript)
+
+
+# --------------------------------------------------------------------------- #
+# Scope: out-of-scope questions are refused at once, without tool searching
+# --------------------------------------------------------------------------- #
+
+OUT_OF_SCOPE_REFUSAL = "This question is outside what the Co-Pilot can check. It answers only from this patient's results, orders, medications, allergies and the last plan."
+
+
+def test_prompt_names_the_sources_and_the_no_tool_refusal() -> None:
+    """Guards the contract the panel states (USERS.md UC-04): the six sources, plan-progress questions via list_commitments,
+    and an immediate refusal for anything else. Failure mode: the model searches every tool for an unanswerable question
+    and the turn times out instead of telling the physician what the tool can do."""
+    from app.providers.prompt import FOLLOWUP_SYSTEM_PROMPT as p
+
+    for tool in ("find_results", "find_orders", "find_medications", "list_allergies", "get_baseline_note", "list_commitments"):
+        assert tool in p
+    assert "Do not call any tool" in p and "kind refusal" in p
+    assert OUT_OF_SCOPE_REFUSAL in p
+    assert "list_commitments" in p.split("what changed")[1].split("\n")[0]
+
+
+def test_out_of_scope_refusal_is_rendered_uncited_with_no_tool_calls(client: TestClient, fixture_payload: dict, scripted_provider: FakeProvider) -> None:
+    """A refusal is the one statement kind that needs no citation; it must come back with tool_calls == [] and rejected_count == 0."""
+    scripted_provider._turn_script = [answer(statement(OUT_OF_SCOPE_REFUSAL, "refusal"))]  # noqa: SLF001
+    accepted = post_bundle(client, fixture_payload)
+    resp = turn(client, accepted["bundle_id"], ticket_for(accepted), "Is her blood pressure well controlled?")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["degraded"] is None and body["tool_calls"] == [] and body["rejected_count"] == 0
+    assert [(s["kind"], s["citations"]) for s in body["statements"]] == [("refusal", [])]
+    assert body["statements"][0]["text"] == OUT_OF_SCOPE_REFUSAL
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.environ.get("RUN_ANTHROPIC_INTEGRATION_TEST") != "1" or not os.environ.get("ANTHROPIC_API_KEY"),
+    reason="live Anthropic call; set RUN_ANTHROPIC_INTEGRATION_TEST=1 and ANTHROPIC_API_KEY to run",
+)
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Have there been any changes since our last encounter?",  # plan progress -> list_commitments, cited
+        "Is her blood pressure well controlled?",  # vitals: out of scope -> immediate refusal
+        "What did the cardiology consult say?",  # notes other than the plan: out of scope
+    ],
+)
+def test_live_scope_behaviour(fixture_payload: dict, question: str) -> None:
+    """Real model: in-scope plan-progress questions are answered from list_commitments with citations; out-of-scope
+    questions get exactly one refusal with zero tool calls and well inside the turn budget."""
+    import time
+
+    from app.providers.anthropic_provider import AnthropicProvider
+    from app.settings import ModelSettings
+
+    from tests.conftest import configured_settings
+
+    app.dependency_overrides.pop(get_provider_factory, None)
+    app.dependency_overrides[get_settings] = lambda: configured_settings(briefing_timeout_seconds=10.0)  # the production budget
+    try:
+        with TestClient(app) as live_client:
+            accepted = post_bundle(live_client, fixture_payload)
+            code, _, events = read_events(live_client, accepted["bundle_id"], ticket_for(accepted))
+            assert code == 200 and events[-1][0] == "complete"
+            started = time.perf_counter()
+            resp = turn(live_client, accepted["bundle_id"], ticket_for(accepted), question)
+            elapsed = time.perf_counter() - started
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["degraded"] is None, body
+    kinds = [s["kind"] for s in body["statements"]]
+    tools = [t["tool"] for t in body["tool_calls"]]
+    if "changes since" in question:
+        assert tools == ["list_commitments"], tools
+        assert all(s["citations"] for s in body["statements"] if s["kind"] == "fact"), body["statements"]
+    else:
+        assert tools == [] and kinds == ["refusal"], (tools, kinds, body["statements"])
+        assert elapsed < 6, elapsed

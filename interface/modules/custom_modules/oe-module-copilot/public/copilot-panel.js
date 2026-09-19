@@ -37,6 +37,15 @@
         clarification: 'badge-info',
         refusal: 'badge-secondary'
     };
+    // One per record source the agent can read (results, orders, medications, allergies, plan check).
+    const EXAMPLE_QUESTIONS = [
+        'What was the last A1c?',
+        'When was the last potassium?',
+        'Was a lipid panel ordered?',
+        'Is there a metformin prescription on file?',
+        'Any allergies on file?',
+        'Which plan items have no evidence yet?'
+    ];
     const STATE_BADGES = {
         matching_result_found: 'badge-success',
         order_found_no_result: 'badge-info',
@@ -405,13 +414,36 @@
             }
             const box = el('div', 'mt-3');
             box.setAttribute('data-role', 'followup');
-            box.appendChild(el('h6', 'mb-2', 'Ask about this patient\u2019s record'));
+            box.appendChild(el('h6', 'mb-1', 'Ask about this patient\u2019s record'));
+            // The scope is the contract (USERS.md UC-04): say it before the physician types.
+            const scope = el('div', 'small text-muted mb-2', 'Answers come only from this patient\u2019s results, orders, medications, allergies and the last plan; every statement cites a record. ');
+            const examplesToggle = el('a', 'small', 'Examples');
+            examplesToggle.href = '#';
+            examplesToggle.setAttribute('role', 'button');
+            examplesToggle.setAttribute('aria-expanded', 'false');
+            scope.appendChild(examplesToggle);
+            box.appendChild(scope);
+            const examples = el('div', 'mb-2');
+            examples.setAttribute('data-role', 'examples');
+            examples.hidden = true;
             const form = el('form', 'form-inline mb-2');
             const input = el('input', 'form-control mr-2 flex-grow-1');
             input.type = 'text';
             input.maxLength = 1000;
-            input.placeholder = 'e.g. When was the last potassium?';
+            input.placeholder = 'e.g. ' + EXAMPLE_QUESTIONS[0];
             input.setAttribute('aria-label', 'Question about this patient\u2019s record');
+            EXAMPLE_QUESTIONS.forEach((q) => {
+                const chip = el('button', 'btn btn-outline-secondary btn-sm mr-1 mb-1', q);
+                chip.type = 'button';
+                chip.addEventListener('click', () => { input.value = q; input.focus(); });
+                examples.appendChild(chip);
+            });
+            examplesToggle.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                examples.hidden = !examples.hidden;
+                examplesToggle.setAttribute('aria-expanded', examples.hidden ? 'false' : 'true');
+            });
+            box.appendChild(examples);
             const button = el('button', 'btn btn-primary btn-sm', 'Ask');
             button.type = 'submit';
             form.appendChild(input);
