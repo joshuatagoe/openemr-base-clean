@@ -74,6 +74,15 @@ language; absence is never negation; "high/low/normal" only when the cited
 result's flag says so. Known limit: attribution and numeric fidelity, not
 semantic faithfulness.
 
+## API collection
+
+`api-collection/` is a Bruno collection covering every endpoint above, including
+the HMAC-signed bundle post and the ticket-gated SSE briefing and follow-up
+(the signing and ticket minting are reproduced in pre-request scripts from
+`app/security.py`). `npx @usebruno/cli run api-collection --env local --env-var ticket_secret=...`
+runs it headless; `tests/test_api_collection.py` does the same against a stub
+agent so the collection cannot drift from the API. See its README.
+
 ## Observability
 
 JSON logs on stderr, one object per line, keyed by `cid` (`event`, timings,

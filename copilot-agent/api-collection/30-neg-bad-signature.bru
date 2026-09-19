@@ -1,0 +1,59 @@
+meta {
+  name: 30 Reject a bundle with a bad signature
+  type: http
+  seq: 30
+}
+
+post {
+  url: {{agent_url}}/v1/bundles
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Copilot-Timestamp: {{ts}}
+  X-Copilot-Signature: v1=0000000000000000000000000000000000000000000000000000000000000000
+}
+
+body:text {
+  {{bundle_json}}
+}
+
+script:pre-request {
+
+  // The synthetic fixture bundle (copilot-agent/fixtures/lab_followup.json) with fresh ids per run.
+  const bundle = {
+    schema_version: "1.0",
+    correlation_id: bru.getVar("correlation_id"),
+    patient_uuid: bru.getVar("patient_uuid"),
+    prior_note: {
+      note_id: "form_soap:1001",
+      encounter_id: "form_encounter:501",
+      note_date: "2026-06-10T14:30:00Z",
+      plan_text: "Continue metformin. Repeat HbA1c in three months."
+    },
+    data_quality: { sources_unavailable: [] },
+    lab_results: [
+      { result_id: "procedure_result:9001", test_name: "Hemoglobin A1c", value: 8.9, units: "%", abnormal_flag: "high", status: "final", observed_at: "2026-09-12T09:15:00Z" }
+    ]
+  };
+  const body = JSON.stringify(bundle);
+  bru.setVar("bundle_json", body);
+  bru.setVar("ts", String(Math.floor(Date.now() / 1000)));
+  req.setBody(body);
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("names the failure without storing anything", function () {
+    expect(res.getBody().detail.code).to.equal("invalid_signature");
+  });
+}
+
+docs {
+  Guards the trust boundary: only the module (holder of the shared secret) can store a bundle.
+}

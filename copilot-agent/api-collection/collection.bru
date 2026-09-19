@@ -1,0 +1,43 @@
+meta {
+  name: Clinical Co-Pilot agent
+}
+
+script:pre-request {
+  // Fresh identifiers once per run so the ticket-gated flow (20 -> 40) can be replayed without collisions.
+  if (!bru.getVar("correlation_id")) {
+    const uuid4 = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+    bru.setVar("correlation_id", uuid4());
+    bru.setVar("patient_uuid", uuid4());
+    bru.setVar("user_uuid", "9c3f0a2b-1d4e-4f5a-8b6c-7d8e9f0a1b2c");
+  }
+}
+
+docs {
+  # Clinical Co-Pilot agent — runnable API collection
+
+  Covers every agent endpoint (ARCHITECTURE.md §8) against a local or deployed agent.
+  Synthetic data only: the bundle is the fixture from `copilot-agent/fixtures/lab_followup.json`.
+
+  ## Environments
+  - `local` — `http://localhost:8765` (start with `uv run uvicorn app.main:app --port 8765`)
+  - `deployed` — the Railway agent
+
+  Both need the secret variable `ticket_secret`: the value of `COPILOT_TICKET_SECRET` on that agent.
+  In the Bruno app, set it under the environment's secret vars (stored outside the repo).
+  From the CLI: `bru run --env deployed --env-var ticket_secret=...`.
+
+  ## Workflows
+  1. **Liveness and readiness** — 01, 02, 03. `/ready` reports each dependency (secret, model provider, store, OpenEMR, Langfuse).
+  2. **Synchronous briefing** — 10. One inline bundle in, one briefing out (the evaluation path; no ticket).
+  3. **Ticket-gated flow (what the OpenEMR module does)** — run 20 → 21 → 22 in order, then 40 to clean up:
+     20 posts the bundle with the HMAC signature the module would compute;
+     21 mints the patient-bound ticket and reads the SSE briefing;
+     22 asks a follow-up over the stored bundle (statements are verified against tool results);
+     40 deletes the bundle.
+  4. **Negative cases** — 30–32 must be rejected: bad signature (401), ticket for another patient (403), expired ticket (401). They need the bundle from 20, so they run before 40.
+
+  Signing and ticket minting are reproduced in the pre-request scripts from `app/security.py`
+  so the collection works without reading source. Nothing here calls the OpenEMR module itself:
+  its only route (`POST /api/copilot/briefing-ticket`) needs an OpenEMR browser session and CSRF
+  token, which the panel supplies.
+}

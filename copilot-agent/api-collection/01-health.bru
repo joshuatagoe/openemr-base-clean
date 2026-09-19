@@ -1,0 +1,20 @@
+meta {
+  name: 01 Health (process alive)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{agent_url}}/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ok
+}
+
+docs {
+  Liveness only. Never depends on any other service.
+}

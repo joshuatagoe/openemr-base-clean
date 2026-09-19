@@ -1,0 +1,30 @@
+meta {
+  name: 03 Metrics (counters, latency, cost)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{agent_url}}/metrics
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("has counters and latency", function () {
+    const body = res.getBody();
+    expect(body).to.have.property("counters");
+    expect(body).to.have.property("latency");
+    expect(body).to.have.property("estimated_cost_usd");
+  });
+}
+
+docs {
+  Process-local snapshot: counters (`briefings_started`, `briefings_completed`, `briefings_degraded{stage,reason}`,
+  `evidence_states{state}`, `verification_rejected{stage}`), latency percentiles per span, tokens and estimated cost.
+  Langfuse holds the cross-instance view.
+}

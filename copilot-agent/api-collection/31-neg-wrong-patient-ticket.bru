@@ -1,0 +1,53 @@
+meta {
+  name: 31 Reject a ticket for another patient
+  type: http
+  seq: 31
+}
+
+get {
+  url: {{agent_url}}/v1/briefings/{{bundle_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{ticket}}
+}
+
+script:pre-request {
+
+  const CryptoJS = require("crypto-js");
+  const b64url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const utf8 = (s) => CryptoJS.enc.Utf8.parse(s);
+  // Reference: copilot-agent/app/security.py sign_body — v1=hex(HMAC_SHA256(secret, "{ts}." + body))
+  const signBody = (secret, body, ts) => "v1=" + CryptoJS.HmacSHA256(ts + "." + body, secret).toString(CryptoJS.enc.Hex);
+  // Reference: copilot-agent/app/security.py mint_ticket — HS256 JWT, claims {sub, puuid, bundle_id, cid, jti, iat, exp}
+  const mintTicket = (secret, claims) => {
+    const header = b64url(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+    const payload = b64url(utf8(JSON.stringify(claims)));
+    const signature = b64url(CryptoJS.HmacSHA256(header + "." + payload, secret));
+    return header + "." + payload + "." + signature;
+  };
+  const uuid4 = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+  // Run 20 first so bundle_id exists. The ticket is valid but bound to a different patient uuid.
+  const now = Math.floor(Date.now() / 1000);
+  bru.setVar("ticket", mintTicket(bru.getEnvVar("ticket_secret"), {
+    sub: bru.getVar("user_uuid"), puuid: uuid4(), bundle_id: bru.getVar("bundle_id"),
+    cid: bru.getVar("correlation_id"), jti: uuid4(), iat: now, exp: now + 120
+  }));
+}
+
+assert {
+  res.status: eq 403
+}
+
+tests {
+  test("patient binding is enforced", function () {
+    expect(res.getBody().detail.code).to.equal("ticket_patient_mismatch");
+  });
+}
+
+docs {
+  Patient binding: a ticket minted for patient A cannot read patient B's bundle even with a valid signature.
+  Requires a stored bundle (run 20 first; if 40 already deleted it the answer is 404 instead).
+}

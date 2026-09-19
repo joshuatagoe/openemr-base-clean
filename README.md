@@ -62,6 +62,8 @@ Without steps 1–2 the panel still renders the deterministic sections and repor
 
 Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container per the module README.
 
+API collection: [`copilot-agent/api-collection/`](copilot-agent/api-collection/README.md) (Bruno) runs every agent endpoint — including the module's signed handshake and the ticket-gated briefing/follow-up flow — against a local or the deployed agent with one command.
+
 ---
 
 # OpenEMR

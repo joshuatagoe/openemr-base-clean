@@ -1,0 +1,75 @@
+meta {
+  name: 21 Stream briefing (ticket-gated SSE)
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{agent_url}}/v1/briefings/{{bundle_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{ticket}}
+}
+
+script:pre-request {
+
+  const CryptoJS = require("crypto-js");
+  const b64url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const utf8 = (s) => CryptoJS.enc.Utf8.parse(s);
+  // Reference: copilot-agent/app/security.py sign_body — v1=hex(HMAC_SHA256(secret, "{ts}." + body))
+  const signBody = (secret, body, ts) => "v1=" + CryptoJS.HmacSHA256(ts + "." + body, secret).toString(CryptoJS.enc.Hex);
+  // Reference: copilot-agent/app/security.py mint_ticket — HS256 JWT, claims {sub, puuid, bundle_id, cid, jti, iat, exp}
+  const mintTicket = (secret, claims) => {
+    const header = b64url(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+    const payload = b64url(utf8(JSON.stringify(claims)));
+    const signature = b64url(CryptoJS.HmacSHA256(header + "." + payload, secret));
+    return header + "." + payload + "." + signature;
+  };
+  const uuid4 = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+  const now = Math.floor(Date.now() / 1000);
+  const claims = {
+    sub: bru.getVar("user_uuid"),
+    puuid: bru.getVar("patient_uuid"),
+    bundle_id: bru.getVar("bundle_id"),
+    cid: bru.getVar("correlation_id"),
+    jti: uuid4(),
+    iat: now,
+    exp: now + 120
+  };
+  bru.setVar("ticket", mintTicket(bru.getEnvVar("ticket_secret"), claims));
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("is an event stream with the cid header", function () {
+    expect(String(res.getHeader("content-type"))).to.include("text/event-stream");
+    expect(res.getHeader("x-correlation-id")).to.equal(bru.getVar("correlation_id"));
+  });
+  test("stream ends with complete or degraded and every event carries the ids", function () {
+    const raw = typeof res.getBody() === "string" ? res.getBody() : JSON.stringify(res.getBody());
+    const frames = raw.trim().split(/\n\n+/).filter(Boolean);
+    const events = frames.map((f) => {
+      const name = (f.match(/^event: (.*)$/m) || [])[1];
+      const data = JSON.parse((f.match(/^data: (.*)$/m) || [])[1]);
+      return { name, data };
+    });
+    expect(events.length).to.be.greaterThan(0);
+    expect(["complete", "degraded"]).to.include(events[events.length - 1].name);
+    events.forEach((e) => {
+      expect(e.data.correlation_id).to.equal(bru.getVar("correlation_id"));
+      expect(e.data.patient_uuid).to.equal(bru.getVar("patient_uuid"));
+    });
+  });
+}
+
+docs {
+  The panel's call. The ticket is an HS256 JWT bound to `sub` (user), `puuid`, `bundle_id` and `cid`, ≤ 120 s,
+  single-use for the briefing (`jti`). Frames: `commitment`*, `interval_annotation`, then `complete` or
+  `degraded{stage, reason_code}`. A missing record is a state (`no_matching_record_found`), never "not done".
+}

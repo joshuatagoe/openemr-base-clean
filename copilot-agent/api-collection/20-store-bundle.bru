@@ -1,0 +1,90 @@
+meta {
+  name: 20 Store bundle (HMAC, as the module does)
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{agent_url}}/v1/bundles
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Copilot-Timestamp: {{ts}}
+  X-Copilot-Signature: {{signature}}
+}
+
+body:text {
+  {{bundle_json}}
+}
+
+script:pre-request {
+
+  const CryptoJS = require("crypto-js");
+  const b64url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const utf8 = (s) => CryptoJS.enc.Utf8.parse(s);
+  // Reference: copilot-agent/app/security.py sign_body — v1=hex(HMAC_SHA256(secret, "{ts}." + body))
+  const signBody = (secret, body, ts) => "v1=" + CryptoJS.HmacSHA256(ts + "." + body, secret).toString(CryptoJS.enc.Hex);
+  // Reference: copilot-agent/app/security.py mint_ticket — HS256 JWT, claims {sub, puuid, bundle_id, cid, jti, iat, exp}
+  const mintTicket = (secret, claims) => {
+    const header = b64url(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+    const payload = b64url(utf8(JSON.stringify(claims)));
+    const signature = b64url(CryptoJS.HmacSHA256(header + "." + payload, secret));
+    return header + "." + payload + "." + signature;
+  };
+  const uuid4 = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+
+  // The synthetic fixture bundle (copilot-agent/fixtures/lab_followup.json) with fresh ids per run.
+  const bundle = {
+    schema_version: "1.0",
+    correlation_id: bru.getVar("correlation_id"),
+    patient_uuid: bru.getVar("patient_uuid"),
+    prior_note: {
+      note_id: "form_soap:1001",
+      encounter_id: "form_encounter:501",
+      note_date: "2026-06-10T14:30:00Z",
+      plan_text: "Continue metformin. Repeat HbA1c in three months."
+    },
+    data_quality: { sources_unavailable: [] },
+    lab_results: [
+      { result_id: "procedure_result:9001", test_name: "Hemoglobin A1c", value: 8.9, units: "%", abnormal_flag: "high", status: "final", observed_at: "2026-09-12T09:15:00Z" }
+    ]
+  };
+  const body = JSON.stringify(bundle);
+  const ts = Math.floor(Date.now() / 1000);
+  bru.setVar("bundle_json", body);
+  bru.setVar("ts", String(ts));
+  bru.setVar("signature", signBody(bru.getEnvVar("ticket_secret"), body, ts));
+  req.setBody(body);
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("bundle_id", res.getBody().bundle_id);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+tests {
+  test("X-Correlation-Id header echoes the cid", function () {
+    expect(res.getHeader("x-correlation-id")).to.equal(bru.getVar("correlation_id"));
+  });
+  test("returns the bundle id and TTL", function () {
+    const body = res.getBody();
+    expect(body.bundle_id).to.be.a("string");
+    expect(body.correlation_id).to.equal(bru.getVar("correlation_id"));
+    expect(body.patient_uuid).to.equal(bru.getVar("patient_uuid"));
+  });
+}
+
+docs {
+  Server-to-server call the OpenEMR module makes after authorizing the physician and building the bundle.
+  Signature: `X-Copilot-Signature: v1=hex(HMAC_SHA256(secret, "{ts}." + body))` over the exact bytes sent,
+  with `X-Copilot-Timestamp` within `COPILOT_SIGNATURE_MAX_SKEW_SECONDS` of the agent clock.
+  The bundle is held in memory for `COPILOT_BUNDLE_TTL_SECONDS` (15 min) and never written to disk.
+}

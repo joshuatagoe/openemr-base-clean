@@ -1,0 +1,72 @@
+meta {
+  name: 10 Synchronous briefing (eval path)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{agent_url}}/v1/briefings
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "context": {
+      "schema_version": "1.0",
+      "correlation_id": "{{correlation_id}}",
+      "patient_uuid": "{{patient_uuid}}",
+      "prior_note": {
+        "note_id": "form_soap:1001",
+        "encounter_id": "form_encounter:501",
+        "note_date": "2026-06-10T14:30:00Z",
+        "plan_text": "Continue metformin. Repeat HbA1c in three months."
+      },
+      "data_quality": { "sources_unavailable": [] },
+      "lab_results": [
+        {
+          "result_id": "procedure_result:9001",
+          "test_name": "Hemoglobin A1c",
+          "value": 8.9,
+          "units": "%",
+          "abnormal_flag": "high",
+          "status": "final",
+          "observed_at": "2026-09-12T09:15:00Z"
+        }
+      ]
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("X-Correlation-Id header echoes the cid", function () {
+    expect(res.getHeader("x-correlation-id")).to.equal(bru.getVar("correlation_id"));
+  });
+  test("every commitment cites a record or has an explicit state", function () {
+    const body = res.getBody();
+    expect(body.correlation_id).to.equal(bru.getVar("correlation_id"));
+    expect(body.matches).to.be.an("array").that.is.not.empty;
+    body.matches.forEach((m) => {
+      expect(m.commitment).to.be.an("object");
+      if (m.state === "matching_result_found" || m.state === "matching_medication_record_found") {
+        expect(m.citations, m.summary).to.not.be.empty;
+        m.citations.forEach((c) => expect(c.record_id).to.be.a("string"));
+      }
+    });
+  });
+}
+
+docs {
+  The synchronous path used by the evaluation harness and load tests: one inline `ContextBundle`, one `BriefingResponse`.
+  A model failure is an explicit 502/503/504 with a reason code, never an empty briefing.
+  Expected with the fixture: the metformin commitment has no medication record (`no_matching_record_found`)
+  and the HbA1c commitment matches `procedure_result:9001` (8.9 %, high).
+}

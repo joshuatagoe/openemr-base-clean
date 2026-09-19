@@ -1,0 +1,72 @@
+meta {
+  name: 22 Ask a follow-up (verified turn)
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{agent_url}}/v1/conversations/{{bundle_id}}/turns
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{ticket}}
+}
+
+body:json {
+  { "question": "What was the last A1c?" }
+}
+
+script:pre-request {
+
+  const CryptoJS = require("crypto-js");
+  const b64url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const utf8 = (s) => CryptoJS.enc.Utf8.parse(s);
+  // Reference: copilot-agent/app/security.py sign_body — v1=hex(HMAC_SHA256(secret, "{ts}." + body))
+  const signBody = (secret, body, ts) => "v1=" + CryptoJS.HmacSHA256(ts + "." + body, secret).toString(CryptoJS.enc.Hex);
+  // Reference: copilot-agent/app/security.py mint_ticket — HS256 JWT, claims {sub, puuid, bundle_id, cid, jti, iat, exp}
+  const mintTicket = (secret, claims) => {
+    const header = b64url(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+    const payload = b64url(utf8(JSON.stringify(claims)));
+    const signature = b64url(CryptoJS.HmacSHA256(header + "." + payload, secret));
+    return header + "." + payload + "." + signature;
+  };
+  const uuid4 = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); });
+  // Turns are not single-use, but mint a fresh ticket so this request also runs on its own after 20.
+  const now = Math.floor(Date.now() / 1000);
+  bru.setVar("ticket", mintTicket(bru.getEnvVar("ticket_secret"), {
+    sub: bru.getVar("user_uuid"), puuid: bru.getVar("patient_uuid"), bundle_id: bru.getVar("bundle_id"),
+    cid: bru.getVar("correlation_id"), jti: uuid4(), iat: now, exp: now + 120
+  }));
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("X-Correlation-Id header echoes the cid", function () {
+    expect(res.getHeader("x-correlation-id")).to.equal(bru.getVar("correlation_id"));
+  });
+  test("answer is verified: every statement cites a record, or the turn is explicitly degraded", function () {
+    const body = res.getBody();
+    expect(body.turn_index).to.be.a("number");
+    if (body.degraded) {
+      expect(body.degraded.reason_code).to.be.a("string");
+      return;
+    }
+    body.statements.forEach((s) => {
+      expect(s.kind).to.be.a("string");
+      if (s.kind !== "refusal") expect(s.citations, s.text).to.not.be.empty;  // a refusal is the one uncited kind
+    });
+    body.tool_calls.forEach((t) => expect(t).to.have.all.keys("tool", "args", "records", "truncated", "error"));
+  });
+}
+
+docs {
+  UC-04: a scoped question over the stored bundle. The model may call read-only tools (`find_results`, `find_orders`,
+  `find_medications`, `list_allergies`, `get_baseline_note`, `list_commitments`); every statement must cite record ids
+  that came back from a tool, or it is withheld (`rejected_count`). Timeouts and provider errors are a `degraded` turn.
+  Out-of-scope questions (anything not answerable from those sources) will be withheld or degraded.
+}

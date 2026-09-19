@@ -1,0 +1,30 @@
+meta {
+  name: 02 Ready (dependencies)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{agent_url}}/ready
+  body: none
+  auth: none
+}
+
+tests {
+  test("every dependency is reported", function () {
+    const deps = res.getBody().dependencies;
+    ["ticket_secret", "model_provider", "bundle_store"].forEach((d) => expect(deps).to.have.property(d));
+    Object.entries(deps).forEach(([name, d]) => expect(d.status, name).to.be.oneOf(["ok", "degraded", "unavailable", "not_configured"]));
+  });
+  test("status is ready or not_ready (503 when not)", function () {
+    const status = res.getBody().status;
+    expect(status).to.be.oneOf(["ready", "not_ready"]);
+    expect(res.getStatus()).to.equal(status === "ready" ? 200 : 503);
+  });
+}
+
+docs {
+  Readiness checks real dependencies: the shared secret, the model provider (credentials present, or the stub),
+  the bundle store, and — when configured on the agent — OpenEMR (`/apis/default/fhir/metadata`) and
+  Langfuse (`/api/public/health`). Cached for `COPILOT_READY_CACHE_SECONDS`.
+}
