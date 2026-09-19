@@ -203,7 +203,8 @@ def _start_observation(name: str, *, cid: UUID | str | None, as_type: str, **kwa
 def _finish_observation(obs: Any, attrs: dict[str, Any], **update: Any) -> None:
     try:
         outcome = str(attrs.get("outcome", "ok"))
-        obs.update(metadata=attrs, level=_level_for(outcome), status_message=attrs.get("reason_code") or attrs.get("error_type"), **update)
+        status = attrs.get("reason_code") or attrs.get("error") or attrs.get("error_type")
+        obs.update(metadata=attrs, level=_level_for(outcome), status_message=status, **update)
     except Exception:  # noqa: BLE001
         pass
 

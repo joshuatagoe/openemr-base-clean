@@ -113,6 +113,19 @@ developer's `.env` keys never export test traces.
 
 ### Alerts (ARCHITECTURE.md §14) and what to do
 
+Langfuse v3 has no alert rules, so `ops/langfuse_alerts.py` is the alerting
+mechanism: `.github/workflows/copilot-alerts.yml` runs it every 5 minutes
+against the Langfuse Metrics API (aggregates only), prints one line per
+rule, posts breaches to `ALERT_WEBHOOK_URL` (Slack-compatible) when set,
+and exits non-zero on a breach so the run fails and notifies. Run it by
+hand with the `LANGFUSE_*` variables in the environment:
+`uv run python ops/langfuse_alerts.py`. "No data" in a window is OK.
+The rules, in the same order as below: briefing p95 > 8 s (warn > 6 s)
+over 5 min; `degraded` score average > 5 % over 5 min; `tool` observations
+at level `ERROR` > 10 % of tool spans over 10 min; any `hallucinated_span`
+score > 0 over 5 min. The on-call response for each is in the script's
+`RUNBOOK` and carried in the notification.
+
 1. `briefing` p95 > 8 s over 5 min — compare `model.usage` latency against
    the span: if the model is slow, lower `EXTRACTION_EFFORT` or switch
    `MODEL_ID_EXTRACTION`; if not, inspect the module's service-read timings

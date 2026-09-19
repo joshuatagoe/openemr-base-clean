@@ -97,6 +97,8 @@ async def run_turn(
                 t["records"] = len(output.records)
                 t["truncated"] = output.truncated
                 t["error"] = output.error
+                if output.error is not None:
+                    t["outcome"] = "error"  # ERROR-level observation, queryable for the tool-failure alert
             outputs.append(output)
             records.append(_record(call.name, call.arguments, output))
             results.append((call.call_id, serialize_output(output)))
