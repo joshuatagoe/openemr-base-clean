@@ -20,8 +20,8 @@ arithmetic. Usage assumptions come from the persona in USERS.md.
 - Cost is not the scaling problem. OpenEMR is (ARCHITECTURE.md §13): ACL checks, audit-row volume and
   session storage bind before the agent or the model provider does. The architectural changes per tier
   are mostly on that side.
-- Development spend to date: **$__ Anthropic** (fill from the console; see §2) + **~$__ Railway** for
-  three services and the six-service Langfuse stack. Traced evaluation and verification runs sum to
+- Development spend to date: **$__ Anthropic** (fill from the console; see §2) + **$20 / month Railway**
+  (Pro plan; the three services and the six-service Langfuse stack run inside the plan's included usage). Traced evaluation and verification runs sum to
   well under $5 — the eval fixture tier is deterministic and the live tier is opt-in.
 
 ## 2. Development spend (actual)
@@ -29,7 +29,7 @@ arithmetic. Usage assumptions come from the persona in USERS.md.
 | Item | Amount | Source |
 |---|---|---|
 | Anthropic API (all development, eval and verification calls, Sept 15–19) | $__ | console.anthropic.com → Usage (fill in) |
-| Railway: OpenEMR + agent + Langfuse (postgres, clickhouse, redis, minio, web, worker) | ~$__ / month | Railway project billing (fill in) |
+| Railway: OpenEMR + agent + Langfuse (postgres, clickhouse, redis, minio, web, worker) | $20 / month | Railway Pro plan; usage within the included credit |
 | Traced model calls since Langfuse went live (2026-09-19) | $0.11 | Langfuse: 9 production generations $0.034; earlier v3-era traces $0.075 |
 | One 18-case eval run, live tier | ≈ $0.08 | 18 extractions × $0.0042 |
 | One Bruno collection run against the deployed agent | ≈ $0.02 | 10 + 21 + 22 (three model calls) |
