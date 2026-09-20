@@ -166,7 +166,7 @@ def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> Extracti
 class CommitmentExtractor:
     """Orchestrates one extraction: bounded provider attempts, then grounding."""
 
-    def __init__(self, provider: ModelProvider, *, max_attempts: int = 2, retry_budget_seconds: float = 6.0) -> None:
+    def __init__(self, provider: ModelProvider, *, max_attempts: int = 2, retry_budget_seconds: float = 3.0) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
         self._retry_budget_seconds = retry_budget_seconds

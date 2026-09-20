@@ -30,7 +30,7 @@ T = TypeVar("T")
 class ProviderGate:
     """Bounds concurrent provider calls in this process. Configure once at startup."""
 
-    def __init__(self, concurrency: int = 16, max_wait_seconds: float = 4.0) -> None:
+    def __init__(self, concurrency: int = 16, max_wait_seconds: float = 3.0) -> None:
         self._concurrency = concurrency
         self._max_wait_seconds = max_wait_seconds
         self._semaphore = asyncio.Semaphore(concurrency)
