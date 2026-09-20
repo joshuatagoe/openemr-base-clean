@@ -180,7 +180,7 @@ $insertAppointment = static function (int $pid, string $time, string $reason) us
     QueryUtils::sqlInsert(
         "INSERT INTO openemr_postcalendar_events SET uuid = ?, pc_catid = 5, pc_multiple = 0, pc_aid = ?, pc_pid = ?, pc_title = 'Office Visit',
             pc_hometext = ?, pc_eventDate = CURDATE(), pc_duration = 900, pc_startTime = ?, pc_endTime = ?,
-            pc_apptstatus = '-', pc_eventstatus = 1, pc_sharing = 0, pc_facility = 3, pc_billing_location = 3, pc_informant = 'admin'",
+            pc_apptstatus = '-', pc_eventstatus = 1, pc_sharing = 1, pc_time = NOW(), pc_facility = 3, pc_billing_location = 3, pc_informant = 'admin'",
         [$uuid('openemr_postcalendar_events'), (string) ADMIN_USER_ID, (string) $pid, $reason, $time, $end]
     );
 };

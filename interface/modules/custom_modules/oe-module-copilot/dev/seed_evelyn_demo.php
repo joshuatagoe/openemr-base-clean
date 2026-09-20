@@ -186,7 +186,7 @@ if ($pid > 0) {
         QueryUtils::sqlInsert(
             "INSERT INTO openemr_postcalendar_events SET uuid = ?, pc_catid = 5, pc_multiple = 0, pc_aid = ?, pc_pid = ?, pc_title = 'Office Visit',
                 pc_hometext = ?, pc_eventDate = CURDATE(), pc_duration = 900, pc_startTime = '10:30:00', pc_endTime = '10:45:00',
-                pc_apptstatus = '-', pc_eventstatus = 1, pc_sharing = 0, pc_facility = 3, pc_billing_location = 3, pc_informant = 'admin'",
+                pc_apptstatus = '-', pc_eventstatus = 1, pc_sharing = 1, pc_time = NOW(), pc_facility = 3, pc_billing_location = 3, pc_informant = 'admin'",
             [UuidRegistry::getRegistryForTable('openemr_postcalendar_events')->createUuid(), (string) ADMIN_USER_ID, (string) $pid, 'Diabetes f/u; review A1c and lipids']
         );
         echo "Added today's appointment with a scheduled reason.\n";
