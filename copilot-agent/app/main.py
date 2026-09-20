@@ -474,6 +474,7 @@ async def _briefing_events(
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
             score("degraded", 1, data_type="BOOLEAN")
+            score("briefing_verified", 0, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="timeout"))
             return
         except ProviderError as exc:
@@ -482,6 +483,7 @@ async def _briefing_events(
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = code
             score("degraded", 1, data_type="BOOLEAN")
+            score("briefing_verified", 0, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code=code))
             return
         except Exception:
@@ -490,6 +492,7 @@ async def _briefing_events(
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
             score("degraded", 1, data_type="BOOLEAN")
+            score("briefing_verified", 0, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="internal_error"))
             return
 
@@ -502,6 +505,7 @@ async def _briefing_events(
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
             score("degraded", 1, data_type="BOOLEAN")
+            score("briefing_verified", 0, data_type="BOOLEAN")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.MATCHING, reason_code="internal_error"))
             return
 
@@ -520,6 +524,9 @@ async def _briefing_events(
         if result.rejected_count:
             metrics.inc("verification_rejected", stage="extraction")
         score("degraded", 0, data_type="BOOLEAN")
+        # North star proxy (KEY_METRICS.md section 3): a completed briefing is verified by construction -
+        # every rendered commitment carries a state and citations, or was withheld. Scored on briefings only.
+        score("briefing_verified", 1, data_type="BOOLEAN")
         score("verification_rejected", result.rejected_count)
         score("hallucinated_span", 1 if result.rejected_count else 0, data_type="BOOLEAN")
         for state, n in Counter(m.state.value for m in result.matches if m.state is not None).items():

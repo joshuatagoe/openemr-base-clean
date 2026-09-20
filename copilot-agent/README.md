@@ -101,7 +101,8 @@ per correlation id — the trace id *is* the `cid`, so a panel's
 (generation, one per provider attempt with `attempt` in metadata);
 `turn` → `turn_step` (generation) → `tool` (one per tool call: `tool`,
 `records`, `truncated`, `error`). Generations carry `usage_details` and
-`cost_details`. Scores on the trace: `degraded` (boolean),
+`cost_details`. Scores on the trace: `briefing_verified` (boolean, briefings only — the
+KEY_METRICS §3 north-star proxy), `degraded` (boolean),
 `verification_rejected` (count), `hallucinated_span` (boolean), and
 `state.<evidence_state>` counts after a completed briefing.
 

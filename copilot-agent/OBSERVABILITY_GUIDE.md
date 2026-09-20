@@ -129,6 +129,8 @@ Langfuse → Dashboards → New. One dashboard, `Clinical Co-Pilot`, with these 
 
 | Widget | Source | KEY_METRICS |
 |---|---|---|
+| **Verified briefing success rate (agent-side)** | `briefing_verified` score average (briefings only) | §3 north star (agent-side proxy) |
+| Briefings by outcome / Briefings (total) | observation `briefing` count by level / total | §3 numerator and denominator (agent-side) |
 | Briefings and turns per hour | observation count, name in (`briefing`, `turn`), grouped by name | context |
 | Degraded rate | `degraded` score average (boolean → rate), filter name=`briefing` | degraded briefing rate |
 | Error/degraded by reason | observation count grouped by `metadata.reason_code` where level=ERROR | degraded breakdown |
