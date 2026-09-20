@@ -34,4 +34,11 @@ final class PanelRendererTest extends TestCase
         self::assertSame('', (new PanelRenderer())->render(0, 't', '/u', '/s'));
         self::assertSame('', (new PanelRenderer())->render(-3, 't', '/u', '/s'));
     }
+
+    public function testPanelScriptVersionIsTheContentHashSoDeploysBustTheCache(): void
+    {
+        $version = \OpenEMR\Modules\Copilot\Bootstrap::panelScriptVersion();
+        self::assertMatchesRegularExpression('/^[0-9a-f]{8}$/', $version);
+        self::assertSame(hash_file('crc32b', __DIR__ . '/../public/copilot-panel.js'), $version);
+    }
 }

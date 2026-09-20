@@ -469,7 +469,7 @@
             item.appendChild(el('div', 'font-italic small mb-1', 'Q: ' + question));
             const pending = el('div', 'small text-muted', 'Checking the record\u2026');
             item.appendChild(pending);
-            answers.appendChild(item);
+            answers.insertBefore(item, answers.firstChild);  // newest question on top: no scrolling in the 90 seconds
             let body = null;
             for (let attempt = 1; attempt <= 2; attempt += 1) {
                 let resp;

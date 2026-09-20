@@ -93,8 +93,19 @@ final class Bootstrap
             $pid,
             CsrfUtils::collectCsrfToken($session, 'api'),
             $webroot . '/apis/' . rawurlencode($siteId) . '/api/copilot/briefing-ticket',
-            $webroot . self::MODULE_PATH . self::PANEL_SCRIPT,
+            $webroot . self::MODULE_PATH . self::PANEL_SCRIPT . '?v=' . self::panelScriptVersion(),
         );
+    }
+
+    /**
+     * Cache-busting token for the panel script: the file's content hash, so a deploy
+     * invalidates every physician's cached copy without a manual hard reload.
+     */
+    public static function panelScriptVersion(): string
+    {
+        $path = __DIR__ . '/..' . self::PANEL_SCRIPT;
+        $hash = is_file($path) ? hash_file('crc32b', $path) : false;
+        return $hash === false ? '0' : $hash;
     }
 
     public function addRoutes(RestApiCreateEvent $event): RestApiCreateEvent
