@@ -326,7 +326,7 @@ Deterministic content that survives an agent or model failure: identity, both re
 | OpenEMR unavailable to agent readiness | `/ready` probe | Agent reports not-ready; panel shows "plan check unavailable"; module still serves deterministic sections if OpenEMR itself is up |
 | Agent unreachable from module | timeout 2 s on `POST /v1/bundles` | Ticket response omits `ticket`, includes sections and `degraded: agent_unavailable` |
 | Individual tool failure (UC-04) | `ToolOutput.error` | Loop continues; answer states that source could not be checked; no empty-list fabrication |
-| LLM error/timeout | SDK typed errors; 10 s hard timeout | One retry on 429/5xx per SDK; then `DegradedEvent{stage: extraction \| turn}`; deterministic sections intact |
+| LLM error/timeout | SDK typed errors; 10 s hard timeout | Bounded retry with exponential backoff or the provider's `Retry-After` inside a wait budget, behind a process-wide concurrency gate that degrades with `provider_busy` rather than queueing into the timeout (`copilot-agent/app/providers/resilience.py`; measured in `loadtest/BASELINE.md`); then `DegradedEvent{stage: extraction \| turn}` with the reason code; deterministic sections intact |
 | LLM output fails schema | Structured-output parse | No corrective retry (decision: a second attempt on malformed output was judged not worth the latency); `degraded{stage: extraction}` or a turn error; counted as `schema_failure` |
 | Verification rejects items | verifier | Items withheld with count; never rendered; `verification_fail` score |
 | Missing prior note | module | "No plan text found in the {date} note"; lookback up to 3 encounters; commitments section empty by design |
