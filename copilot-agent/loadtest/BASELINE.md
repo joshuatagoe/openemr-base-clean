@@ -23,10 +23,11 @@ Pass criteria (ARCHITECTURE.md §13): 10 users p95 ≤ 8 s and errors < 1 % — 
 reason code), errors < 5 % — **pass**. Every request returned HTTP 200 with a terminal frame;
 "errors" (transport failures, malformed frames, missing terminal frame) were zero in every run.
 
-**Infrastructure during the runs** (Railway metrics, agent service): peak **0.2 vCPU** of a
-24 vCPU limit; memory **253 MB** (from ~100 MB idle) of 24 GB; 5 MB egress / 3 MB ingress for the
-two runs; ~900 requests in the 15-minute window. The agent process is not the constraint at
-this load: its own `briefing` span p50 stayed at ~2–3 s, and the model call dominates.
+**Infrastructure during the runs** (Railway metrics, agent service, 24 vCPU / 24 GB limits):
+first 10+50 run peak **0.2 vCPU** and **253 MB** (from ~100 MB idle), 5 MB egress / 3 MB ingress;
+final 10+50 run peak **0.1 vCPU** and **167 MB**; a transient ~330 MB between runs coincides with
+a redeploy (old and new process overlapping). The agent process is not the constraint at this
+load: its own `briefing` span p50 stayed at ~2–3 s, and the model call dominates.
 
 ### What the 50-user run measures, and the two iterations it took
 
