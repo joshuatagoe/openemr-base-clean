@@ -23,7 +23,6 @@ The model turns plan narrative into commitments with verbatim quotes and, in fol
 
 **Tradeoffs accepted.** Two services add an operational seam (bundle, ticket, TTL store) in exchange for streaming, cancellation and a meaningful readiness probe. Extraction quality depends on note wording and a curated synonym table, both measured on fixtures. Reads are parameter-bound SQL through the audited `QueryUtils` path rather than `src/Services` (§6 records why). Dosage-threshold and interaction checks are out of scope: no verified knowledge source exists here.
 
-**Status (2026-09-19).** Phases 0–5 of §17 are implemented on `main` and deployed on Railway (OpenEMR, the agent, and self-hosted Langfuse receiving masked traces); the Langfuse dashboard and alert rules are the remaining §14 items. Where the implementation departed from the original plan, the decision is recorded in the section concerned (§6, §7, §8, §12, §16).
 
 ## Glossary
 
@@ -402,6 +401,8 @@ Deterministic content that survives an agent or model failure: identity, both re
 | Tracing backend | Self-hosted Langfuse on our infrastructure, PHI masked at the SDK boundary | Langfuse Cloud / LangSmith / Braintrust SaaS | Keeps observability data (even masked) inside the same control boundary as PHI; one fewer third party in the data-flow record and BAA discussion; same dashboards, scores and alerting |
 
 ## 17. Phased Implementation Roadmap
+
+**Status (2026-09-20).** Phases 0–5 are implemented on `main` and deployed on Railway: OpenEMR with the module, the agent, and self-hosted Langfuse (v4) receiving masked traces, with the dashboard and five alert rules live, the deployed load baseline recorded, the API collection verified against the deployed agent, and the demo patients seeded. The only phase item still open is the authenticated module-side load test. Where the implementation departed from the original plan, the decision is recorded in the section concerned (§6, §7, §8, §12, §14, §16).
 
 | Phase | Deliverable | Depends on | Proves | Status (2026-09-18) |
 |---|---|---|---|---|
