@@ -38,6 +38,16 @@ One module global exists (Administration → Globals → Clinical Co-Pilot):
 users without a care relationship read a context; every such read is audited
 with basis `admin_override`.
 
+## Demo data
+
+`dev/seed_evelyn_demo.php --confirm-local` seeds the tracer-bullet patient;
+`dev/seed_demo_patients.php --confirm-local` seeds seven synthetic patients, one per
+evidence state (each mirrors a fixture case in `copilot-agent/fixtures/cases/`),
+all with an appointment today so the schedule reads like a clinic morning. Both
+refuse to run outside a local/compose database and are idempotent by name.
+Verified 2026-09-20 through the real module and model: every patient lands on
+the intended state.
+
 ## Route
 
 `POST /api/copilot/briefing-ticket` (local API bridge; `APICSRFTOKEN` header).

@@ -60,7 +60,7 @@ Without steps 1–2 the panel still renders the deterministic sections and repor
 2. Start the agent: `cd copilot-agent && cp .env.example .env` (set `ANTHROPIC_API_KEY`, `COPILOT_TICKET_SECRET`), then `uv sync && uv run uvicorn app.main:app --port 8765`.
 3. Point OpenEMR at it: set `COPILOT_AGENT_URL=http://host.docker.internal:8765` and the same `COPILOT_TICKET_SECRET` in `docker/development-easy/.env`, then recreate the `openemr` service.
 4. Enable the module as above (or `dev/seed_evelyn_demo.php --confirm-local --enable-module` in the next step does it for you).
-5. Seed a demo patient with a prior plan and a later result (dev database only): run `interface/modules/custom_modules/oe-module-copilot/dev/seed_evelyn_demo.php --confirm-local` inside the OpenEMR container, then open that patient's summary.
+5. Seed demo patients (dev database only), inside the OpenEMR container: `interface/modules/custom_modules/oe-module-copilot/dev/seed_evelyn_demo.php --confirm-local` (the tracer-bullet patient) and `dev/seed_demo_patients.php --confirm-local` (seven synthetic patients, one per evidence state — result found, order pending, no record, result before the note, ambiguous, corrected result, no prior note — each with an appointment today). Open any of them from the calendar or patient finder.
 
 Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container per the module README.
 
