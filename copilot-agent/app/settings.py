@@ -29,6 +29,10 @@ class ModelSettings(BaseSettings):
     extraction_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
     extraction_effort: Literal["low", "medium", "high"] = "low"
 
+    provider_concurrency: int = Field(default=8, ge=1, le=64, description="Max in-flight provider calls per process; the rest queue in-process (ARCHITECTURE.md section 13).")
+    provider_max_attempts: int = Field(default=3, ge=1, le=6, description="Attempts per model call on retryable provider errors (rate limit, timeout, 5xx, malformed output).")
+    provider_retry_budget_seconds: float = Field(default=6.0, ge=0, le=30, description="Total backoff wait allowed per model call; kept under the briefing timeout so degradation is explicit, never a timeout.")
+
     price_input_per_mtok: float | None = Field(default=None, ge=0, description="Override: USD per million uncached input tokens for the configured model.")
     price_cached_per_mtok: float | None = Field(default=None, ge=0)
     price_output_per_mtok: float | None = Field(default=None, ge=0)

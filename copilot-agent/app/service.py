@@ -21,6 +21,7 @@ from collections.abc import Callable
 
 from app.annotations import annotate_interval
 from app.contracts import BriefingRequest, BriefingResponse, ContextBundle, ExtractionOutput
+from app.settings import ModelSettings
 from app.extractor import (
     REJECTED_DRUG_NAME_WARNING,
     REJECTED_LAB_NAME_WARNING,
@@ -91,7 +92,8 @@ class BriefingService:
         plan_text, warnings = select_plan_text(context, max_chars=self._max_plan_chars)
         if plan_text is None:
             return None, warnings
-        extractor = CommitmentExtractor(self._provider_factory())
+        model_settings = ModelSettings()
+        extractor = CommitmentExtractor(self._provider_factory(), max_attempts=model_settings.provider_max_attempts, retry_budget_seconds=model_settings.provider_retry_budget_seconds)
         return await extractor.extract(plan_text), warnings
 
     @staticmethod

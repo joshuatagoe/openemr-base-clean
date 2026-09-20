@@ -144,7 +144,7 @@ def test_provider_failure_is_an_explicit_error_not_an_empty_briefing(
     assert resp.headers[CORRELATION_HEADER] == CID
     assert "matches" not in resp.json()
     assert "metformin" not in resp.text and "HbA1c" not in resp.text  # no clinical content in error bodies
-    expected_calls = 2 if getattr(error, "retryable", False) else 1  # bounded retry
+    expected_calls = 2 if getattr(error, "retryable", False) else 1  # bounded retry (PROVIDER_MAX_ATTEMPTS=2 in tests; 3 in production)
     assert len(provider.calls) == expected_calls
 
 

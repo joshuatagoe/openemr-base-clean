@@ -32,7 +32,7 @@ from app.contracts import (
 from app.followup import MAX_TOOL_ITERATIONS, ConversationTurn, run_turn
 from app.main import app, get_provider_factory, get_settings
 from app.matcher import match_evidence
-from app.providers.base import ProviderUnavailableError
+from app.providers.base import ProviderRateLimitError, ProviderUnavailableError
 from app.tools import ToolOutput, run_tool, tool_definitions
 from app.verifier import TurnEvidence, verify_statement
 from tests.fakes import FakeProvider, answer, calls, hba1c, metformin, model_output, statement
@@ -305,11 +305,21 @@ def test_turn_rejects_overlong_or_empty_questions(client: TestClient, fixture_pa
     assert turn(client, accepted["bundle_id"], ticket_for(accepted), "x" * 1001).status_code == 422
 
 
-@pytest.mark.parametrize("scripted_provider", [FakeProvider(model_output(), turn_script=[ProviderUnavailableError("down")])])
+@pytest.mark.parametrize("scripted_provider", [FakeProvider(model_output(), turn_script=[ProviderUnavailableError("down"), ProviderUnavailableError("still down")])])
 def test_provider_failure_is_a_degraded_turn_not_an_answer(client: TestClient, fixture_payload: dict, scripted_provider: FakeProvider) -> None:
+    """A transient failure is retried once with backoff; when the retry also fails the turn degrades explicitly."""
     accepted = post_bundle(client, fixture_payload)
     body = turn(client, accepted["bundle_id"], ticket_for(accepted), "A1c?").json()
     assert body["statements"] == [] and body["degraded"]["stage"] == "turn" and body["degraded"]["reason_code"] == "provider_unavailable"
+    assert scripted_provider.forced == [False, False]  # two attempts at the same step
+
+
+@pytest.mark.parametrize("scripted_provider", [FakeProvider(model_output(), turn_script=[ProviderRateLimitError("r", retry_after=0.01), calls(("find_results", {"test_query": "HbA1c"})), answer(statement("The latest HbA1c result was 8.9 % on 2026-09-12.", "fact", "procedure_result:9001"))])])
+def test_rate_limited_turn_step_is_retried_and_recovers(client: TestClient, fixture_payload: dict, scripted_provider: FakeProvider) -> None:
+    """Guards: a provider 429 on a turn step no longer degrades the turn immediately; the step is retried after the backoff."""
+    accepted = post_bundle(client, fixture_payload)
+    body = turn(client, accepted["bundle_id"], ticket_for(accepted), "What was the last A1c?").json()
+    assert body["degraded"] is None and len(body["statements"]) == 1
 
 
 def test_conversations_do_not_leak_between_bundles(client: TestClient, fixture_payload: dict, scripted_provider: FakeProvider) -> None:

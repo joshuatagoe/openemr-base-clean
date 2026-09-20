@@ -154,6 +154,17 @@ score > 0 over 5 min. The on-call response for each is in the script's
    side can see): check `/health` and `/ready`, the Railway deploy state and
    `COPILOT_AGENT_URL`; physicians see sections without a plan check meanwhile.
 
+## Provider resilience
+
+Every model call goes through a process-wide gate (`PROVIDER_CONCURRENCY`
+in-flight calls; the rest wait in-process) and a bounded retry
+(`PROVIDER_MAX_ATTEMPTS`, exponential backoff with jitter or the provider's
+`Retry-After`, total wait ≤ `PROVIDER_RETRY_BUDGET_SECONDS` so the request
+degrades explicitly rather than timing out). Added after the deployed load
+test showed a burst of 50 users degrading 48 % of briefings with
+`provider_rate_limited` while seconds of budget remained. `/metrics` reports
+`provider_queue.waiting` as the queue depth.
+
 ## Cost
 
 Estimated from token usage with a per-million price table (override with

@@ -53,6 +53,12 @@ def _no_api_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
         return
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")  # never send test traces to the real Langfuse
+    monkeypatch.setenv("PROVIDER_MAX_ATTEMPTS", "2")  # the bounded-retry tests pin exactly two attempts
+
+    async def _no_wait(_seconds: float) -> None:  # retries back off in production; tests do not wait
+        return None
+
+    monkeypatch.setattr("app.providers.resilience._sleep", _no_wait)
 
 
 @pytest.fixture

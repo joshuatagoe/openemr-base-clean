@@ -19,7 +19,8 @@ from typing import Any
 from app.contracts import ContextBundle, EvidenceMatch, ToolCallRecord, VerifiedStatement
 from app.extractor import record_usage
 from app.observability import generation, span
-from app.providers.base import ModelProvider, ModelTurnAnswer
+from app.providers.base import ModelProvider, ModelTurnAnswer, TurnStep
+from app.providers.resilience import call_with_retry
 from app.providers.prompt import FOLLOWUP_SYSTEM_PROMPT, build_question_content
 from app.tools import ToolOutput, run_tool, serialize_output, tool_definitions
 from app.verifier import TurnEvidence, verify_turn
@@ -67,6 +68,8 @@ async def run_turn(
     question: str,
     *,
     max_iterations: int = MAX_TOOL_ITERATIONS,
+    max_attempts: int = 2,
+    retry_budget_seconds: float = 2.0,
 ) -> TurnOutcome:
     """Run one turn. Raises ``ProviderError`` on model failure; tool failures are returned as errors, never raised."""
     transcript: list[Any] = [*_history_messages(history), {"role": "user", "content": build_question_content(question)}]
@@ -78,12 +81,16 @@ async def run_turn(
 
     for step_index in range(max_iterations + 1):
         force = step_index >= max_iterations
-        with generation("turn_step", step=step_index + 1) as gen:
-            step = await provider.turn_step(FOLLOWUP_SYSTEM_PROMPT, transcript, tools, force_answer=force)
-            gen["usage"] = step.usage
-            # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
-            gen["input"] = {"question": question, "history_turns": len(history), "force_answer": force}
-            gen["output"] = step.answer.model_dump(mode="json") if step.answer is not None else {"tool_calls": [c.name for c in step.tool_calls]}
+        async def step_once(attempt: int) -> TurnStep:
+            with generation("turn_step", step=step_index + 1, attempt=attempt) as gen:
+                step = await provider.turn_step(FOLLOWUP_SYSTEM_PROMPT, transcript, tools, force_answer=force)
+                gen["usage"] = step.usage
+                # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
+                gen["input"] = {"question": question, "history_turns": len(history), "force_answer": force}
+                gen["output"] = step.answer.model_dump(mode="json") if step.answer is not None else {"tool_calls": [c.name for c in step.tool_calls]}
+            return step
+
+        step = await call_with_retry(step_once, max_attempts=max_attempts, budget_seconds=retry_budget_seconds, stage="turn")
         record_usage(step.usage)
         if step.answer is not None:
             answer = step.answer

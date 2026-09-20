@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from app.contracts import CommitmentKind, ExtractedCommitment, ExtractionOutput, MedicationAction
 from app.observability import generation
+from app.providers.resilience import call_with_retry
 from app.providers.base import (
     ModelCommitment,
     ModelExtractionOutput,
@@ -165,9 +166,10 @@ def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> Extracti
 class CommitmentExtractor:
     """Orchestrates one extraction: bounded provider attempts, then grounding."""
 
-    def __init__(self, provider: ModelProvider, *, max_attempts: int = 2) -> None:
+    def __init__(self, provider: ModelProvider, *, max_attempts: int = 2, retry_budget_seconds: float = 6.0) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
+        self._retry_budget_seconds = retry_budget_seconds
         self._provider = provider
         self._max_attempts = max_attempts
 
@@ -182,21 +184,17 @@ class CommitmentExtractor:
         provider fails after the bounded attempts, so a model outage is not
         mistaken for "no commitments".
         """
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                with generation("extract", attempt=attempt) as gen:
-                    result = await self._provider.extract_commitments(plan_text)
-                    gen["usage"] = result.usage
-                    # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
-                    gen["input"], gen["output"] = plan_text, result.output.model_dump(mode="json")
-            except ProviderError as exc:
-                if exc.retryable and attempt < self._max_attempts:
-                    continue
-                raise
-            record_usage(result.usage)
-            return ground_extraction(plan_text, result.output)
+        async def attempt_once(attempt: int) -> ModelExtractionResult:
+            with generation("extract", attempt=attempt) as gen:
+                result = await self._provider.extract_commitments(plan_text)
+                gen["usage"] = result.usage
+                # Forwarded only with COPILOT_LANGFUSE_CAPTURE_IO on (synthetic data); masked otherwise.
+                gen["input"], gen["output"] = plan_text, result.output.model_dump(mode="json")
+            return result
+
+        result = await call_with_retry(attempt_once, max_attempts=self._max_attempts, budget_seconds=self._retry_budget_seconds, stage="extraction")
+        record_usage(result.usage)
+        return ground_extraction(plan_text, result.output)
 
 
 __all__ = [

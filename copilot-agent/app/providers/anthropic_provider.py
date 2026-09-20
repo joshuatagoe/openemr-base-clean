@@ -19,6 +19,7 @@ from typing import Any
 import anthropic
 from pydantic import ValidationError
 
+from app.providers.resilience import gate
 from app.providers.base import (
     MalformedModelOutputError,
     ModelExtractionOutput,
@@ -40,6 +41,20 @@ from app.tools import strict_schema
 
 SUBMIT_ANSWER_TOOL = "submit_answer"
 from app.settings import ModelSettings
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """The provider's Retry-After header in seconds, when present and sane (never the response body)."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    raw = headers.get("retry-after") if headers is not None else None
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if 0 <= value <= 60 else None
 
 
 class AnthropicProvider:
@@ -78,7 +93,8 @@ class AnthropicProvider:
         request = self.build_request(plan_text)
         started = time.perf_counter()
         try:
-            response = await self._client.messages.parse(**request)
+            async with gate.slot():
+                response = await self._client.messages.parse(**request)
         except Exception as exc:  # noqa: BLE001 - mapped below
             self._raise_mapped(exc)
         latency_ms = int((time.perf_counter() - started) * 1000)
@@ -114,7 +130,7 @@ class AnthropicProvider:
         except anthropic.APITimeoutError as exc:
             raise ProviderTimeoutError("provider request timed out") from exc
         except anthropic.RateLimitError as exc:
-            raise ProviderRateLimitError("provider rate limit reached") from exc
+            raise ProviderRateLimitError("provider rate limit reached", retry_after=_retry_after_seconds(exc)) from exc
         except (anthropic.APIConnectionError, anthropic.InternalServerError) as exc:
             raise ProviderUnavailableError("provider unavailable") from exc
         except anthropic.APIStatusError as exc:
@@ -157,7 +173,8 @@ class AnthropicProvider:
         request = self.build_turn_request(system, transcript, tools, force_answer=force_answer)
         started = time.perf_counter()
         try:
-            response = await self._client.messages.create(**request)
+            async with gate.slot():
+                response = await self._client.messages.create(**request)
         except Exception as exc:  # noqa: BLE001 - mapped below
             self._raise_mapped(exc)
         latency_ms = int((time.perf_counter() - started) * 1000)

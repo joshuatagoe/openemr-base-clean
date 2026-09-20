@@ -152,6 +152,10 @@ class ProviderTimeoutError(ProviderError):
 class ProviderRateLimitError(ProviderError):
     retryable = True
 
+    def __init__(self, message: str = "provider rate limit reached", *, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after  # seconds the provider asked us to wait, when it said
+
 
 class ProviderUnavailableError(ProviderError):
     """Connection failure or provider-side 5xx/overload."""

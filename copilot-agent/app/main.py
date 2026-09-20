@@ -63,6 +63,7 @@ from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, configure_tracing, log_event, score, shutdown_tracing, span
 from app.metrics import metrics
 from app.providers.anthropic_provider import AnthropicProvider
+from app.providers.resilience import gate
 from app.providers.base import (
     MalformedModelOutputError,
     ModelProvider,
@@ -108,6 +109,7 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         environment=settings.environment,
         capture_io=settings.langfuse_capture_io,
     )
+    gate.configure(ModelSettings().provider_concurrency)
     application.state.store = BundleStore(ttl_seconds=settings.bundle_ttl_seconds)
     log_event("service.start", environment=settings.environment, bundle_ttl_seconds=settings.bundle_ttl_seconds, tracing=traced)
     yield
@@ -391,8 +393,11 @@ async def ready(response: Response, cfg: ServiceSettings = Depends(get_settings)
 
 @app.get("/metrics", tags=["operations"])
 async def metrics_snapshot() -> dict[str, Any]:
-    """Process-local counters, latency percentiles per stage, token totals and estimated cost. No clinical data."""
-    return metrics.snapshot()
+    """Process-local counters, latency percentiles per stage, token totals, estimated cost and the
+    provider queue (in-flight limit and calls waiting for a slot). No clinical data."""
+    snapshot = metrics.snapshot()
+    snapshot["provider_queue"] = {"concurrency": gate.concurrency, "waiting": gate.waiting}
+    return snapshot
 
 
 # --------------------------------------------------------------------------- #
