@@ -40,6 +40,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from app.contracts import (
+    StatementKind,
     SCHEMA_VERSION,
     BriefingRequest,
     BriefingResponse,
@@ -475,6 +476,7 @@ async def _briefing_events(
             attrs["reason_code"] = "timeout"
             score("degraded", 1, data_type="BOOLEAN")
             score("briefing_verified", 0, data_type="BOOLEAN")
+            score("degraded_reason", "timeout", data_type="CATEGORICAL")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="timeout"))
             return
         except ProviderError as exc:
@@ -484,6 +486,7 @@ async def _briefing_events(
             attrs["reason_code"] = code
             score("degraded", 1, data_type="BOOLEAN")
             score("briefing_verified", 0, data_type="BOOLEAN")
+            score("degraded_reason", code, data_type="CATEGORICAL")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code=code))
             return
         except Exception:
@@ -493,6 +496,7 @@ async def _briefing_events(
             attrs["reason_code"] = "internal_error"
             score("degraded", 1, data_type="BOOLEAN")
             score("briefing_verified", 0, data_type="BOOLEAN")
+            score("degraded_reason", "internal_error", data_type="CATEGORICAL")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.EXTRACTION, reason_code="internal_error"))
             return
 
@@ -506,6 +510,7 @@ async def _briefing_events(
             attrs["reason_code"] = "internal_error"
             score("degraded", 1, data_type="BOOLEAN")
             score("briefing_verified", 0, data_type="BOOLEAN")
+            score("degraded_reason", "internal_error", data_type="CATEGORICAL")
             yield _sse("degraded", DegradedEvent(**ids, stage=DegradedStage.MATCHING, reason_code="internal_error"))
             return
 
@@ -600,18 +605,27 @@ async def conversation_turn(
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "timeout"
             score("degraded", 1, data_type="BOOLEAN")
+            score("degraded_reason", "timeout", data_type="CATEGORICAL")
+            score("turn_success", 0, data_type="BOOLEAN")
+            score("turn_outcome", "degraded", data_type="CATEGORICAL")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="timeout"))
         except ProviderError as exc:
             _, code, _ = _provider_error_code(exc)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = code
             score("degraded", 1, data_type="BOOLEAN")
+            score("degraded_reason", code, data_type="CATEGORICAL")
+            score("turn_success", 0, data_type="BOOLEAN")
+            score("turn_outcome", "degraded", data_type="CATEGORICAL")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code=code))
         except Exception:
             log_event("turn.failed", cid=claims.cid, level=logging.ERROR, exc_info=True)
             attrs["outcome"] = "degraded"
             attrs["reason_code"] = "internal_error"
             score("degraded", 1, data_type="BOOLEAN")
+            score("degraded_reason", "internal_error", data_type="CATEGORICAL")
+            score("turn_success", 0, data_type="BOOLEAN")
+            score("turn_outcome", "degraded", data_type="CATEGORICAL")
             return VerifiedTurn(**ids, turn_index=turn_index, degraded=DegradedEvent(**ids, stage=DegradedStage.TURN, reason_code="internal_error"))
         attrs["statements"] = len(outcome.statements)
         attrs["rejected"] = outcome.rejected_count
@@ -621,6 +635,12 @@ async def conversation_turn(
         score("degraded", 0, data_type="BOOLEAN")
         score("verification_rejected", outcome.rejected_count)
         score("hallucinated_span", 1 if outcome.rejected_count else 0, data_type="BOOLEAN")
+        # Follow-up success rate and decision outcome (KEY_METRICS section 6): answered = at least one grounded
+        # fact or no_record_found statement; refused = only refusals (out of scope / advice); empty = nothing verifiable.
+        kinds = {s.kind for s in outcome.statements}
+        turn_outcome = "answered" if kinds & {StatementKind.FACT, StatementKind.NO_RECORD_FOUND} else "refused" if kinds and kinds <= {StatementKind.REFUSAL, StatementKind.CLARIFICATION} else "empty"
+        score("turn_success", 1 if turn_outcome == "answered" else 0, data_type="BOOLEAN")
+        score("turn_outcome", turn_outcome, data_type="CATEGORICAL")
     stored.add_turn(ConversationTurn(question=request.question, statements=outcome.statements))
     return VerifiedTurn(**ids, turn_index=turn_index, statements=outcome.statements, rejected_count=outcome.rejected_count, tool_calls=outcome.tool_calls)
 

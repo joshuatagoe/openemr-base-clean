@@ -132,7 +132,12 @@ Langfuse → Dashboards → New. One dashboard, `Clinical Co-Pilot`, with these 
 | **Verified briefing success rate (agent-side)** | `briefing_verified` score average (briefings only) | §3 north star (agent-side proxy) |
 | Briefings by outcome / Briefings (total) | observation `briefing` count by level / total | §3 numerator and denominator (agent-side) |
 | Briefings and turns per hour | observation count, name in (`briefing`, `turn`), grouped by name | context |
-| Degraded rate | `degraded` score average (boolean → rate), filter name=`briefing` | degraded briefing rate |
+| Degraded rate | `degraded` score average (boolean → rate) | degraded briefing rate |
+| Degraded by reason | `degraded_reason` categorical score, pie | degraded breakdown |
+| Follow-up success rate / Turn outcomes | `turn_success` average; `turn_outcome` categorical pie | §6 follow-up success rate; decision outcomes |
+| Verification withhold rate | `hallucinated_span` average (share of traces with a withheld proposal) | verifier-withhold rate |
+| Cost per briefing / per turn step | `extract_cost_usd` / `turn_step_cost_usd` averages | §7 cost per briefing |
+| Queue depth | not applicable: no queue in the design (bounded concurrency inside one process; a backpressure queue is a 10K-tier change in COST_ANALYSIS.md) | — |
 | Error/degraded by reason | observation count grouped by `metadata.reason_code` where level=ERROR | degraded breakdown |
 | p50 / p95 / p99 latency | observation latency percentiles, grouped by name (`briefing`, `turn`, `extract`) | latency |
 | Tool calls and failures | observation count, name=`tool`, grouped by `metadata.tool`; and by `metadata.error` | tool metrics |

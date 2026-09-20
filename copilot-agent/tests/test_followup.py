@@ -354,6 +354,15 @@ def test_out_of_scope_refusal_is_rendered_uncited_with_no_tool_calls(client: Tes
     assert body["statements"][0]["text"] == OUT_OF_SCOPE_REFUSAL
 
 
+def test_turn_outcome_scores_refused_for_a_refusal_only_answer(client: TestClient, fixture_payload: dict, scripted_provider: FakeProvider, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, object]] = []
+    monkeypatch.setattr("app.main.score", lambda name, value, data_type="NUMERIC": seen.append((name, value)))
+    scripted_provider._turn_script = [answer(statement(OUT_OF_SCOPE_REFUSAL, "refusal"))]  # noqa: SLF001
+    accepted = post_bundle(client, fixture_payload)
+    assert turn(client, accepted["bundle_id"], ticket_for(accepted), "Is her blood pressure well controlled?").status_code == 200
+    assert ("turn_outcome", "refused") in seen and ("turn_success", 0) in seen
+
+
 @pytest.mark.live
 @pytest.mark.skipif(
     os.environ.get("RUN_ANTHROPIC_INTEGRATION_TEST") != "1" or not os.environ.get("ANTHROPIC_API_KEY"),

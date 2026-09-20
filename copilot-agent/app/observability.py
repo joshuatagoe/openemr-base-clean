@@ -278,18 +278,23 @@ def generation(name: str, *, model: str | None = None, **fields: Any) -> Iterato
             update["usage_details"] = {k: v for k, v in tokens.items() if v is not None}
             cost = estimate_cost_usd(usage.model, usage.input_tokens or 0, usage.cached_input_tokens or 0, usage.output_tokens or 0, ModelSettings().price_table())
             update["cost_details"] = {"total": round(cost, 6)}
+            attrs["estimated_cost_usd"] = round(cost, 6)
+            score(f"{name}_cost_usd", round(cost, 6))  # averages give cost per briefing / per turn step (KEY_METRICS section 7)
         if _capture_io:
             update["input"], update["output"] = io_in, io_out
         _finish_observation(obs, attrs, **update)
         obs_cm.__exit__(None, None, None)
 
 
-def score(name: str, value: float | int | bool, *, data_type: str = "NUMERIC") -> None:
-    """Attach a score to the current trace (verification outcomes, degraded flag, state counts)."""
+def score(name: str, value: float | int | bool | str, *, data_type: str = "NUMERIC") -> None:
+    """Attach a score to the current trace (verification outcomes, degraded flag, state counts, outcome labels).
+
+    Values are codes, counts or flags - never clinical content; CATEGORICAL values must be fixed labels."""
     if _langfuse is None or not _in_active_trace():
         return
     try:
-        _langfuse.score_current_trace(name=name, value=float(value), data_type=data_type)  # type: ignore[arg-type]
+        typed: float | str = str(value) if data_type == "CATEGORICAL" else float(value)
+        _langfuse.score_current_trace(name=name, value=typed, data_type=data_type)  # type: ignore[arg-type]
     except Exception:  # noqa: BLE001
         pass
 

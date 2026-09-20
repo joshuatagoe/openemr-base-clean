@@ -189,8 +189,8 @@ def test_degraded_briefing_is_an_error_level_observation(traced_client: TestClie
 
 def test_briefing_scores_the_north_star_proxy(client: TestClient, fixture_payload: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     """KEY_METRICS section 3: a completed briefing scores briefing_verified=1; a degraded one scores 0; turns never score it."""
-    seen: list[tuple[str, float]] = []
-    monkeypatch.setattr("app.main.score", lambda name, value, data_type="NUMERIC": seen.append((name, float(value))))
+    seen: list[tuple[str, float | str]] = []
+    monkeypatch.setattr("app.main.score", lambda name, value, data_type="NUMERIC": seen.append((name, str(value) if data_type == "CATEGORICAL" else float(value))))
     accepted = post_bundle(client, fixture_payload)
     status_code, _, events = read_events(client, accepted["bundle_id"], ticket_for(accepted))
     assert status_code == 200 and events[-1][0] == "complete"
@@ -199,6 +199,7 @@ def test_briefing_scores_the_north_star_proxy(client: TestClient, fixture_payloa
     resp = turn(client, accepted["bundle_id"], ticket_for(accepted), "What was the last A1c?")
     assert resp.status_code == 200
     assert not any(name == "briefing_verified" for name, _ in seen), seen
+    assert ("turn_success", 0.0) in seen and ("turn_outcome", "empty") in seen  # this module's fake answers with no statements
 
     from app.providers.base import ProviderUnavailableError
 
@@ -209,6 +210,7 @@ def test_briefing_scores_the_north_star_proxy(client: TestClient, fixture_payloa
     status_code, _, events = read_events(client, accepted["bundle_id"], ticket_for(accepted))
     assert status_code == 200 and events[-1][0] == "degraded"
     assert ("briefing_verified", 0.0) in seen and ("degraded", 1.0) in seen
+    assert ("degraded_reason", "provider_unavailable") in seen
 
 
 def test_tracing_off_by_default_leaves_the_span_seam_intact(client: TestClient, fixture_payload: dict) -> None:

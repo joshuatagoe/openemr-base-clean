@@ -102,7 +102,10 @@ per correlation id — the trace id *is* the `cid`, so a panel's
 `turn` → `turn_step` (generation) → `tool` (one per tool call: `tool`,
 `records`, `truncated`, `error`). Generations carry `usage_details` and
 `cost_details`. Scores on the trace: `briefing_verified` (boolean, briefings only — the
-KEY_METRICS §3 north-star proxy), `degraded` (boolean),
+KEY_METRICS §3 north-star proxy), `degraded` (boolean), `degraded_reason`
+(categorical: timeout, provider_*, internal_error), `turn_success` (boolean) and
+`turn_outcome` (categorical: answered, refused, empty, degraded), `<generation>_cost_usd`
+(per model call; averages give cost per briefing and per turn step),
 `verification_rejected` (count), `hallucinated_span` (boolean), and
 `state.<evidence_state>` counts after a completed briefing.
 
