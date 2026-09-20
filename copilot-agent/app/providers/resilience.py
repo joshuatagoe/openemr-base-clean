@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from typing import TypeVar
 
 from app.observability import log_event
-from app.providers.base import ProviderError
+from app.providers.base import ProviderBusyError, ProviderError
 
 T = TypeVar("T")
 
@@ -30,14 +30,22 @@ T = TypeVar("T")
 class ProviderGate:
     """Bounds concurrent provider calls in this process. Configure once at startup."""
 
-    def __init__(self, concurrency: int = 8) -> None:
+    def __init__(self, concurrency: int = 16, max_wait_seconds: float = 4.0) -> None:
         self._concurrency = concurrency
+        self._max_wait_seconds = max_wait_seconds
         self._semaphore = asyncio.Semaphore(concurrency)
         self._waiting = 0
+        self.rejected = 0  # calls that found no slot inside the wait budget
 
-    def configure(self, concurrency: int) -> None:
+    def configure(self, concurrency: int, max_wait_seconds: float | None = None) -> None:
         self._concurrency = concurrency
+        if max_wait_seconds is not None:
+            self._max_wait_seconds = max_wait_seconds
         self._semaphore = asyncio.Semaphore(concurrency)
+
+    @property
+    def max_wait_seconds(self) -> float:
+        return self._max_wait_seconds
 
     @property
     def concurrency(self) -> int:
@@ -50,9 +58,16 @@ class ProviderGate:
 
     @asynccontextmanager
     async def slot(self) -> AsyncIterator[None]:
+        """Acquire a slot or, after ``max_wait_seconds``, raise ``ProviderBusyError``: a request must never
+        sit in this queue long enough for its own timeout to be what fires."""
         self._waiting += 1
         try:
-            await self._semaphore.acquire()
+            try:
+                await asyncio.wait_for(self._semaphore.acquire(), timeout=self._max_wait_seconds)
+            except TimeoutError:
+                self.rejected += 1
+                log_event("provider.busy", waiting=self._waiting, concurrency=self._concurrency, max_wait_ms=int(self._max_wait_seconds * 1000))
+                raise ProviderBusyError("no provider slot within the wait budget") from None
         finally:
             self._waiting -= 1
         try:

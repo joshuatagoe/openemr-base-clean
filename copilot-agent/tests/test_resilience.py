@@ -120,3 +120,18 @@ async def test_gate_releases_the_slot_on_error() -> None:
         await failing()
     async with gate.slot():  # would hang if the failed call had kept the slot
         pass
+
+
+async def test_gate_degrades_fast_with_busy_instead_of_queueing_into_the_timeout() -> None:
+    """The 50-user load-test regression: a gate that queues past the request budget turns a fast, explicit
+    rate-limit degrade into a silent timeout. A slot wait is bounded and raises ProviderBusyError."""
+    from app.providers.base import ProviderBusyError
+
+    gate = ProviderGate(concurrency=1, max_wait_seconds=0.05)
+    async with gate.slot():
+        with pytest.raises(ProviderBusyError):
+            async with gate.slot():
+                pass
+    assert gate.rejected == 1 and gate.waiting == 0
+    async with gate.slot():  # the slot is free again afterwards
+        pass

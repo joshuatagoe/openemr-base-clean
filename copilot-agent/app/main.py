@@ -63,11 +63,11 @@ from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, configure_tracing, log_event, score, shutdown_tracing, span
 from app.metrics import metrics
 from app.providers.anthropic_provider import AnthropicProvider
-from app.providers.resilience import gate
 from app.providers.base import (
     MalformedModelOutputError,
     ModelProvider,
     ProviderAuthenticationError,
+    ProviderBusyError,
     ProviderConfigurationError,
     ProviderError,
     ProviderRateLimitError,
@@ -75,6 +75,7 @@ from app.providers.base import (
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
+from app.providers.resilience import gate
 from app.providers.stub_provider import StubProvider
 from app.security import (
     SIGNATURE_HEADER,
@@ -109,7 +110,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         environment=settings.environment,
         capture_io=settings.langfuse_capture_io,
     )
-    gate.configure(ModelSettings().provider_concurrency)
+    model_settings = ModelSettings()
+    gate.configure(model_settings.provider_concurrency, model_settings.provider_queue_wait_seconds)
     application.state.store = BundleStore(ttl_seconds=settings.bundle_ttl_seconds)
     log_event("service.start", environment=settings.environment, bundle_ttl_seconds=settings.bundle_ttl_seconds, tracing=traced)
     yield
@@ -185,6 +187,7 @@ _PROVIDER_ERROR_MAP: list[tuple[type[ProviderError], int, str, str]] = [
     (ProviderRejectedRequestError, status.HTTP_502_BAD_GATEWAY, "provider_rejected_request", "The model provider rejected the request; the briefing could not be produced."),
     (ProviderTimeoutError, status.HTTP_504_GATEWAY_TIMEOUT, "provider_timeout", "The model provider did not respond in time; the briefing could not be produced."),
     (ProviderRateLimitError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_rate_limited", "The model provider is rate limiting requests; the briefing could not be produced."),
+    (ProviderBusyError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_busy", "The service is at its model-call capacity; the briefing could not be produced right now."),
     (ProviderUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, "provider_unavailable", "The model provider is unavailable; the briefing could not be produced."),
     (MalformedModelOutputError, status.HTTP_502_BAD_GATEWAY, "malformed_model_output", "The model returned output that failed validation; the briefing could not be produced."),
 ]
@@ -201,7 +204,7 @@ def _provider_error_to_http(exc: ProviderError, correlation_id: UUID, patient_uu
     http_status, code, message = _provider_error_code(exc)
     detail = ErrorDetail(code=code, message=message, correlation_id=correlation_id, patient_uuid=patient_uuid)
     headers = {CORRELATION_HEADER: str(correlation_id)}
-    if code == "provider_rate_limited":
+    if code in ("provider_rate_limited", "provider_busy"):
         headers["Retry-After"] = "5"
     return HTTPException(status_code=http_status, detail=detail.model_dump(mode="json"), headers=headers)
 
@@ -396,7 +399,7 @@ async def metrics_snapshot() -> dict[str, Any]:
     """Process-local counters, latency percentiles per stage, token totals, estimated cost and the
     provider queue (in-flight limit and calls waiting for a slot). No clinical data."""
     snapshot = metrics.snapshot()
-    snapshot["provider_queue"] = {"concurrency": gate.concurrency, "waiting": gate.waiting}
+    snapshot["provider_queue"] = {"concurrency": gate.concurrency, "waiting": gate.waiting, "rejected": gate.rejected, "max_wait_seconds": gate.max_wait_seconds}
     return snapshot
 
 

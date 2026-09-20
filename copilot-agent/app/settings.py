@@ -29,7 +29,8 @@ class ModelSettings(BaseSettings):
     extraction_max_output_tokens: int = Field(default=2048, ge=256, le=16000)
     extraction_effort: Literal["low", "medium", "high"] = "low"
 
-    provider_concurrency: int = Field(default=8, ge=1, le=64, description="Max in-flight provider calls per process; the rest queue in-process (ARCHITECTURE.md section 13).")
+    provider_concurrency: int = Field(default=16, ge=1, le=128, description="Max in-flight provider calls per process, sized to the provider's throughput (~6 calls/s x ~3 s); the rest queue in-process (ARCHITECTURE.md section 13).")
+    provider_queue_wait_seconds: float = Field(default=4.0, gt=0, le=30, description="Longest a call waits for a slot before degrading with provider_busy instead of running into the request timeout.")
     provider_max_attempts: int = Field(default=3, ge=1, le=6, description="Attempts per model call on retryable provider errors (rate limit, timeout, 5xx, malformed output).")
     provider_retry_budget_seconds: float = Field(default=6.0, ge=0, le=30, description="Total backoff wait allowed per model call; kept under the briefing timeout so degradation is explicit, never a timeout.")
 

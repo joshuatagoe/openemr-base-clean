@@ -157,6 +157,13 @@ class ProviderRateLimitError(ProviderError):
         self.retry_after = retry_after  # seconds the provider asked us to wait, when it said
 
 
+class ProviderBusyError(ProviderError):
+    """No provider slot freed inside the request's wait budget: backpressure, degraded fast and explicitly
+    instead of queueing into a timeout (ARCHITECTURE.md section 13). Not retryable within the request."""
+
+    retryable = False
+
+
 class ProviderUnavailableError(ProviderError):
     """Connection failure or provider-side 5xx/overload."""
 
@@ -228,6 +235,7 @@ __all__ = [
     "ProviderAuthenticationError",
     "ProviderConfigurationError",
     "ProviderError",
+    "ProviderBusyError",
     "ProviderRateLimitError",
     "ProviderRejectedRequestError",
     "ProviderTimeoutError",

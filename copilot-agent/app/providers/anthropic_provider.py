@@ -19,7 +19,6 @@ from typing import Any
 import anthropic
 from pydantic import ValidationError
 
-from app.providers.resilience import gate
 from app.providers.base import (
     MalformedModelOutputError,
     ModelExtractionOutput,
@@ -37,6 +36,7 @@ from app.providers.base import (
     TurnStep,
 )
 from app.providers.prompt import EXTRACTION_SYSTEM_PROMPT, build_user_content
+from app.providers.resilience import gate
 from app.tools import strict_schema
 
 SUBMIT_ANSWER_TOOL = "submit_answer"

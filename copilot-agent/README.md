@@ -157,7 +157,9 @@ score > 0 over 5 min. The on-call response for each is in the script's
 ## Provider resilience
 
 Every model call goes through a process-wide gate (`PROVIDER_CONCURRENCY`
-in-flight calls; the rest wait in-process) and a bounded retry
+in-flight calls, sized to the provider's throughput; the rest wait in-process
+for at most `PROVIDER_QUEUE_WAIT_SECONDS`, then degrade explicitly with
+`provider_busy` rather than queue into the request timeout) and a bounded retry
 (`PROVIDER_MAX_ATTEMPTS`, exponential backoff with jitter or the provider's
 `Retry-After`, total wait ≤ `PROVIDER_RETRY_BUDGET_SECONDS` so the request
 degrades explicitly rather than timing out). Added after the deployed load
