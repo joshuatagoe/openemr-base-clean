@@ -37,7 +37,9 @@
  * Safety: identical gates to seed_evelyn_demo.php - CLI only, --confirm-local,
  * refuses on OPENEMR__ENVIRONMENT=prod or a non-local database host unless
  * --target-demo-database is given explicitly (demo instances only).
- * Idempotent by patient name; re-running adds nothing.
+ * Idempotent by patient name: clinical data is inserted once; today's appointment is
+ * ensured on every run (earlier runs' appointments are made visible), so re-run on the
+ * morning of a demo.
  *
  * Usage (inside the development container, as the web user):
  *   docker compose -f docker/development-easy/docker-compose.yml exec openemr \
@@ -185,98 +187,136 @@ $insertAppointment = static function (int $pid, string $time, string $reason) us
     );
 };
 
-$createPatient = static function (string $fname, string $lname, string $dob, string $sex) use ($firstRowInt): ?int {
+/** @return array{0: ?int, 1: bool}  [pid, created]; an existing patient is returned with created = false */
+$patient = static function (string $fname, string $lname, string $dob, string $sex) use ($firstRowInt): array {
     $existing = QueryUtils::fetchRecords("SELECT pid FROM patient_data WHERE fname = ? AND lname = ? ORDER BY pid LIMIT 1", [$fname, $lname]);
     if ($existing !== []) {
-        echo "{$fname} {$lname} already present (pid {$firstRowInt($existing, 'pid')}); skipped.\n";
-        return null;
+        return [$firstRowInt($existing, 'pid'), false];
     }
     $result = (new PatientService())->insert(['fname' => $fname, 'lname' => $lname, 'DOB' => $dob, 'sex' => $sex, 'providerID' => ADMIN_USER_ID]);
     if ($result->hasErrors()) {
-        fwrite(STDERR, "Patient insert failed for {$fname} {$lname}: " . json_encode($result->getValidationMessages()) . "\n");
-        return null;
+        fwrite(STDERR, "Patient insert failed for {$fname} {$lname}: " . json_encode($result->getValidationMessages()) . "
+");
+        return [null, false];
     }
     $pid = $firstRowInt($result->getData(), 'pid');
-    return $pid > 0 ? $pid : null;
+    return [$pid > 0 ? $pid : null, true];
+};
+
+/**
+ * Today's appointment, whether the patient is new or not: earlier runs may have created appointments on another
+ * day, or with sharing level 0 (which the calendar hides), so existing ones are made visible and today's is added
+ * if missing. Re-run on the morning of a demo.
+ */
+$ensureAppointment = static function (int $pid, string $time, string $reason) use ($insertAppointment): void {
+    QueryUtils::sqlStatementThrowException(
+        "UPDATE openemr_postcalendar_events SET pc_sharing = 1, pc_time = COALESCE(pc_time, NOW()) WHERE pc_pid = ? AND pc_sharing = 0",
+        [(string) $pid]
+    );
+    $today = QueryUtils::fetchRecords("SELECT pc_eid FROM openemr_postcalendar_events WHERE pc_pid = ? AND pc_eventDate = CURDATE() LIMIT 1", [(string) $pid]);
+    if ($today === []) {
+        $insertAppointment($pid, $time, $reason);
+    }
 };
 
 // ----------------------------------------------------------------------------- scenarios
 
 // 1. Marcus Hale: result after the note; medication started after the note.
-if (($pid = $createPatient('Marcus', 'Hale', '1961-02-03', 'Male')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Hypertension follow-up');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Hypertension, above goal; potassium borderline.', 'Repeat potassium in two weeks. Start lisinopril 10 mg daily.');
-    $insertOrder($pid, $enc, '2026-06-24 08:00:00', '2823-3', 'Potassium', 'complete', [
-        ['code' => '2823-3', 'text' => 'Potassium', 'value' => '4.1', 'units' => 'mmol/L', 'range' => '3.5-5.1', 'abnormal' => '', 'status' => 'final', 'date' => '2026-06-25 09:10:00'],
-    ]);
-    $insertPrescription($pid, 'Lisinopril 10 mg', '314076', '2026-06-11', 1);
-    $insertAllergy($pid, 'Sulfa', 'hives');
-    $insertAppointment($pid, '09:00:00', 'BP check; review potassium');
-    echo "Seeded Marcus Hale (pid {$pid}): result found + medication started after note.\n";
+[$pid, $new] = $patient('Marcus', 'Hale', '1961-02-03', 'Male');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Hypertension follow-up');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Hypertension, above goal; potassium borderline.', 'Repeat potassium in two weeks. Start lisinopril 10 mg daily.');
+        $insertOrder($pid, $enc, '2026-06-24 08:00:00', '2823-3', 'Potassium', 'complete', [
+            ['code' => '2823-3', 'text' => 'Potassium', 'value' => '4.1', 'units' => 'mmol/L', 'range' => '3.5-5.1', 'abnormal' => '', 'status' => 'final', 'date' => '2026-06-25 09:10:00'],
+        ]);
+        $insertPrescription($pid, 'Lisinopril 10 mg', '314076', '2026-06-11', 1);
+        $insertAllergy($pid, 'Sulfa', 'hives');
+    }
+    $ensureAppointment($pid, '09:00:00', 'BP check; review potassium');
+    echo ($new ? "Seeded" : "Existing"), " Marcus Hale (pid {$pid}): result found + medication started after note.\n";
 }
 
 // 2. Priya Nair: order pending without a result; continue medication found in the medication list.
-if (($pid = $createPatient('Priya', 'Nair', '1974-09-21', 'Female')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Hyperlipidemia follow-up');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Hyperlipidemia on statin.', 'Order lipid panel. Continue atorvastatin.');
-    $insertOrder($pid, $enc, '2026-09-14 08:00:00', '24331-1', 'Lipid Panel', 'pending', []);
-    $insertListMedication($pid, 'Atorvastatin 20 mg', '2025-03-01 00:00:00', null, 1);
-    $insertAppointment($pid, '09:20:00', 'Lipid review');
-    echo "Seeded Priya Nair (pid {$pid}): order pending + continue medication on file.\n";
+[$pid, $new] = $patient('Priya', 'Nair', '1974-09-21', 'Female');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Hyperlipidemia follow-up');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Hyperlipidemia on statin.', 'Order lipid panel. Continue atorvastatin.');
+        $insertOrder($pid, $enc, '2026-09-14 08:00:00', '24331-1', 'Lipid Panel', 'pending', []);
+        $insertListMedication($pid, 'Atorvastatin 20 mg', '2025-03-01 00:00:00', null, 1);
+    }
+    $ensureAppointment($pid, '09:20:00', 'Lipid review');
+    echo ($new ? "Seeded" : "Existing"), " Priya Nair (pid {$pid}): order pending + continue medication on file.\n";
 }
 
 // 3. Thomas Reyes: no result after the note; stop-order contradicted by active records in both tables.
-if (($pid = $createPatient('Thomas', 'Reyes', '1957-11-30', 'Male')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Diabetes and hypertension follow-up');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Type 2 diabetes; cough attributed to ACE inhibitor.', 'Repeat HbA1c in three months. Stop lisinopril.');
-    $insertPrescription($pid, 'Lisinopril 20 mg', '314077', '2025-08-01', 1);
-    $insertListMedication($pid, 'Lisinopril 20 mg', '2025-08-01 00:00:00', null, 1);
-    $insertPrescription($pid, 'Metformin HCl 500 mg', '861007', '2025-01-15', 1);
-    $insertAllergy($pid, 'Penicillin', 'rash');
-    $insertAppointment($pid, '09:40:00', 'Diabetes f/u');
-    echo "Seeded Thomas Reyes (pid {$pid}): no matching record + conflicting stop.\n";
+[$pid, $new] = $patient('Thomas', 'Reyes', '1957-11-30', 'Male');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Diabetes and hypertension follow-up');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Type 2 diabetes; cough attributed to ACE inhibitor.', 'Repeat HbA1c in three months. Stop lisinopril.');
+        $insertPrescription($pid, 'Lisinopril 20 mg', '314077', '2025-08-01', 1);
+        $insertListMedication($pid, 'Lisinopril 20 mg', '2025-08-01 00:00:00', null, 1);
+        $insertPrescription($pid, 'Metformin HCl 500 mg', '861007', '2025-01-15', 1);
+        $insertAllergy($pid, 'Penicillin', 'rash');
+    }
+    $ensureAppointment($pid, '09:40:00', 'Diabetes f/u');
+    echo ($new ? "Seeded" : "Existing"), " Thomas Reyes (pid {$pid}): no matching record + conflicting stop.\n";
 }
 
 // 4. Grace Okafor: the only TSH result predates the note, so it is not evidence.
-if (($pid = $createPatient('Grace', 'Okafor', '1969-05-14', 'Female')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Hypothyroidism follow-up');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Hypothyroidism on levothyroxine.', 'Repeat TSH.');
-    $insertOrder($pid, $enc, '2026-05-20 08:00:00', '3016-3', 'TSH', 'complete', [
-        ['code' => '3016-3', 'text' => 'TSH', 'value' => '6.8', 'units' => 'mIU/L', 'range' => '0.4-4.0', 'abnormal' => 'high', 'status' => 'final', 'date' => '2026-05-21 10:00:00'],
-    ]);
-    $insertPrescription($pid, 'Levothyroxine 75 mcg', '966224', '2024-02-01', 1);
-    $insertAppointment($pid, '10:00:00', 'Thyroid follow-up');
-    echo "Seeded Grace Okafor (pid {$pid}): result before the note is not evidence.\n";
+[$pid, $new] = $patient('Grace', 'Okafor', '1969-05-14', 'Female');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Hypothyroidism follow-up');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Hypothyroidism on levothyroxine.', 'Repeat TSH.');
+        $insertOrder($pid, $enc, '2026-05-20 08:00:00', '3016-3', 'TSH', 'complete', [
+            ['code' => '3016-3', 'text' => 'TSH', 'value' => '6.8', 'units' => 'mIU/L', 'range' => '0.4-4.0', 'abnormal' => 'high', 'status' => 'final', 'date' => '2026-05-21 10:00:00'],
+        ]);
+        $insertPrescription($pid, 'Levothyroxine 75 mcg', '966224', '2024-02-01', 1);
+    }
+    $ensureAppointment($pid, '10:00:00', 'Thyroid follow-up');
+    echo ($new ? "Seeded" : "Existing"), " Grace Okafor (pid {$pid}): result before the note is not evidence.\n";
 }
 
 // 5. Daniel Kim: unnamed labs -> ambiguous; an interval result the plan does not explain.
-if (($pid = $createPatient('Daniel', 'Kim', '1982-07-08', 'Male')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Annual review');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Chronic kidney disease stage 2, stable.', 'Recheck labs at next visit.');
-    $insertOrder($pid, $enc, '2026-08-30 08:00:00', '2160-0', 'Creatinine', 'complete', [
-        ['code' => '2160-0', 'text' => 'Creatinine', 'value' => '1.3', 'units' => 'mg/dL', 'range' => '0.7-1.2', 'abnormal' => 'high', 'status' => 'final', 'date' => '2026-08-31 11:00:00'],
-    ]);
-    $insertAppointment($pid, '10:20:00', 'Annual review');
-    echo "Seeded Daniel Kim (pid {$pid}): ambiguous (unnamed labs) + unexplained interval result.\n";
+[$pid, $new] = $patient('Daniel', 'Kim', '1982-07-08', 'Male');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Annual review');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Chronic kidney disease stage 2, stable.', 'Recheck labs at next visit.');
+        $insertOrder($pid, $enc, '2026-08-30 08:00:00', '2160-0', 'Creatinine', 'complete', [
+            ['code' => '2160-0', 'text' => 'Creatinine', 'value' => '1.3', 'units' => 'mg/dL', 'range' => '0.7-1.2', 'abnormal' => 'high', 'status' => 'final', 'date' => '2026-08-31 11:00:00'],
+        ]);
+    }
+    $ensureAppointment($pid, '10:20:00', 'Annual review');
+    echo ($new ? "Seeded" : "Existing"), " Daniel Kim (pid {$pid}): ambiguous (unnamed labs) + unexplained interval result.\n";
 }
 
 // 6. Henry Walsh: corrected result supersedes final on the same order; a referral is unchecked; no allergy entries.
-if (($pid = $createPatient('Henry', 'Walsh', '1950-12-02', 'Male')) !== null) {
-    $enc = $insertEncounter($pid, NOTE_DATE, 'Heart failure follow-up');
-    $insertSoap($pid, $enc, NOTE_DATE, 'Heart failure with reduced ejection fraction.', 'Repeat basic metabolic panel. Refer to cardiology.');
-    $insertOrder($pid, $enc, '2026-07-01 08:00:00', '24320-4', 'Basic Metabolic Panel', 'complete', [
-        ['code' => '2951-2', 'text' => 'Sodium', 'value' => '142', 'units' => 'mmol/L', 'range' => '135-145', 'abnormal' => '', 'status' => 'final', 'date' => '2026-07-02 09:00:00'],
-        ['code' => '2951-2', 'text' => 'Sodium', 'value' => '138', 'units' => 'mmol/L', 'range' => '135-145', 'abnormal' => '', 'status' => 'corrected', 'date' => '2026-07-02 15:30:00', 'report_status' => 'corrected'],
-    ]);
-    $insertPrescription($pid, 'Carvedilol 6.25 mg', '200031', '2024-06-01', 1);
-    $insertAppointment($pid, '10:40:00', 'HF follow-up; labs and referral');
-    echo "Seeded Henry Walsh (pid {$pid}): corrected result + unchecked referral + no allergy entries.\n";
+[$pid, $new] = $patient('Henry', 'Walsh', '1950-12-02', 'Male');
+if ($pid !== null) {
+    if ($new) {
+        $enc = $insertEncounter($pid, NOTE_DATE, 'Heart failure follow-up');
+        $insertSoap($pid, $enc, NOTE_DATE, 'Heart failure with reduced ejection fraction.', 'Repeat basic metabolic panel. Refer to cardiology.');
+        $insertOrder($pid, $enc, '2026-07-01 08:00:00', '24320-4', 'Basic Metabolic Panel', 'complete', [
+            ['code' => '2951-2', 'text' => 'Sodium', 'value' => '142', 'units' => 'mmol/L', 'range' => '135-145', 'abnormal' => '', 'status' => 'final', 'date' => '2026-07-02 09:00:00'],
+            ['code' => '2951-2', 'text' => 'Sodium', 'value' => '138', 'units' => 'mmol/L', 'range' => '135-145', 'abnormal' => '', 'status' => 'corrected', 'date' => '2026-07-02 15:30:00', 'report_status' => 'corrected'],
+        ]);
+        $insertPrescription($pid, 'Carvedilol 6.25 mg', '200031', '2024-06-01', 1);
+    }
+    $ensureAppointment($pid, '10:40:00', 'HF follow-up; labs and referral');
+    echo ($new ? "Seeded" : "Existing"), " Henry Walsh (pid {$pid}): corrected result + unchecked referral + no allergy entries.\n";
 }
 
 // 7. Sofia Marin: no prior note at all.
-if (($pid = $createPatient('Sofia', 'Marin', '1990-03-27', 'Female')) !== null) {
-    $insertAppointment($pid, '11:00:00', 'New patient visit');
-    echo "Seeded Sofia Marin (pid {$pid}): no prior note.\n";
+[$pid, $new] = $patient('Sofia', 'Marin', '1990-03-27', 'Female');
+if ($pid !== null) {
+    if ($new) {
+    }
+    $ensureAppointment($pid, '11:00:00', 'New patient visit');
+    echo ($new ? "Seeded" : "Existing"), " Sofia Marin (pid {$pid}): no prior note.\n";
 }
 
 echo "Done.\n";
