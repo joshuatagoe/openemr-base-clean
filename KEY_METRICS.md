@@ -2,7 +2,7 @@
 
 ## 1. Product promise
 
-A scheduled outpatient primary-care physician, in the ~90 seconds before an established-patient visit, sees which commitments in the last plan have evidence in the record and which do not — and nothing on the panel is invented ([USERS.md](USERS.md)). Concretely, per briefing: deterministic sections built by the PHP module with no model involved (identity, both reasons, interval results and medication changes, allergies as recorded, a data-quality footer naming every source that could not be read); a plan check from the agent (each lab/test or medication commitment quoted verbatim with a matcher-assigned evidence state and record citations); and scoped follow-up answers whose every statement cites record ids a tool returned in that turn. Two rules govern the metrics as they govern the code: every clinical claim traces to a record the code holds, and a missing record is "no matching record found in the sources searched", never "not done".
+A scheduled outpatient primary-care physician, in the ~90 seconds before an established-patient visit, sees which commitments in the last plan have evidence in the record and which do not — and nothing on the panel is invented ([USER.md](USER.md)). Concretely, per briefing: deterministic sections built by the PHP module with no model involved (identity, both reasons, interval results and medication changes, allergies as recorded, a data-quality footer naming every source that could not be read); a plan check from the agent (each lab/test or medication commitment quoted verbatim with a matcher-assigned evidence state and record citations); and scoped follow-up answers whose every statement cites record ids a tool returned in that turn. Two rules govern the metrics as they govern the code: every clinical claim traces to a record the code holds, and a missing record is "no matching record found in the sources searched", never "not done".
 
 ## 2. Metric hierarchy
 
@@ -45,7 +45,7 @@ Run in CI and on every model or prompt change. A build that fails a gate is not 
 |---|---|---|---|---|
 | Checked-commitment recall | Labelled `lab_test` and `medication` commitments the extractor produced (verbatim span, correct kind) ÷ all labelled ones. `other` kinds are extracted but not checked, so not scored; no `critical` label exists in the fixtures | ≥ 0.85 | `tests/test_eval_fixtures.py` (live tier assertion) | Inspect missed commitment phrasings by kind; add labelled cases for them; adjust the extraction prompt only with the case in place |
 | Extraction precision | Extracted commitments that a labeller also marked ÷ all extracted | ≥ 0.90 | same | Inspect extra commitments: inferred from assessment text vs stated actions; tighten the prompt rules for that pattern |
-| Evidence-state precision | Commitments whose assigned state equals the labelled state ÷ commitments with a labelled state | ≥ 0.90 | same; USERS.md §7 | Inspect synonym/LOINC aliasing (`app/synonyms.py`), panel-member handling, corrected/preliminary and conflicting-record rules in `app/matcher.py` |
+| Evidence-state precision | Commitments whose assigned state equals the labelled state ÷ commitments with a labelled state | ≥ 0.90 | same; USER.md §7 | Inspect synonym/LOINC aliasing (`app/synonyms.py`), panel-member handling, corrected/preliminary and conflicting-record rules in `app/matcher.py` |
 | Citation completeness | Citations the label requires that were produced ÷ citations required | 1.00 | same | A miss is a matcher or contract bug; fix before release |
 
 The fixture tier fixes `model_output` in each case, so it exercises grounding, matching and citation — not extraction. Extraction P/R comes only from the opt-in live tier, which spends money and was not run for this revision.
@@ -96,13 +96,13 @@ All model proposals evaluated
 
 ## 8. Lagging physician-pilot metrics
 
-Not measurable in this project (synthetic data only; no physicians). They are what §3 exists to deliver; without them the technical north star is unproven as physician value. No current values or targets are claimed beyond the one USERS.md already states.
+Not measurable in this project (synthetic data only; no physicians). They are what §3 exists to deliver; without them the technical north star is unproven as physician value. No current values or targets are claimed beyond the one USER.md already states.
 
 | Metric | Definition | Depends on |
 |---|---|---|
 | Median physician preparation time | Time from opening the briefing until the physician reports being ready to enter the room | A usability study with a fixed protocol; self-report alone is unreliable at 90-second scale |
-| Manual chart-reopen rate | Visits where the physician opens additional chart sections (lab data, prescriptions) to find information the briefing was expected to provide, ÷ eligible visits using the briefing (formula below) | OpenEMR access-log counts, no clinical content (USERS.md §7 "workflow shift") |
-| "Would have missed this" rate | Briefing items the physician marks as something they would not otherwise have noticed before entering the room; USERS.md §7 target ≥ 1 per 10 established-patient visits | A one-tap control on the panel recording a count and `cid`, never text; physician feedback, so subject to recall and selection bias |
+| Manual chart-reopen rate | Visits where the physician opens additional chart sections (lab data, prescriptions) to find information the briefing was expected to provide, ÷ eligible visits using the briefing (formula below) | OpenEMR access-log counts, no clinical content (USER.md §7 "workflow shift") |
+| "Would have missed this" rate | Briefing items the physician marks as something they would not otherwise have noticed before entering the room; USER.md §7 target ≥ 1 per 10 established-patient visits | A one-tap control on the panel recording a count and `cid`, never text; physician feedback, so subject to recall and selection bias |
 
 ```text
 Visits where the physician opens additional chart sections
@@ -115,15 +115,15 @@ Eligible visits using the briefing
 
 | Metric | Value | How to read it |
 |---|---|---|
-| Hallucinated spans / citation completeness | 0 / 1.00 over 24 fixture cases (`eval.py`, 2026-09-18) | Synthetic evaluation: an offline regression baseline, not real-world clinical accuracy |
-| Evidence-state precision | 1.00 over 24 fixture cases (2026-09-18) | Same; the cases are self-authored |
-| Extraction precision / recall | Last live run 1.00 / 1.00 over 6 plans (2026-09-17; printed, no report committed) | Limited sample — encouraging, not sufficient to establish general extraction performance |
-| Isolation and invariant tests | 131 / 131 pass (`uv run pytest`, 2026-09-18) | Tested control behaviour; not zero production incidents |
-| Briefing delivery under load | 100 % complete, 0 errors at 10 and 50 users; `briefing` p95 4 ms (`loadtest/BASELINE.md`, 2026-09-17) | Stub provider: infrastructure behaviour, not live-model production performance |
-| Live briefing latency | 4.4–5.0 s end to end on `claude-opus-5`, single briefings (`BASELINE.md`) | Observed range from a few runs, not an established p95 |
-| Live follow-up latency | ~18.7 s for one turn with two tool calls (`BASELINE.md`) | Single observation; outside the 4 s target; planned fix is a cheaper `MODEL_ID_TURN` measured before switching |
-| Verified Briefing Success Rate, follow-up success rate, degraded rate (live) | Not established | No live-traffic measurement recorded |
-| Cost per briefing | ≈ $0.03 (≈ 4 K mostly-cached input + 0.5 K output; `copilot-agent/README.md`) | Price-table estimate, not billed spend |
+| Hallucinated spans / citation completeness | 0 / 1.00 over 24 fixture cases (`EVAL.md`, 2026-09-20) | Synthetic evaluation: an offline regression baseline, not real-world clinical accuracy |
+| Evidence-state precision | 1.00 over 24 fixture cases (2026-09-20) | Same; the cases are self-authored |
+| Extraction precision / recall | 1.00 / 1.00 over the 22 live-eligible cases on `claude-opus-5` (`EVAL.md`, 2026-09-20), all 22 also passing the deterministic checks on the live extraction | Small, self-authored sample — encouraging, not sufficient to establish general extraction performance |
+| Isolation and invariant tests | 224 / 224 pass in the agent suite (`uv run pytest`, 2026-09-20) and 57 / 57 in the module's PHPUnit suite | Tested control behaviour; not zero production incidents |
+| Briefing delivery under load | Deployed agent, real model (2026-09-20): 10 users 49/50 complete, p95 6.5 s, 0 errors; 50 users 141/250 complete with the rest explicitly degraded (`provider_busy`), p95 7.3 s, 0 errors; peak 0.2 vCPU / 253 MB (`copilot-agent/loadtest/BASELINE.md`) | The 50-user burst is ~700 briefings/min, the peak of ~8,000 physicians; a 500-bed hospital peaks near 26/min |
+| Live briefing latency | p50 2.9 s, p95 6.5 s at 10 concurrent users on the deployed stack (`BASELINE.md`, 2026-09-20); Langfuse `briefing` p50 2.4 s on single requests | Inside the ≤ 8 s p95 target |
+| Live follow-up latency | p50 4.6 s, p95 5.3 s over the first deployed turns (Langfuse, 2026-09-20; ~2.6 s for an out-of-scope refusal) | Near the ≤ 4 s median target; a cheaper `MODEL_ID_TURN` remains to be measured |
+| Verified Briefing Success Rate, follow-up success rate, degraded rate (live) | Live on the Langfuse dashboard (`briefing_verified`, `turn_success`, `degraded` scores; module-side `ticket.*` spans for the denominator) — demo traffic only so far | No clinic traffic yet; the tiles report what has run |
+| Cost per briefing | $0.0042 measured per extraction on the deployed agent; $0.0058 per follow-up turn (`COST_ANALYSIS.md` §3) | Langfuse-computed from token usage at list price, not billed spend |
 
 ## 10. Reproduction commands
 

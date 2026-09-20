@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-**The problem.** A primary-care physician ([USERS.md](USERS.md)) has about 90 seconds before each visit. Today they read the last note and stop, because checking whether its commitments ("repeat HbA1c in three months", "continue metformin") actually happened means cross-referencing orders, results and two medication tables. The Co-Pilot performs that check, then answers scoped follow-up questions about the same patient.
+**The problem.** A primary-care physician ([USER.md](USER.md)) has about 90 seconds before each visit. Today they read the last note and stop, because checking whether its commitments ("repeat HbA1c in three months", "continue metformin") actually happened means cross-referencing orders, results and two medication tables. The Co-Pilot performs that check, then answers scoped follow-up questions about the same patient.
 
 **The central decision: split the work by what can go wrong.**
 
@@ -48,7 +48,7 @@ Terms used throughout; where the code uses a different name it is shown in paren
 
 ## 2. Scope and Use-Case Traceability
 
-Every capability traces to [USERS.md](USERS.md) §4.
+Every capability traces to [USER.md](USER.md) §4.
 
 | Capability | Use case | Scope | Component |
 |---|---|---|---|
@@ -59,7 +59,7 @@ Every capability traces to [USERS.md](USERS.md) §4.
 | Reason-relation statement (scheduled reason ↔ commitment) | UC-01 (folded UC-03) | Initial | Agent (model, enum-constrained) + verifier |
 | Allergies as recorded, absence stated as absence | UC-01 | Initial | Module (deterministic) |
 | Scoped, cited follow-up questions over the bound patient's bundle, multi-turn | UC-04 | Secondary (built after UC-01) | Agent (model tool selection) + verifier |
-| Referral and follow-up-interval commitments; problems list; precomputed briefings | Deferred in USERS.md | Stretch | — |
+| Referral and follow-up-interval commitments; problems list; precomputed briefings | Deferred in USER.md | Stretch | — |
 
 **Explicit non-goals.** Writing to the chart in any form; diagnosis, dosing or treatment recommendation; drug-interaction or dosage-threshold checking (no verified knowledge source in this deployment — OpenEMR's optional prescribing/allergy-check features are not confirmed enabled here and are not used); summarizing the whole record; answering about any patient other than the bound one; running on real PHI before the Section 10 blockers are cleared.
 
@@ -394,7 +394,7 @@ Deterministic content that survives an agent or model failure: identity, both re
 | Data access | Module endpoint with explicit ACL checks; reads are parameter-bound SQL in one reader class through the audited `QueryUtils` path (§6) | `src/Services` end to end; ad-hoc SQL / read replica | Services: `ProcedureService::search` omits `procedure_result.date` and `/api/procedure` is unbound, so the evidence window could not be built from them. Ad-hoc SQL or a replica: bypasses ACL, audit, `forms` polymorphism (AUDIT §3.4) — the reader keeps all three by going through `QueryUtils` behind module-level ACL checks. FHIR-only rejected for notes/reports because those routes require `admin/super` for user scope; OAuth `system/*` client rejected as over-broad (SEC-002) and exposed to key regeneration (ARCH-006) |
 | Extraction | LLM with span-anchored structured output + deterministic verification | Fully deterministic (regex/NLP) | Plan language is too varied for rules to reach useful recall; the verifier keeps the LLM's failure mode (invention) detectable and rejectable |
 | Prompt content | Plan text only, plus bundle tools for turns | Full-chart prompting | Violates minimum-necessary (COMP-006), costs more, slower, and invites unverifiable synthesis |
-| Interaction | Automatic briefing as turn 0, follow-up turns | Question-first chatbot | The persona does not type in the window (USERS.md §1.1); AgentForge's conversational requirement is met by the thread and UC-04, not by forcing a question |
+| Interaction | Automatic briefing as turn 0, follow-up turns | Question-first chatbot | The persona does not type in the window (USER.md §1.1); AgentForge's conversational requirement is met by the thread and UC-04, not by forcing a question |
 | Topology | Single hybrid agent | Multi-agent (planner/critic/verifier agents) | Fixed inputs and contracts; a deterministic verifier is stronger than a critic model; extra agents add latency and failure surface |
 | Panel ↔ agent | Direct browser → agent with a signed, patient-bound ticket | Module proxies every agent call | Proxying through PHP breaks streaming and cancellation and doubles OpenEMR load; the ticket keeps authorization in the module while letting the browser abort directly |
 | Agent framework | FastAPI + Pydantic v2 + Anthropic SDK directly, behind a `ModelProvider` port | LangChain; LangGraph now | The flow is one structured call plus a three-iteration tool loop with a deterministic verifier; a framework adds an abstraction between verifier and model output without removing code. LangGraph is deferred until UC-04 needs branching or durable state — the port and contracts make that adoption additive |
@@ -419,7 +419,7 @@ Deterministic content that survives an agent or model failure: identity, both re
 
 **Not verified.** Railway runtime configuration (`rest_api` globals, HTTPS/HSTS, `api_log_option`, volume durability — ARCH-006, SEC-007); latency of `src/Services` reads on realistic data (audit timings were Xdebug-inflated legacy pages); whether `EventAuditLogger::newEvent` is the right event class for disclosure accounting (COMP-005); PHP environment-variable availability to modules under the Flex image at runtime.
 
-**Assumptions requiring clinician validation.** USERS.md §1.1 workflow assumptions; the two commitment kinds cover most of what matters in the 90 seconds; the synonym table's coverage; that `ambiguous_match` noise is tolerable; that "no matching record found" wording is read as intended.
+**Assumptions requiring clinician validation.** USER.md §1.1 workflow assumptions; the two commitment kinds cover most of what matters in the 90 seconds; the synonym table's coverage; that `ambiguous_match` noise is tolerable; that "no matching record found" wording is read as intended.
 
 **Decided (this revision).** Agent service: Python, FastAPI, Pydantic v2, Anthropic SDK directly; no LangChain; LangGraph reconsidered only if UC-04 develops branching or durable state. Model: `claude-opus-5` initially, behind a replaceable `ModelProvider` port with per-stage configuration and an eval harness that compares latency, cost and extraction quality across models. Tracing: self-hosted Langfuse on our infrastructure, PHI masked at the SDK boundary, raw prompts/completions never recorded in production.
 

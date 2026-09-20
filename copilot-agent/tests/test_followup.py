@@ -340,7 +340,7 @@ OUT_OF_SCOPE_REFUSAL = "This question is outside what the Co-Pilot can check. It
 
 
 def test_prompt_names_the_sources_and_the_no_tool_refusal() -> None:
-    """Guards the contract the panel states (USERS.md UC-04): the six sources, plan-progress questions via list_commitments,
+    """Guards the contract the panel states (USER.md UC-04): the six sources, plan-progress questions via list_commitments,
     and an immediate refusal for anything else. Failure mode: the model searches every tool for an unanswerable question
     and the turn times out instead of telling the physician what the tool can do."""
     from app.providers.prompt import FOLLOWUP_SYSTEM_PROMPT as p

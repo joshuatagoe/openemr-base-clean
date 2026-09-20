@@ -415,7 +415,7 @@
             const box = el('div', 'mt-3');
             box.setAttribute('data-role', 'followup');
             box.appendChild(el('h6', 'mb-1', 'Ask about this patient\u2019s record'));
-            // The scope is the contract (USERS.md UC-04): say it before the physician types.
+            // The scope is the contract (USER.md UC-04): say it before the physician types.
             const scope = el('div', 'small text-muted mb-2', 'Answers come only from this patient\u2019s results, orders, medications, allergies and the last plan; every statement cites a record. ');
             const examplesToggle = el('a', 'small', 'Examples');
             examplesToggle.href = '#';

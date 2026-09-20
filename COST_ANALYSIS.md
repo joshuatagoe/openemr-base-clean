@@ -3,7 +3,7 @@
 Actual development spend, measured unit costs, and projected production cost at 100 / 1K / 10K / 100K
 physicians with the architectural changes each level requires. Unit costs are **measured** from
 Langfuse generations on the deployed agent (2026-09-19, `claude-opus-5`, effort `low`), not list-price
-arithmetic. Usage assumptions come from the persona in USERS.md.
+arithmetic. Usage assumptions come from the persona in USER.md.
 
 ## 1. Summary
 
@@ -63,12 +63,12 @@ deterministic sections.
 
 ## 4. Usage model
 
-From USERS.md: a primary-care physician with a 20-patient day. Assumptions, all adjustable:
+From USER.md: a primary-care physician with a 20-patient day. Assumptions, all adjustable:
 
 | Assumption | Value | Basis |
 |---|---|---|
-| Visits per physician-day | 20 | USERS.md persona |
-| Established-patient share (a briefing needs a prior plan) | 70 % → **14 briefings/day** | USERS.md §1.1 |
+| Visits per physician-day | 20 | USER.md persona |
+| Established-patient share (a briefing needs a prior plan) | 70 % → **14 briefings/day** | USER.md §1.1 |
 | Follow-up turns per briefing | **0.5** | UC-04 is secondary: the persona does not type in the 90-second window |
 | Clinic days per month | 21 | |
 | Concurrency shape | 8-hour clinic day, peak minute = 3 × average | morning and post-lunch bunching |

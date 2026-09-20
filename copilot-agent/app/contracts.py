@@ -42,7 +42,7 @@ class StrictModel(BaseModel):
 
 
 class CommitmentKind(StrEnum):
-    """Commitment kinds (USERS.md UC-01). ``OTHER`` is extracted but never checked."""
+    """Commitment kinds (USER.md UC-01). ``OTHER`` is extracted but never checked."""
 
     LAB_TEST = "lab_test"
     MEDICATION = "medication"
