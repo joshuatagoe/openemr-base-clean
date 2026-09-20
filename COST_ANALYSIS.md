@@ -116,7 +116,9 @@ inside one provider tier, but a single agent replica is now a single point of fa
 
 **10K physicians — take the model out of the peak.** Peak ~875 briefings/min (~15/s) with a ~2.5 s model
 call means ~40 concurrent provider requests; fine for the agent, but now rate limits, provider incidents
-and cost governance matter:
+and cost governance matter. This is the tier the 50-user load test actually exercised (~700/min): the
+provider's rate limit was the first ceiling, the agent's bounded gate degraded the excess explicitly, and
+the measured completion ceiling was ~7 briefings/s on the current tier (`copilot-agent/loadtest/BASELINE.md`):
 - **Pre-visit precomputation** (ARCHITECTURE.md ARCH-005): the day's schedule is known; extract commitments
   overnight for tomorrow's established patients and store the extraction keyed by note id. Briefings then
   run only the deterministic match at visit time (sub-second, zero tokens), the model is off the
