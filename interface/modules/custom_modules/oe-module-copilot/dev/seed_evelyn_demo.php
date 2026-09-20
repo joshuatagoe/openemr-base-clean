@@ -27,7 +27,8 @@
  *     su -s /bin/sh apache -c 'php interface/modules/custom_modules/oe-module-copilot/dev/seed_evelyn_demo.php --confirm-local'
  *
  * Optional flags:
- *   --enable-module        register/enable oe-module-copilot in the modules table
+ *   --enable-module          register/enable oe-module-copilot in the modules table
+ *   --target-demo-database   allow a non-local database host (a demo instance such as Railway); never with real data
  *
  * @package   OpenEMR
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
@@ -64,8 +65,13 @@ use OpenEMR\Services\PatientService;
 
 $dbHost = is_array($sqlconf ?? null) ? Scalar::str($sqlconf['host'] ?? null) : '';
 if (!in_array($dbHost, ['localhost', '127.0.0.1', 'mysql', 'mariadb'], true)) {
-    fwrite(STDERR, "Refusing to run: database host is not a local/compose host.\n");
-    exit(2);
+    // A non-local host is refused unless the operator states, per run, that this database holds demo data
+    // only (e.g. the Railway demo instance). The OPENEMR__ENVIRONMENT=prod refusal above still applies.
+    if (!in_array('--target-demo-database', $cliArgs, true)) {
+        fwrite(STDERR, "Refusing to run: database host '{$dbHost}' is not a local/compose host. Add --target-demo-database only for a database that holds synthetic demo data.\n");
+        exit(2);
+    }
+    fwrite(STDERR, "Seeding non-local database host '{$dbHost}' because --target-demo-database was given.\n");
 }
 
 const SEED_FNAME = 'Evelyn';

@@ -249,3 +249,17 @@ def test_every_commitment_gets_exactly_one_match_in_order() -> None:
     matches = match_evidence(ctx(), ext)
     assert [m.commitment.commitment_id for m in matches] == ["c-001", "c-001", "c-001"]
     assert [m.state for m in matches] == [EvidenceState.NO_MATCHING_RECORD_FOUND, None, EvidenceState.NO_MATCHING_RECORD_FOUND]
+
+
+def test_panel_order_arriving_once_per_report_is_still_cited_with_its_corrected_result() -> None:
+    """Regression (Henry Walsh demo patient): a BMP order with a final and a corrected report is read once per
+    report; the two identical order rows must count as one order so the result's order is cited rather than
+    the order being left 'unexplained' in the interval list."""
+    bmp = [order("procedure_order:7", "Basic Metabolic Panel", code="24320-4", status=LabOrderStatus.COMPLETE, at=AFTER) for _ in range(2)]
+    results = [
+        res("procedure_result:5", "Sodium", "142", code="2951-2", order_id="procedure_order:7", at=AFTER, status=LabResultStatus.FINAL),
+        res("procedure_result:6", "Sodium", "138", code="2951-2", order_id="procedure_order:7", at=LATER, status=LabResultStatus.CORRECTED),
+    ]
+    m = single(ctx(orders=bmp, results=results), extraction(commitment("basic metabolic panel")))
+    assert m.state is EvidenceState.MATCHING_RESULT_FOUND
+    assert "procedure_order:7:1" in [c.record_id for c in m.citations]

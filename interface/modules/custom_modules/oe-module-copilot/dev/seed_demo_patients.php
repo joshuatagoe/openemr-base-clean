@@ -35,7 +35,8 @@
  *                 module reports ticket.no_prior_note
  *
  * Safety: identical gates to seed_evelyn_demo.php - CLI only, --confirm-local,
- * refuses on OPENEMR__ENVIRONMENT=prod or a non-local database host.
+ * refuses on OPENEMR__ENVIRONMENT=prod or a non-local database host unless
+ * --target-demo-database is given explicitly (demo instances only).
  * Idempotent by patient name; re-running adds nothing.
  *
  * Usage (inside the development container, as the web user):
@@ -76,8 +77,13 @@ use OpenEMR\Services\PatientService;
 
 $dbHost = is_array($sqlconf ?? null) ? Scalar::str($sqlconf['host'] ?? null) : '';
 if (!in_array($dbHost, ['localhost', '127.0.0.1', 'mysql', 'mariadb'], true)) {
-    fwrite(STDERR, "Refusing to run: database host is not a local/compose host.\n");
-    exit(2);
+    // A non-local host is refused unless the operator states, per run, that this database holds demo data
+    // only (e.g. the Railway demo instance). The OPENEMR__ENVIRONMENT=prod refusal above still applies.
+    if (!in_array('--target-demo-database', $cliArgs, true)) {
+        fwrite(STDERR, "Refusing to run: database host '{$dbHost}' is not a local/compose host. Add --target-demo-database only for a database that holds synthetic demo data.\n");
+        exit(2);
+    }
+    fwrite(STDERR, "Seeding non-local database host '{$dbHost}' because --target-demo-database was given.\n");
 }
 
 const ADMIN_USER_ID = 1;

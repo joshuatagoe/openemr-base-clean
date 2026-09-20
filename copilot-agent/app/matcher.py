@@ -290,6 +290,13 @@ def _match_lab_test(commitment: ExtractedCommitment, context: ContextBundle) -> 
                 "Values are shown from the cited records."
             )
             cites = [_cite_result(o.selected) for o in selected if o.selected is not None]
+            # The panel's order is evidence too (and otherwise shows as unexplained in the interval list).
+            seen_orders: set[str] = set()
+            for o in selected:
+                panel_order = _order_for(o.selected, context.lab_orders) if o.selected is not None else None
+                if panel_order is not None and panel_order.record_id not in seen_orders:
+                    seen_orders.add(panel_order.record_id)
+                    cites.append(_cite_order(panel_order))
             return _match(commitment, EvidenceState.MATCHING_RESULT_FOUND, summary, [note_cite, *cites])
 
         outcome = selected[0]
@@ -335,7 +342,10 @@ def _order_for(result: LabResult, orders: Sequence[LabOrder]) -> LabOrder | None
     for o in same:
         if _record_key(o.test_name, o.code) == key:
             return o
-    return same[0] if len(same) == 1 else None
+    # A panel order with several reports (e.g. final then corrected) arrives once per report; identical
+    # rows are one order, so the result's order is still cited rather than left unexplained.
+    distinct = {o.record_id for o in same}
+    return same[0] if len(distinct) == 1 else None
 
 
 # --------------------------------------------------------------------------- #
