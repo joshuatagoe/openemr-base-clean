@@ -31,6 +31,7 @@ declare(strict_types=1);
 
 namespace OpenEMR\Modules\Copilot;
 
+use OpenEMR\BC\ServiceContainer;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Http\HttpRestRequest;
 use OpenEMR\Common\Session\SessionWrapperFactory;
@@ -45,6 +46,8 @@ use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
+use OpenEMR\Modules\Copilot\Observability\LangfuseTicketOutcomeReporter;
+use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
 use OpenEMR\Modules\Copilot\Support\UtcDate;
 use OpenEMR\Services\Globals\GlobalSetting;
@@ -126,12 +129,16 @@ final class Bootstrap
     {
         $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
         $config = CopilotConfig::fromEnvironment();
+        $reporter = $config->hasLangfuse()
+            ? new LangfuseTicketOutcomeReporter((string) $config->langfuseBaseUrl, (string) $config->langfusePublicKey, (string) $config->langfuseSecretKey, $config->environment, logger: ServiceContainer::getLogger())
+            : new NullTicketOutcomeReporter();
         return new BriefingTicketController(
             new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
             new SqlClinicalReader(),
             new ContextBundleBuilder(UtcDate::serverZone()),
             new GuzzleAgentClient($config),
             $config,
+            reporter: $reporter,
         );
     }
 }

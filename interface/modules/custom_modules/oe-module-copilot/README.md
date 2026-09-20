@@ -20,6 +20,19 @@ stack). Configuration is environment-only, never the globals table:
 With either missing the panel still renders the deterministic sections and
 reports the plan check unavailable.
 
+Optional, same names as the agent's tracing settings: `LANGFUSE_BASE_URL`,
+`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` (and `COPILOT_ENVIRONMENT`, default
+`development`). With all three set the module reports every ticket outcome to
+Langfuse as one `ticket.<outcome>` span (issued, agent_unavailable, no_prior_note,
+refused, source_unavailable, internal_error, ticket_refresh) whose trace id is the
+correlation id, so it joins the agent's trace for that briefing — and a request
+the agent never saw is a trace with only a ticket span. The span carries the cid
+and fixed codes only; it is sent after the response with a 1 s timeout and can
+never fail or delay the request (`src/Observability/`). This is the north-star
+denominator in KEY_METRICS.md §3. The report goes straight to Langfuse, not via
+the agent, so an agent outage is counted; a Langfuse outage is not (the audit
+log is the durable record) — an external heartbeat covers that case.
+
 One module global exists (Administration → Globals → Clinical Co-Pilot):
 `copilot_admin_relationship_override`, off by default, lets admin/super
 users without a care relationship read a context; every such read is audited

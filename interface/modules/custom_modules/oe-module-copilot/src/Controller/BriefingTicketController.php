@@ -52,6 +52,8 @@ use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\ContextBundleBuilder;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
+use OpenEMR\Modules\Copilot\Observability\TicketOutcomeReporterInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
 use OpenEMR\Modules\Copilot\Support\UtcDate;
 use OpenEMR\Modules\Copilot\Ticket\TicketSigner;
@@ -104,6 +106,9 @@ final class BriefingTicketController
     /** @var Closure(): int  unix seconds */
     private readonly Closure $unixTime;
 
+    /** Counts every outcome, including the ones the agent never sees (KEY_METRICS.md section 3 denominator). */
+    private readonly TicketOutcomeReporterInterface $reporter;
+
     public function __construct(
         private readonly CopilotAuthorizer $authorizer,
         private readonly ClinicalReaderInterface $reader,
@@ -114,7 +119,9 @@ final class BriefingTicketController
         ?callable $auditWriter = null,
         ?Closure $serverTime = null,
         ?Closure $unixTime = null,
+        ?TicketOutcomeReporterInterface $reporter = null,
     ) {
+        $this->reporter = $reporter ?? new NullTicketOutcomeReporter();
         $this->logger = $logger ?? ServiceContainer::getLogger();
         $this->auditWriter = $auditWriter ?? static function (string $event, string $user, bool $success, string $comment, int $pid): void {
             EventAuditLogger::getInstance()->newEvent($event, $user, 'copilot', $success ? 1 : 0, $comment, $pid);
@@ -155,6 +162,7 @@ final class BriefingTicketController
             if ($pid !== null && $username !== null && $decision['code'] !== CopilotAuthorizer::CODE_NOT_AUTHENTICATED) {
                 ($this->auditWriter)(self::AUDIT_EVENT, $username, false, "cid={$correlationId}; code={$decision['code']}", $pid);
             }
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_REFUSED, $decision['code']);
             return $this->error($decision['code'], $correlationId, $headers);
         }
         assert($userId !== null && $pid !== null && $username !== null);
@@ -162,6 +170,7 @@ final class BriefingTicketController
         if ($requestedPid !== null && $requestedPid !== $pid) {
             $this->logger->info('copilot briefing denied', ['cid' => $correlationId, 'code' => 'patient_mismatch']);
             ($this->auditWriter)(self::AUDIT_EVENT, $username, false, "cid={$correlationId}; code=patient_mismatch", $pid);
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_REFUSED, 'patient_mismatch');
             return $this->error('patient_mismatch', $correlationId, $headers);
         }
 
@@ -187,6 +196,7 @@ final class BriefingTicketController
                     "cid={$correlationId}; basis={$decision['basis']}; as_of={$asOfSource}; outcome=no_prior_note",
                     $pid
                 );
+                $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_NO_PRIOR_NOTE);
                 return $this->error('no_prior_note', $correlationId, $headers);
             }
 
@@ -204,10 +214,12 @@ final class BriefingTicketController
             $sections = $this->sections($bundle, $asOfUtc, $asOfSource, $identity, $scheduled, $encounterReason, $allergies, $sectionSourcesUnavailable);
         } catch (SourceUnavailableException $e) {
             $this->logger->error('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_SOURCE_UNAVAILABLE, $e->getSource());
             return $this->error('source_unavailable', $correlationId, $headers);
         } catch (InvalidArgumentException | RuntimeException $e) {
             // Bad stored timestamp, uuid conversion failure, or a helper's runtime error: never partial output.
             $this->logger->error('copilot briefing build failed', ['cid' => $correlationId, 'type' => $e::class]);
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_INTERNAL_ERROR);
             return $this->error('internal_error', $correlationId, $headers);
         }
 
@@ -255,6 +267,11 @@ final class BriefingTicketController
                 . "; agent={$agentOutcome}",
             $pid
         );
+        if ($degraded === null) {
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_ISSUED);
+        } else {
+            $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_AGENT_UNAVAILABLE, $agentOutcome);
+        }
         $this->logger->info('copilot briefing ticket issued', [
             'cid' => $correlationId,
             'basis' => $decision['basis'],
@@ -347,6 +364,7 @@ final class BriefingTicketController
             $this->config->ticketTtlSeconds,
         );
         ($this->auditWriter)(self::AUDIT_EVENT, $username, true, "cid={$correlationId}; basis={$basis}; outcome=ticket_refresh; bundle_cid={$bundleCid}", $pid);
+        $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_TICKET_REFRESH);
         $this->logger->info('copilot ticket refreshed', ['cid' => $correlationId, 'basis' => $basis]);
         return ['status' => 200, 'body' => [
             'schema_version' => self::SCHEMA_VERSION,

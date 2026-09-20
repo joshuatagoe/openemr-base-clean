@@ -44,11 +44,13 @@ final class BriefingTicketControllerTest extends TestCase
     private CapturingLogger $logger;
     private AuditCapture $audit;
     private FakeAgentClient $agent;
+    private ReporterCapture $reporter;
 
     protected function setUp(): void
     {
         $this->logger = new CapturingLogger();
         $this->audit = new AuditCapture();
+        $this->reporter = new ReporterCapture();
         $this->agent = new FakeAgentClient();
     }
 
@@ -105,7 +107,14 @@ final class BriefingTicketControllerTest extends TestCase
             $this->audit,
             static fn(): string => self::SERVER_NOW,
             static fn(): int => self::UNIX_NOW,
+            $this->reporter,
         );
+    }
+
+    /** @return list<string> outcomes reported so far, in order */
+    private function reported(): array
+    {
+        return array_map(static fn(array $r): string => $r['outcome'] . ($r['detail'] === null ? '' : ':' . $r['detail']), $this->reporter->reports);
     }
 
     /**
@@ -319,6 +328,9 @@ final class BriefingTicketControllerTest extends TestCase
         self::assertCount(1, self::intervalResults($result));
         self::assertStringContainsString('agent=agent_timeout', $this->audit->events[0]['comment']);
         self::assertStringContainsString('agent hand-off failed', $this->logger->dump());
+        // The north-star denominator: an eligible request the agent never saw is reported with the reason.
+        self::assertSame(['agent_unavailable:agent_timeout'], $this->reported());
+        self::assertSame($result['headers']['X-Correlation-Id'], $this->reporter->reports[0]['cid']);
     }
 
     public function testUnconfiguredModuleDegradesWithoutContactingTheAgent(): void
@@ -673,6 +685,40 @@ final class BriefingTicketControllerTest extends TestCase
     }
 
     // ------------------------------------------------------------------ //
+    // ------------------------------------------------------------------ #
+    // Ticket-outcome reporting (KEY_METRICS.md section 3 denominator)
+    // ------------------------------------------------------------------ #
+
+    public function testEveryOutcomeIsReportedOnceWithItsCidAndNoIdentifiers(): void
+    {
+        $this->controller($this->reader([self::hba1c()]))->handleForSession($this->session());
+        self::assertSame(['issued'], $this->reported());
+
+        $this->reporter = new ReporterCapture();
+        $this->controller($this->reader([], notes: []))->handleForSession($this->session());
+        self::assertSame(['no_prior_note'], $this->reported());
+
+        $this->reporter = new ReporterCapture();
+        $this->controller($this->reader([]), acl: [])->handleForSession($this->session());
+        $refused = $this->reported();
+        self::assertCount(1, $refused);
+        self::assertStringStartsWith('refused:', $refused[0]);
+
+        $this->reporter = new ReporterCapture();
+        $this->controller($this->reader([]))->handleForSession($this->session(), requestedPid: self::PID + 1);
+        self::assertSame(['refused:patient_mismatch'], $this->reported());
+
+        $this->reporter = new ReporterCapture();
+        $this->controller($this->reader([], notesFail: true))->handleForSession($this->session());
+        self::assertSame(['source_unavailable:soap_notes'], $this->reported());
+
+        foreach ($this->reporter->reports as $report) {
+            self::assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', $report['cid']);
+            self::assertStringNotContainsString((string) self::PID, (string) $report['detail']);
+            self::assertStringNotContainsString((string) self::USER, (string) $report['detail']);
+        }
+    }
+
     // Ticket refresh for follow-up turns
     // ------------------------------------------------------------------ //
 

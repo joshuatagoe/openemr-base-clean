@@ -11,6 +11,7 @@ use OpenEMR\Modules\Copilot\Authorization\AclCheckerInterface;
 use OpenEMR\Modules\Copilot\Authorization\RelationshipRepositoryInterface;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Observability\TicketOutcomeReporterInterface;
 use Psr\Log\AbstractLogger;
 use Stringable;
 
@@ -216,6 +217,17 @@ final class AuditCapture
     public function __invoke(string $event, string $user, bool $success, string $comment, int $pid): void
     {
         $this->events[] = ['event' => $event, 'user' => $user, 'success' => $success, 'comment' => $comment, 'pid' => $pid];
+    }
+}
+
+final class ReporterCapture implements TicketOutcomeReporterInterface
+{
+    /** @var list<array{cid:string, outcome:string, detail:?string}> */
+    public array $reports = [];
+
+    public function report(string $correlationId, string $outcome, ?string $detail = null): void
+    {
+        $this->reports[] = ['cid' => $correlationId, 'outcome' => $outcome, 'detail' => $detail];
     }
 }
 

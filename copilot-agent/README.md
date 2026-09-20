@@ -149,6 +149,10 @@ score > 0 over 5 min. The on-call response for each is in the script's
 4. Any `verification_rejected{stage=extraction}` in production — the model
    is proposing spans that are not in the note; disable the agent path via
    the module global while investigating.
+5. Any `ticket.agent_unavailable` span over 5 min — the OpenEMR module built
+   a bundle the agent never received (the outage case nothing on the agent
+   side can see): check `/health` and `/ready`, the Railway deploy state and
+   `COPILOT_AGENT_URL`; physicians see sections without a plan check meanwhile.
 
 ## Cost
 

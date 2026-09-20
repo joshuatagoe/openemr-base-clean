@@ -130,6 +130,7 @@ Langfuse → Dashboards → New. One dashboard, `Clinical Co-Pilot`, with these 
 | Widget | Source | KEY_METRICS |
 |---|---|---|
 | **Verified briefing success rate (agent-side)** | `briefing_verified` score average (briefings only) | §3 north star (agent-side proxy) |
+| Eligible briefings lost / Ticket outcomes (module side) / Ticket requests | `ticket.*` observations from oe-module-copilot (OTLP, trace id = cid) | §3 denominator; §11 first item |
 | Briefings by outcome / Briefings (total) | observation `briefing` count by level / total | §3 numerator and denominator (agent-side) |
 | Briefings and turns per hour | observation count, name in (`briefing`, `turn`), grouped by name | context |
 | Degraded rate | `degraded` score average (boolean → rate) | degraded briefing rate |
@@ -161,6 +162,7 @@ Langfuse → Alerts → New Alert (v4). First create an **Automation** (Settings
 | 2. Error rate | `degraded` score average, name=`briefing` | alert > 0.05 | 5 min | Check `/ready` of both services, recent deploy, provider status; roll back if deploy-correlated |
 | 3. Tool failure rate | observation `tool` count with `metadata.error` set ÷ tool count | alert > 0.10 | 10 min | Inspect the failing source in module logs (service exceptions, ACL); verify DB health |
 | 4. Hallucinated span | `hallucinated_span` score sum | alert > 0 | 5 min, renotify every 30 min | Page: disable the agent path via the module global while investigating |
+| 5. Agent unreachable from OpenEMR | observation `ticket.agent_unavailable` count | alert > 0 | 5 min | The module built a bundle the agent never received: check the agent's `/health` and `/ready`, Railway deploy state, and `COPILOT_AGENT_URL`; physicians see sections without a plan check meanwhile |
 
 Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) and to *OK* for 4.
 
