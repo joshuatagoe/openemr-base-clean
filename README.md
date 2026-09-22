@@ -66,7 +66,7 @@ Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container 
 
 **Changes since the Week 1 submission (2026-09-21, before Week 2 work)**
 
-Everything above is the Week 1 baseline. The items below were made after the Week 1 submission and before any Week 2 (multimodal / multi-agent) surface was added, so graders can separate them; each is small and is covered by the suites named.
+Everything above is the Week 1 baseline as submitted on 2026-09-20. The items below are **not Week 1 results and not Week 2 work**: they were made on 2026-09-21, after the Week 1 submission and before any Week 2 (multimodal / multi-agent) surface was added, so graders can separate all three. Each is small and is covered by the suites named. Week 2 work begins after commit `e80e740` and is described in `W2_ARCHITECTURE.md` once it exists.
 
 | Change | Why | Where |
 |---|---|---|

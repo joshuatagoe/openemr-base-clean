@@ -76,7 +76,7 @@ result's flag says so. A `refusal` is rendered as one of two fixed sentences
 model prose. Known limit: attribution and numeric fidelity, not semantic
 faithfulness.
 
-Tool routing (which tool the model reaches for) is probabilistic, so it is
+Tool routing (added post-Week 1 / pre-Week 2 (2026-09-21; not part of the Week 1 submission, made before any Week 2 work); which tool the model reaches for) is probabilistic, so it is
 measured, not asserted: `app/routing_eval.py` asks each labelled question in
 `fixtures/routing_cases.json` N times and scores every sample with a boolean
 rubric over the tool set and the answer kind (targets: accuracy ≥ 0.90,
