@@ -9,8 +9,12 @@ semantic faithfulness (a known limit):
   (value, units, range, dates, dose text, status).
 * ``no_record_found``: must correspond to a tool call in this turn that
   returned no records; it may not cite records.
-* ``clarification`` / ``refusal``: no citations required; still subject to
-  the domain deny-lists.
+* ``clarification``: no citations required; still subject to the domain
+  deny-lists.
+* ``refusal``: rendered as one of two fixed sentences (scope or advice),
+  never as model prose: a refusal that quotes the request ("I cannot advise
+  on the dose") must not be lost to the recommendation deny-list, and a
+  recommendation must not be smuggled through by labelling it a refusal.
 * Domain constraints on every kind: no recommendation or directive language;
   absence is never negation ("no known allergies", "never", "not done", ...)
   unless the phrase is quoted from a cited record; "abnormal/high/low/normal"
@@ -27,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from app.contracts import Citation, RecordType, StatementKind, VerifiedStatement
+from app.contracts import ADVICE_REFUSAL_TEXT, SCOPE_REFUSAL_TEXT, Citation, RecordType, StatementKind, VerifiedStatement
 from app.providers.base import ModelStatement, ModelTurnAnswer
 from app.tools import ToolOutput
 
@@ -42,6 +46,8 @@ _NEGATION = re.compile(r"\b(no known allergies|nka|nkda|never|not done|not perfo
 # Interpretation words allowed only when a cited result's abnormal flag says so.
 _INTERPRETATION = re.compile(r"\b(abnormal|high|low|elevated|normal|within (?:normal|reference) (?:range|limits)|out of range|critical)\b", re.I)
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+# Topics a refusal declines that make it the advice refusal rather than the scope refusal.
+_ADVICE_TOPIC = re.compile(r"(advice|advis\w*|dos(?:e|es|ing|age)|treat\w*|diagnos\w*|interpret\w*|recommend\w*)", re.I)
 _FLAG_WORDS = {"high": {"high", "yes"}, "elevated": {"high", "yes"}, "low": {"low", "yes"}, "abnormal": {"high", "low", "yes"}, "critical": {"high", "low", "yes"}, "normal": {"no"}, "within normal range": {"no"}, "within normal limits": {"no"}, "within reference range": {"no"}, "out of range": {"high", "low", "yes"}}
 
 
@@ -130,6 +136,13 @@ def _numbers_supported(text: str, cited: Iterable[dict[str, Any]]) -> bool:
     return all(_normalize_number(n) in supported for n in _NUMBER.findall(text))
 
 
+def canonical_refusal(text: str) -> str:
+    """The fixed sentence a refusal is rendered with; the model's wording never reaches the panel."""
+    if text in (SCOPE_REFUSAL_TEXT, ADVICE_REFUSAL_TEXT):
+        return text
+    return ADVICE_REFUSAL_TEXT if (_RECOMMENDATION.search(text) or _INTERPRETATION.search(text) or _ADVICE_TOPIC.search(text)) else SCOPE_REFUSAL_TEXT
+
+
 def verify_statement(stmt: ModelStatement, evidence: TurnEvidence) -> tuple[VerifiedStatement | None, str | None]:
     """Return (verified statement, None) or (None, rejection code)."""
     records = evidence.records()
@@ -151,6 +164,9 @@ def verify_statement(stmt: ModelStatement, evidence: TurnEvidence) -> tuple[Veri
         if stmt.citation_record_ids:
             return None, "absence_with_citations"
         cited = []
+    elif stmt.kind is StatementKind.REFUSAL:
+        # Fixed message, chosen by what the model declined: advice/interpretation wording -> the advice sentence.
+        return VerifiedStatement(text=canonical_refusal(text), kind=stmt.kind, citations=[]), None
     else:
         cited = [records[rid] for rid in stmt.citation_record_ids if rid in records]
     violation = _domain_violation(text, cited)
@@ -173,4 +189,4 @@ def verify_turn(answer: ModelTurnAnswer, evidence: TurnEvidence) -> tuple[list[V
     return kept, len(codes), codes
 
 
-__all__ = ["TurnEvidence", "verify_statement", "verify_turn"]
+__all__ = ["TurnEvidence", "canonical_refusal", "verify_statement", "verify_turn"]

@@ -1,8 +1,8 @@
 """Shared test configuration.
 
 * Async tests run on asyncio through the ``anyio`` pytest plugin.
-* ``ANTHROPIC_API_KEY`` is removed and ``LANGFUSE_TRACING_ENABLED`` forced off for every test so no
-  suite can construct the real provider or export traces by accident.
+* ``LANGFUSE_TRACING_ENABLED`` is forced off for every test (live ones included) and ``ANTHROPIC_API_KEY``
+  is removed for every non-live test, so no suite can export traces or construct the real provider by accident.
 * ``client`` is a ``TestClient`` whose model provider is a scripted
   ``FakeProvider``; set the script with the ``provider_script`` fixture.
 """
@@ -47,12 +47,14 @@ def anyio_backend() -> str:
 def _no_api_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     # An empty value overrides any local .env entry (env vars take precedence
     # over env_file in pydantic-settings) and reads as "not configured".
+    # Never send test traces to the real Langfuse, live tests included: a live run is model verification, not
+    # traffic, and the SDK's flush on app shutdown can block a ``TestClient`` exit indefinitely.
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
     # Tests marked ``live`` (explicitly opted-in integration checks) keep the
-    # environment as supplied.
+    # provider environment as supplied.
     if "live" in request.node.keywords:
         return
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")  # never send test traces to the real Langfuse
     monkeypatch.setenv("PROVIDER_MAX_ATTEMPTS", "2")  # the bounded-retry tests pin exactly two attempts
 
     async def _no_wait(_seconds: float) -> None:  # retries back off in production; tests do not wait

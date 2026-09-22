@@ -64,6 +64,18 @@ Without steps 1–2 the panel still renders the deterministic sections and repor
 
 Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container per the module README.
 
+**Changes since the Week 1 submission (2026-09-21, before Week 2 work)**
+
+Everything above is the Week 1 baseline. The items below were made after the Week 1 submission and before any Week 2 (multimodal / multi-agent) surface was added, so graders can separate them; each is small and is covered by the suites named.
+
+| Change | Why | Where |
+|---|---|---|
+| Tool-routing evaluation tier: 12 labelled follow-up questions, each asked N times against the synthetic bundle, scored with a decision-level boolean rubric (routing accuracy, out-of-scope leak rate) | Which tool the model reaches for is probabilistic, so it has to be measured statistically rather than asserted by three passing examples. Last run: 1.00 (36/36), leak 0.00 (`EVAL.md`, "Tool routing"); gates in `KEY_METRICS.md` §4 | `copilot-agent/app/routing_eval.py`, `fixtures/routing_cases.json`, `tests/test_routing_eval.py`; `python -m app.eval --routing N` |
+| Refusals are rendered as one of two fixed sentences (scope / advice), never as model prose | Found by the new tier: an advice question ("Should I increase her metformin dose?") was refused without tools every time, but the verifier then dropped the refusal for `recommendation_language` because it quoted the request, leaving an empty answer. The fixed sentence also closes the converse: advice labelled `refusal` to slip past the deny-list. Matches `ARCHITECTURE.md` §9 as written | `copilot-agent/app/verifier.py` (`canonical_refusal`), `app/contracts.py`, `app/providers/prompt.py`; `tests/test_followup.py` |
+| Live tests never export traces | The opt-in live tests were sending test traces to the production Langfuse, and the SDK's flush on app shutdown could block a `TestClient` exit indefinitely | `copilot-agent/tests/conftest.py` |
+
+Baseline at that point: agent suite 302 passed / 6 skipped (the 6 are the opt-in live tiers, all passing when run), module PHPUnit 57 / 57.
+
 API collection: [`copilot-agent/api-collection/`](copilot-agent/api-collection/README.md) (Bruno) runs every agent endpoint — including the module's signed handshake and the ticket-gated briefing/follow-up flow — against a local or the deployed agent with one command.
 
 ---

@@ -47,8 +47,10 @@ Run in CI and on every model or prompt change. A build that fails a gate is not 
 | Extraction precision | Extracted commitments that a labeller also marked ÷ all extracted | ≥ 0.90 | same | Inspect extra commitments: inferred from assessment text vs stated actions; tighten the prompt rules for that pattern |
 | Evidence-state precision | Commitments whose assigned state equals the labelled state ÷ commitments with a labelled state | ≥ 0.90 | same; USER.md §7 | Inspect synonym/LOINC aliasing (`app/synonyms.py`), panel-member handling, corrected/preliminary and conflicting-record rules in `app/matcher.py` |
 | Citation completeness | Citations the label requires that were produced ÷ citations required | 1.00 | same | A miss is a matcher or contract bug; fix before release |
+| Tool-routing accuracy (follow-up) | Samples of a labelled follow-up question whose turn called every `must_call` tool, nothing outside `must_call` + `may_call`, and ended in a refusal exactly when expected ÷ all samples (each question asked N times; decision-level boolean rubric, never prose) | ≥ 0.90 | `tests/test_routing_eval.py` (live tier assertion); `fixtures/routing_cases.json` | Read the observed tool sequences in `EVAL.md`; fix the tool description or the prompt's routing rule for that question class, with the case in place |
+| Out-of-scope leak rate | Out-of-scope samples (vitals, other notes, appointments, another patient) in which any tool was called ÷ out-of-scope samples | 0 | same | A leak is a scope-rule regression in the follow-up prompt; it also costs the turn budget (measured: ~2.6 s refusal vs a 10 s timeout when the model searched) |
 
-The fixture tier fixes `model_output` in each case, so it exercises grounding, matching and citation — not extraction. Extraction P/R comes only from the opt-in live tier, which spends money and was not run for this revision.
+The fixture tier fixes `model_output` in each case, so it exercises grounding, matching and citation — not extraction. Extraction P/R and tool-routing accuracy come only from the opt-in live tiers, which spend money (`EVAL.md` records the last run). Routing is measured statistically because which tool the model reaches for is a probabilistic choice made from the tool descriptions and the prompt; the deterministic tests in `tests/test_routing_eval.py` prove the rubric itself with scripted decisions, so a drop in the live number is a model or prompt change, not a scoring bug.
 
 ## 5. Safety and security guardrails
 
@@ -118,6 +120,7 @@ Eligible visits using the briefing
 | Hallucinated spans / citation completeness | 0 / 1.00 over 24 fixture cases (`EVAL.md`, 2026-09-20) | Synthetic evaluation: an offline regression baseline, not real-world clinical accuracy |
 | Evidence-state precision | 1.00 over 24 fixture cases (2026-09-20) | Same; the cases are self-authored |
 | Extraction precision / recall | 1.00 / 1.00 over the 22 live-eligible cases on `claude-opus-5` (`EVAL.md`, 2026-09-20), all 22 also passing the deterministic checks on the live extraction | Small, self-authored sample — encouraging, not sufficient to establish general extraction performance |
+| Tool-routing accuracy / out-of-scope leak rate | 1.00 (36/36) / 0.00 (0/12) over 12 labelled questions × 3 samples on `claude-opus-5` (`EVAL.md`, 2026-09-21). The first run scored 0.92: the advice question was refused without tools every time, but the verifier then dropped the refusal for `recommendation_language` because it quoted the request — the physician got an empty answer. Refusals are now rendered as one of two fixed sentences (ARCHITECTURE.md §9) and the rerun is 36/36 | Three samples per question bounds the estimate loosely (one miss in a case = 0.67); raise `ROUTING_EVAL_RUNS` before reading a per-case number as more than a smoke signal |
 | Isolation and invariant tests | 224 / 224 pass in the agent suite (`uv run pytest`, 2026-09-20) and 57 / 57 in the module's PHPUnit suite | Tested control behaviour; not zero production incidents |
 | Briefing delivery under load | Deployed agent, real model (2026-09-20): 10 users 49/50 complete, p95 6.5 s, 0 errors; 50 users 141/250 complete with the rest explicitly degraded (`provider_busy`), p95 7.3 s, 0 errors; peak 0.2 vCPU / 253 MB (`copilot-agent/loadtest/BASELINE.md`) | The 50-user burst is ~700 briefings/min, the peak of ~8,000 physicians; a 500-bed hospital peaks near 26/min |
 | Live briefing latency | p50 2.9 s, p95 6.5 s at 10 concurrent users on the deployed stack (`BASELINE.md`, 2026-09-20); Langfuse `briefing` p50 2.4 s on single requests | Inside the ≤ 8 s p95 target |
@@ -131,7 +134,9 @@ Eligible visits using the briefing
 cd copilot-agent
 uv run pytest -q                                            # isolation + invariant tests (131)
 uv run python -c "from app.eval import *; c=load_cases(); r=[run_case(x) for x in c]; s=summarize(c,r); print(len(c), s.state_precision, s.citation_completeness, s.hallucinated_spans)"   # §4 gates (offline, free)
-RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live -s   # extraction P/R (spends ~$0.03 per plan; not run for this revision)
+RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live_extraction -s   # extraction P/R (spends ~$0.03 per plan)
+RUN_ANTHROPIC_INTEGRATION_TEST=1 ROUTING_EVAL_RUNS=3 uv run pytest -k live_routing -s   # tool-routing accuracy + leak rate (~36 turns, ~$0.20, ~3 min)
+uv run python -m app.eval --report --live --routing 3 --out ../EVAL.md   # regenerate EVAL.md with both live tiers
 uv run python loadtest/run_load.py --base-url <agent> --secret <secret> --users 10 50 --iterations 5   # delivery + latency under stub
 curl -s <agent>/metrics                                     # counters, latency percentiles, tokens, estimated_cost_usd (JSON snapshot, not a dashboard)
 grep '"event": "span.turn"' <agent stderr log> | jq '{outcome, statements, rejected, tool_calls, duration_ms}'   # follow-up success, withhold per turn

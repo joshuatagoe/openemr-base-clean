@@ -471,6 +471,19 @@ class StatementKind(StrEnum):
     REFUSAL = "refusal"
 
 
+# The only two texts a rendered refusal may carry (ARCHITECTURE.md section 9, "Domain constraints"). The prompt asks
+# the model for them verbatim; the verifier substitutes one of them for whatever the model wrote, so a refusal never
+# carries model prose and can never be used to smuggle advice past the deny-lists.
+SCOPE_REFUSAL_TEXT = (
+    "This question is outside what the Co-Pilot can check. "
+    "It answers only from this patient's results, orders, medications, allergies and the last plan."
+)
+ADVICE_REFUSAL_TEXT = (
+    "The Co-Pilot does not give treatment advice or clinical interpretation. "
+    "It reports only what this patient's record shows."
+)
+
+
 class ToolCallRecord(StrictModel):
     """One tool invocation in a turn (logged as a span; returned so the panel can show what was searched)."""
 

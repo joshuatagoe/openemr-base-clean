@@ -193,7 +193,9 @@ async def _live_scores(cases: list[EvalCase]) -> dict[str, dict[str, Any]]:
     return scores
 
 
-def render_report(cases: list[EvalCase], results: list[CaseResult], live: dict[str, dict[str, Any]] | None, *, model: str | None, when: str) -> str:
+def render_report(cases: list[EvalCase], results: list[CaseResult], live: dict[str, dict[str, Any]] | None, *, model: str | None, when: str, routing: Any | None = None) -> str:
+    from app.routing_eval import render_section as render_routing_section
+
     summary = summarize(cases, results)
     lines = [
         "# Evaluation dataset and results — Clinical Co-Pilot",
@@ -209,7 +211,8 @@ def render_report(cases: list[EvalCase], results: list[CaseResult], live: dict[s
         "  verification, so every case is reproducible with no model and no OpenEMR; it is the regression gate. The",
         "  *live tier* sends each distinct plan text to the configured model and scores the extraction against the",
         "  labelled commitments (precision/recall on `(kind, source_span)` pairs) and then re-runs the deterministic",
-        "  checks on the live extraction.",
+        "  checks on the live extraction. A third, opt-in *tool-routing tier* (below) samples which tools the model",
+        "  chooses for labelled follow-up questions and scores each sample with a boolean rubric.",
         "- **No happy-path-only cases.** Every case is a boundary condition, an invariant, or a regression risk, and",
         "  says which (`test_class`) and what it guards (`guards`), per the brief's engineering requirement. Cases",
         "  whose labels describe scripted model *misbehaviour* (a hallucinated span, an injected instruction) carry",
@@ -255,9 +258,11 @@ def render_report(cases: list[EvalCase], results: list[CaseResult], live: dict[s
         else:
             lv = "not run"
         lines.append(f"| {i} | `{case.name}` | {case.test_class} | {case.guards} | {det} | {lv} |")
-    lines += ["", "## Reproduce", "", "```sh", "uv run pytest tests/test_eval_fixtures.py -q                       # deterministic tier",
-              "RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live_extraction   # live tier (one call per distinct plan)",
-              "uv run python -m app.eval --report --live --out ../EVAL.md         # this file", "```", ""]
+    lines += ["", *render_routing_section(routing)]
+    lines += ["## Reproduce", "", "```sh", "uv run pytest tests/test_eval_fixtures.py tests/test_routing_eval.py -q   # deterministic tiers",
+              "RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live_extraction          # live extraction (one call per distinct plan)",
+              "RUN_ANTHROPIC_INTEGRATION_TEST=1 ROUTING_EVAL_RUNS=3 uv run pytest -k live_routing -s   # live tool routing (N turns per case)",
+              "uv run python -m app.eval --report --live --routing 3 --out ../EVAL.md   # this file", "```", ""]
     return "\n".join(lines)
 
 
@@ -269,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Fixture-tier evaluation; --report renders EVAL.md to stdout")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--live", action="store_true", help="also run the live extraction tier (spends money)")
+    ap.add_argument("--routing", type=int, default=0, metavar="RUNS", help="also run the live tool-routing tier with RUNS samples per case (spends money)")
     ap.add_argument("--out", type=Path, default=None, help="write the report here (UTF-8) instead of stdout")
     args = ap.parse_args(argv)
     cases = load_cases()
@@ -280,8 +286,13 @@ def main(argv: list[str] | None = None) -> int:
 
         model = ModelSettings().model_id_extraction
         live = asyncio.run(_live_scores(cases))
+    routing = None
+    if args.routing > 0:
+        from app.routing_eval import run_live
+
+        routing = asyncio.run(run_live(args.routing))
     if args.report:
-        report = render_report(cases, results, live, model=model, when=datetime.now(UTC).strftime("%Y-%m-%d"))
+        report = render_report(cases, results, live, model=model, when=datetime.now(UTC).strftime("%Y-%m-%d"), routing=routing)
         if args.out is not None:
             args.out.write_text(report, encoding="utf-8", newline="\n")
         else:

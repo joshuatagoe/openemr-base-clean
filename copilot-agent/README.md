@@ -71,8 +71,26 @@ Follow-up turns (`app/verifier.py`): citations must be record ids that tools
 returned in the turn; every number in a statement must appear in a cited
 record; `no_record_found` requires an empty search; no recommendation
 language; absence is never negation; "high/low/normal" only when the cited
-result's flag says so. Known limit: attribution and numeric fidelity, not
-semantic faithfulness.
+result's flag says so. A `refusal` is rendered as one of two fixed sentences
+(`SCOPE_REFUSAL_TEXT` / `ADVICE_REFUSAL_TEXT` in `app/contracts.py`), never as
+model prose. Known limit: attribution and numeric fidelity, not semantic
+faithfulness.
+
+Tool routing (which tool the model reaches for) is probabilistic, so it is
+measured, not asserted: `app/routing_eval.py` asks each labelled question in
+`fixtures/routing_cases.json` N times and scores every sample with a boolean
+rubric over the tool set and the answer kind (targets: accuracy ≥ 0.90,
+out-of-scope leak rate 0; last run in `../EVAL.md`). `tests/test_routing_eval.py`
+proves the rubric with scripted decisions on every `uv run pytest`; the live
+sample is opt-in:
+
+```
+RUN_ANTHROPIC_INTEGRATION_TEST=1 ROUTING_EVAL_RUNS=3 uv run pytest -k live_routing -s
+uv run python -m app.eval --report --live --routing 3 --out ../EVAL.md
+```
+
+Live tests never export traces (`tests/conftest.py` forces
+`LANGFUSE_TRACING_ENABLED=false` for every test, live ones included).
 
 ## API collection
 

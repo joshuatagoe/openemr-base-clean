@@ -15,6 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.contracts import (
+    ADVICE_REFUSAL_TEXT,
+    SCOPE_REFUSAL_TEXT,
     AllergyRecord,
     CommitmentKind,
     ContextBundle,
@@ -177,6 +179,24 @@ def test_refusal_and_clarification_need_no_citation_but_no_advice() -> None:
     assert code is None and ok is not None and ok.kind is StatementKind.REFUSAL
     ok, code = verify_statement(statement("Which test do you mean: HbA1c or potassium?", "clarification"), evidence())
     assert code is None
+    ok, code = verify_statement(statement("You should consider a higher dose.", "clarification"), evidence())
+    assert code == "recommendation_language"
+
+
+def test_refusal_is_rendered_as_a_fixed_sentence_never_model_prose() -> None:
+    """Guards two failure modes found by the routing eval (EVAL.md, "Tool routing"): a refusal that quotes the request
+    ("I cannot advise on the dose") was lost to the recommendation deny-list, leaving the physician an empty answer; and
+    the converse, advice labelled `refusal` to slip past the deny-list. Neither wording reaches the panel."""
+    ok, code = verify_statement(statement("I can't advise on whether to increase the dose; that is a treatment decision.", "refusal"), evidence())
+    assert code is None and ok is not None and ok.text == ADVICE_REFUSAL_TEXT and ok.citations == []
+    ok, code = verify_statement(statement("You should increase metformin to 1000 mg twice daily.", "refusal", "prescriptions:31"), evidence())
+    assert code is None and ok is not None and ok.text == ADVICE_REFUSAL_TEXT and ok.citations == []  # smuggled advice is replaced, not rendered
+    ok, code = verify_statement(statement("The HbA1c is high, so this is out of scope.", "refusal"), evidence())
+    assert ok is not None and ok.text == ADVICE_REFUSAL_TEXT  # interpretation wording -> advice sentence
+    ok, code = verify_statement(statement("I cannot answer questions about another patient.", "refusal"), evidence())
+    assert ok is not None and ok.text == SCOPE_REFUSAL_TEXT
+    ok, code = verify_statement(statement(SCOPE_REFUSAL_TEXT, "refusal"), evidence())
+    assert ok is not None and ok.text == SCOPE_REFUSAL_TEXT
 
 
 # --------------------------------------------------------------------------- #
@@ -336,7 +356,7 @@ def test_conversations_do_not_leak_between_bundles(client: TestClient, fixture_p
 # Scope: out-of-scope questions are refused at once, without tool searching
 # --------------------------------------------------------------------------- #
 
-OUT_OF_SCOPE_REFUSAL = "This question is outside what the Co-Pilot can check. It answers only from this patient's results, orders, medications, allergies and the last plan."
+OUT_OF_SCOPE_REFUSAL = SCOPE_REFUSAL_TEXT
 
 
 def test_prompt_names_the_sources_and_the_no_tool_refusal() -> None:
