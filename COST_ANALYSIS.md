@@ -126,11 +126,18 @@ call means ~40 concurrent provider requests; fine for the agent, but now rate li
 and cost governance matter. This is the tier the 50-user load test actually exercised (~700/min): the
 provider's rate limit was the first ceiling, the agent's bounded gate degraded the excess explicitly, and
 the measured completion ceiling was ~7 briefings/s on the current tier (`copilot-agent/loadtest/BASELINE.md`):
-- **Pre-visit precomputation** (ARCHITECTURE.md ARCH-005): the day's schedule is known; extract commitments
+- **Pre-visit precomputation**: the day's schedule is known; extract commitments
   overnight for tomorrow's established patients and store the extraction keyed by note id. Briefings then
   run only the deterministic match at visit time (sub-second, zero tokens), the model is off the
   latency-critical path, and the overnight batch is eligible for batch pricing (−50 %). Turn traffic stays
-  live.
+  live. Safe because extraction reads only the baseline note, which does not change between the overnight
+  run and the visit; anything that must be fresh (a result that arrived this morning) is the deterministic
+  match, which is free and runs at visit time. **The scheduler runs in the agent, not in OpenEMR**
+  (AUDIT.md ARCH-005: OpenEMR has no scheduler and background work would ride on UI traffic, so
+  precomputing *inside* OpenEMR would make one physician's page load pay for warming everyone's cache).
+  The agent is a long-running process, so a nightly job there is ordinary; it reads through the same
+  module endpoint under the same authorization. Same conclusion as ARCHITECTURE.md §13 ("if pre-visit
+  precomputation is wanted, an external scheduler") and AUDIT.md remediation item 18.
 - Request queue with backpressure in front of the provider: 429 + `Retry-After` to the panel, which keeps
   showing the deterministic sections — degraded, never blank.
 - Cheaper extraction model if the eval gates hold (Sonnet or Haiku column above); Opus stays for turns if

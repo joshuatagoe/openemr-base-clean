@@ -42,7 +42,7 @@ The template deploys **v3**. Alert rules with Slack/webhook delivery are a **v4+
 3. Add to **both** web and worker: `LANGFUSE_MIGRATION_V4_WRITE_MODE=events_only` (fresh install → nothing to migrate; this is the default and the only mode that gives the full v4 UI).
 4. Redeploy worker, then web. Verify `/api/public/health` again and that the project you created still opens.
 
-If anything in A3 fights you, stop and use the fallback in Part F — the dashboard works on v3; only native alerts need v4. Record the deviation in ARCHITECTURE.md §14.
+If anything in A3 fights you: the dashboard, tracing, scores and cost accounting all work on v3 — only native alert rules need v4. There is **no v3 fallback for alerting** in this build; alerts would have to come from an external poller against the agent's `/metrics`, which is not implemented (the same mechanism the external-heartbeat gap in ARCHITECTURE.md §18 describes). Since the brief requires ≥3 alerts with on-call responses, treat A3 as required rather than optional, and record any deviation in ARCHITECTURE.md §14. (Corrected 2026-09-22: this line previously promised "the fallback in Part F"; Part F documents the v4 rules only and never contained one.)
 
 ### A4. Lock it down
 
@@ -190,5 +190,5 @@ Set "no data" handling to *OK* for 1–3 (quiet clinic hours are not an outage) 
 - [x] Agent env vars set; `/ready` shows `langfuse: ok` (public URL; the private hostname gave `ConnectError` from the agent container — revisit)
 - [x] PHI check passed on a real trace from the deployed stack (2026-09-19): briefing + three turns with claude-opus-5, tokens and cost per generation, no clinical string or patient identifier anywhere in the trace
 - [x] Dashboard created: [Clinical Co-Pilot](https://langfuse-web-production-818f.up.railway.app/project/cmu8ny4ie0006ok02zd0nib5e/dashboards/cmu8tudy10001ql02y7yb0i7r); widgets per Part E
-- [x] Four native v4 alert rules in the UI, runbook text in each description, Slack incoming-webhook automation
+- [x] Five native v4 alert rules in the UI, runbook text in each description, Slack incoming-webhook automation (the fifth, `ticket.agent_unavailable`, was added after the first four — see Part F row 5; count corrected 2026-09-22)
 - [x] §14, §17, KEY_METRICS §11, agent README updated; commit per milestone

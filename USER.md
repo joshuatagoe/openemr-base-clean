@@ -114,7 +114,7 @@ IDs are stable. Retired IDs are not reused.
 2. *Evidence matching (deterministic).* For each commitment, search the structured record after the note date for matching orders, results and medication records, using code and name matching rules defined in `ARCHITECTURE.md`.
 3. *Evidence state assignment (deterministic).* Assign exactly one state per commitment (see below). The model does not participate in this step.
 4. *Interval digest (deterministic; the former UC-02).* List results and medication changes since the prior encounter that were not matched to any commitment, flagged results first.
-5. *Reason relation (model, one field; the former UC-03).* Given the scheduled reason, the prior encounter reason and the extracted commitments, state whether the scheduled reason plausibly corresponds to a commitment, or that it is not referenced in the prior plan. Both reasons are always shown verbatim regardless.
+5. *Reason relation (model, one field; the former UC-03).* **Specified, not built — see ARCHITECTURE.md §2.** Given the scheduled reason, the prior encounter reason and the extracted commitments, state whether the scheduled reason plausibly corresponds to a commitment, or that it is not referenced in the prior plan. Both reasons are always shown verbatim regardless — that part is implemented; the relation statement is not. Found in the post-Week 1 review (2026-09-22) and deferred, not removed: the use case stands, the model field was judged not to earn its verification surface.
 
 **Evidence states.** Each state names the source it rests on. There is no generic "done".
 
