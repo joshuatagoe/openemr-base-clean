@@ -1,10 +1,10 @@
 {
   "cases": 24,
   "versions": {
-    "commit": "8381d03",
-    "dirty": "yes",
+    "commit": "2ad484b",
+    "dirty": "no",
     "fixture_set": "24 cases / e6e6ef2877174933",
-    "prompt_version": "13f3f3a0dd3a4d81",
+    "prompt_version": "a5ded2c28418efbe",
     "judge": "none (all rubrics deterministic)"
   },
   "counts": {
