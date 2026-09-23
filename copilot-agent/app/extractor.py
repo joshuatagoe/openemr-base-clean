@@ -109,7 +109,6 @@ def ground_extraction(plan_text: str, output: ModelExtractionOutput) -> Extracti
         position = plan_text.find(span) if span else -1
         if position < 0:
             warnings.append(REJECTED_SPAN_WARNING)
-            continue
 
         commitment = proposed
         if commitment.kind is CommitmentKind.LAB_TEST:
