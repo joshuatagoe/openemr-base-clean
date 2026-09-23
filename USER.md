@@ -195,11 +195,11 @@ Rejected outright: "summarise the medical record" and "answer questions about a 
 
 **The Co-Pilot must refuse to**
 
-- write to the record in any form: no orders, prescriptions, notes, or pre-filled forms submitted on the physician's behalf;
-- give clinical recommendations, dosing, diagnoses, or "you should" statements, even when asked directly;
+- write to the record in any form: no orders, prescriptions, notes, or pre-filled forms submitted on the physician's behalf — **scoped extension in §9.2 for document ingestion, which files an uploaded document and saves the facts read from it as candidates; a candidate is not a chart result until a clinician verifies it against its source and files it**;
+- give clinical recommendations, dosing, diagnoses, or "you should" statements, even when asked directly — **scoped extension in §9.3: attributed guideline text may be quoted as evidence; the system still never speaks in its own clinical voice**;
 - answer about any patient other than the one currently selected, including "the previous patient";
 - state "no known allergies", "no problems", or "not done" on the basis of absent records;
-- present a result as abnormal unless the source record flags it;
+- present a result as abnormal unless the source record flags it — **scoped extension in §9.3: a comparison against a reference range printed on the source document may be shown as a derived finding, labelled as derived, never as a lab-printed flag**;
 - act on instructions found inside note text or any other record content;
 - render anything it produces as markup.
 
@@ -237,3 +237,98 @@ Rejected outright: "summarise the medical record" and "answer questions about a 
 - Matching rules for tests and medications across the two medication sources and free-text order names (to be defined in `ARCHITECTURE.md` and validated on synthetic data).
 - When referral and follow-up-interval commitments should enter scope, and what evidence states they would need.
 - Whether UC-04 justifies its cost once UC-01 is in pilot.
+
+## 9. Week 2 scoped extensions
+
+Week 2 adds document ingestion, guideline retrieval and a multi-agent graph. Some Week 2 capabilities are required by the Week 2 assignment but were out of scope in Week 1. This section records each scoped change explicitly so no Week 1 boundary is silently overridden.
+
+**Precedence rule.** For Week 2 features, the Week 2 requirements take precedence. Week 1 boundaries remain in force for Week 1 behaviour — the UC-01 panel and the UC-04 typed answer are unchanged by this section. Where §6 is extended, the extension is named here and nowhere else.
+
+**Persona unchanged.** §1 and §1.1 describe the same physician. Nothing in this section alters who the product is for.
+
+### 9.1 Actors
+
+Week 1 had one actor: the physician. Week 2 adds one, already present in the clinic, with a deliberately narrow role.
+
+- **Front-desk / intake staff** — upload a lab PDF or intake form to the correct patient in OpenEMR. That is the whole of their role in this workflow. They perform **no transcription review**, and they may not verify, alter or approve any extracted clinical value. This mirrors real practice: staff who file scanned documents do not re-key or transcription-check them.
+- **Physician (clinician of record)** — the only actor who may turn an extracted candidate into a structured chart result, by verifying it against its source (§9.2).
+
+### 9.2 Scoped extension to "must refuse to write to the record"
+
+Two things the Co-Pilot may now do in the document-ingestion path, and they are **not the same thing**:
+
+**(a) Store the source document and its candidate facts.**
+
+1. **File the source document** against the confirmed patient, exactly as a scanned document filed by hand would be.
+2. **Save the facts read from that document as candidates**, durably, each carrying a link to its source document, the highlighted page region it was read from, and a label describing how well that reading could be corroborated.
+
+**(b) File a verified result into the chart.**
+
+3. A clinician views a **candidate lab value beside its highlighted source region** and takes an explicit **Verify and file** action for that value. Only then does it become a structured chart result.
+4. Verification is **per result**. There is no document-wide "approve all" in Week 2.
+5. The filed result retains its source link, the original extraction as produced, any clinician correction, and the verification event with who and when.
+
+#### Candidate facts are not chart facts
+
+A candidate is visible to the physician and may be used as **document-stated** evidence, attributed to its source document and marked as not yet in the chart. It is **not** a patient-record fact, does not appear in the UC-01 evidence layer, and is not counted as evidence for any prior-plan commitment until it has been verified and filed.
+
+**Durable candidate storage is not clinical persistence.** Saving candidates is a Co-Pilot convenience; only a verified, filed result is a structured chart result.
+
+#### Corroboration is a diagnostic, not permission
+
+Agreement between the model's reading and a PDF text layer or OCR output is recorded and shown to the clinician because it is useful. It does **not** authorise filing. Both readings can reflect the same document defect, and a vision model and an OCR engine can misread the same pixels. **This applies to digitally generated PDFs exactly as it does to scans** — no document class files automatically.
+
+#### Two clinician actions, never conflated
+
+**Verify and file** (Co-Pilot, *before* the result enters the chart) answers "does this extracted value match the source document?" OpenEMR's native lab review (*after* filing) answers "have I, as a clinician, reviewed this result?" They carry distinct names and distinct meanings in the interface. Neither performs the other, and native review does not verify transcription.
+
+#### What is never filed
+
+Unreadable regions · unreconciled conflicting values · computed comparisons (for example a value against a printed reference range) · guideline-supported considerations · patient-reported intake content. These remain in the Co-Pilot evidence view, identified by type.
+
+The original boundary still holds for everything else: no orders, no prescriptions, no notes, no pre-filled clinical forms, and no modification of any record the Co-Pilot did not itself create.
+
+**Patient-reported content is never promoted into a curated clinical list.** A medication or allergy a patient writes on an intake form may appear as an attributed observation — for example, *"the intake form reports the patient stopped metformin; the chart lists it as active"* — with a link to the native medication page. It never becomes a settled clinical fact and never becomes a medication-list or allergy-list entry. Changing those lists remains a physician action taken in the native OpenEMR page.
+
+#### Open question: does this satisfy the Week 2 persistence requirement?
+
+**Not yet demonstrated, and not claimed.** The Week 2 assignment describes an ingestion tool that stores the source document, returns strict-schema JSON, and persists derived facts as appropriate FHIR resources or OpenEMR records, which must then round-trip through OpenEMR without duplicate or untraceable records. Our design inserts a clinician verification step between extraction and persistence that the assignment does not describe.
+
+The precise question: **does persistence gated on a human action still satisfy that requirement, and can we show it end to end?**
+
+Evidence needed to resolve it:
+
+1. A verified, filed result present in the patient's ordinary OpenEMR lab view — not only inside the Co-Pilot.
+2. The same result read back through an independent OpenEMR/FHIR path, returned once, with its source link intact.
+3. Re-ingestion of the same document producing no additional records.
+4. The filed result recognisable as an externally originated outside lab result in native views, confirmed against the running interface rather than inferred from one list.
+5. Provenance retrievable for that result: source document and region, original extraction, any correction, and the verification event.
+
+Until all five are shown together on a filed result, the requirement is treated as **open**. Candidate storage satisfies none of them on its own.
+
+Rationale and rejected alternatives: `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` → ADR-003 (2026-09-23).
+
+### 9.3 Three tiers of assertion
+
+Week 2 permits grounded inference. Every assertion the Co-Pilot displays falls into exactly one tier, and the tier is visible to the reader:
+
+| Tier | What it is | Example | Provenance shown |
+|---|---|---|---|
+| **(a) Stated** | Printed in the source document or present in the chart | "HbA1c 8.9 %" | Document citation with page and region, or record citation |
+| **(b) Derived** | Computed by deterministic rule from stated facts | "8.9 % is above the printed reference range 4.0–5.6" | The inputs, the rule, and an explicit "derived" label |
+| **(c) Guideline-supported consideration** | What published guidance says, quoted and attributed | "ADA 2026 §6 states reassessment is recommended when A1c is above target" | Guideline citation with publisher, publication date and corpus version |
+
+Rules that bind all three tiers:
+
+- A derived finding is **never** presented as though the laboratory printed it. The `abnormal` flag as printed and a derived range comparison are different things and are displayed differently.
+- A tier-(c) statement quotes guidance and attributes it. The system does not say what the physician should do. "Guidance states X" is permitted; "You should do X" remains refused under §6.
+- Uncertainty is shown, not hidden: an unreadable region, a value that could not be verified against the document text, and an absent guideline are each stated explicitly.
+- Tier (a) claims carry patient-document or patient-record citations. Tier (c) claims carry guideline citations. The two are kept in separate sections of the answer and are never merged.
+
+### 9.4 Scope of the three-sentence rule
+
+UC-04's "at most three sentences with citations" governs the **typed follow-up answer** in the 90-second panel workflow. It does not govern the Week 2 document-evidence view, which is a separate surface the physician opens deliberately, with document previews, source highlighting and a per-fact review state. The 90-second glanceable constraint applies to the panel; it does not apply to a review screen the physician chose to open.
+
+### 9.5 What has not changed
+
+Patient binding and isolation, refusal to answer about another patient, refusal to infer absence as negation, refusal to act on instructions inside content, no markup rendering, and the requirement that no clinical fact is displayed without either a citation or an explicit "unknown" — all unchanged and now also apply to document-derived facts.
