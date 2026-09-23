@@ -15,6 +15,7 @@ baselines or exit codes. See scripts/eval_gate.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 
 from app.eval import CaseResult, EvalCase
 
@@ -98,10 +99,19 @@ class CategoryRate:
     applicable: int
 
     @property
-    def rate(self) -> float:
-        # A category with no applicable cases scores 1.0 but reports applicable=0,
-        # so the gate can tell "nothing broke" from "nothing was checked".
-        return self.passed / self.applicable if self.applicable else 1.0
+    def rate(self) -> Fraction:
+        """Exact, not float.
+
+        The gate compares against a 5-point tolerance, and case counts make
+        rates that are not representable in binary: 23/24 is 0.958333...
+        Comparing that to a float threshold near the boundary is decided by
+        rounding, which is not a property a build gate should have. Fraction
+        keeps every comparison exact, so no epsilon fudge is needed anywhere.
+
+        A category with no applicable cases scores 1 but reports applicable=0,
+        so the gate can tell "nothing broke" from "nothing was checked".
+        """
+        return Fraction(self.passed, self.applicable) if self.applicable else Fraction(1)
 
 
 def aggregate(rows: list[dict[str, bool | None]]) -> dict[str, CategoryRate]:

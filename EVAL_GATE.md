@@ -118,6 +118,17 @@ Either condition, on any category:
 1. **Regression** — rate drops more than **5 points** below `baseline.json`
 2. **Floor** — rate falls below the threshold above
 
+Both comparisons are **exact rational arithmetic on case counts**, never floats.
+A rate like 23/24 has no finite binary representation, so a float comparison
+near the 5-point boundary would be decided by rounding — not a property a build
+gate should have. The baseline therefore commits *counts*, and the gate
+reconstructs the fraction. No epsilon appears anywhere.
+
+Every run also records its identity — commit, working-tree cleanliness,
+fixture-set digest, prompt digest, judge configuration — so two results are
+comparable and a difference is attributable to a specific change rather than
+guessed at.
+
 ### Why four floors are at 1.00
 
 **The 5% rule alone cannot catch a single-case regression.** One case out of 24
