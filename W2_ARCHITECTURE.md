@@ -26,12 +26,18 @@ a file in this repo, it is marked as planned.
 | Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003 |
 | Supervisor / `intake-extractor` / `evidence-retriever` graph | **Planned** | ADR-001 |
 | Sparse + dense retrieval, RRF, reranking | **Planned** | ADR-002, `W2-AMB-012` |
-| Guideline corpus (NDEP + CDC) | **Planned** | ADR-006 |
+| Guideline corpus (NDEP + CDC), tier rule enforced | **Built** | `copilot-agent/app/corpus.py`, `fixtures/corpus/` |
+| Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
 
 Nothing in `copilot-agent/pyproject.toml` or `uv.lock` yet depends on LangGraph, boto3, a BM25
 library, an embedding model or a PDF parser. The dependency set is still `anthropic`, `fastapi`,
 `langfuse`, `pydantic`, `pydantic-settings`, `uvicorn`. That is the fastest way to confirm which half
 of this document is real.
+
+The corpus is built and indexed but **nothing retrieves from it yet** — `app/corpus.py` has no caller
+outside its tests. It is a corpus without a retriever, which is the honest state: the content,
+provenance and tier enforcement are real and tested, and the sparse/dense pipeline in §3 that would
+consume them is not.
 
 ---
 
