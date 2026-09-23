@@ -1,13 +1,15 @@
 # GitLab CI — Week 2 eval gate (PRD CR6)
 #
-# The runner is a self-hosted Windows shell executor running as LocalSystem,
-# so per-user tooling is not on PATH. uv is installed per-user; the line below
-# is the whole cost of that choice.
+# The gate logic deliberately does NOT live in this file. It lives in
+# copilot-agent/scripts/eval_gate.py so a grader can run it from a fresh clone
+# with no CI, no runner and no API key:
 #
-# Gate logic deliberately does NOT live in this file. It lives in
-# scripts/eval_gate.sh so that a grader can run it with no CI and no runner:
-#   git clone && uv sync && ./scripts/eval_gate.sh
-# See W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md.
+#     cd copilot-agent && uv sync && uv run python scripts/eval_gate.py
+#
+# This file only invokes it. See EVAL_GATE.md at the repo root.
+#
+# Runner: self-hosted Windows shell executor running as LocalSystem, so
+# per-user tooling is not on PATH; hence the explicit uv path below.
 
 default:
   tags: [copilot-w2]
@@ -15,11 +17,19 @@ default:
     - $env:PATH = "C:\Users\joshu\.local\bin;$env:PATH"
 
 stages:
-  - smoke
+  - gate
 
-smoke:
-  stage: smoke
+eval-gate:
+  stage: gate
   script:
-    - Write-Output "runner alive"
-    - uv --version
-    - uv run python --version
+    - cd copilot-agent
+    - uv sync
+    # No API key is set here on purpose: the gated tier runs entirely offline
+    # against StubProvider, so a failure is a change in our logic rather than
+    # model sampling noise. Live provider tests are opt-in and not gated.
+    - uv run python scripts/eval_gate.py --json ../eval-results.json
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - eval-results.json
