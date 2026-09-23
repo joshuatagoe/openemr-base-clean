@@ -1,0 +1,1520 @@
+I
+Guiding Principles
+for the Care of People with or at Risk for Diabetes
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | SUPPORTING ORGANIZATIONS
+
+i
+
+Supporting Organizations
+The Guiding Principles for the Care of People with or at Risk for Diabetes was produced by the National Diabetes Education Program (NDEP), a federally funded program sponsored by the U.S. Department of Health and Human Services' National Institutes of Health and Centers for Disease Control and Prevention. NDEP's partnership network includes more than 200 partners working together to improve the treatment and outcomes for people with diabetes, promote early diagnosis, and prevent or delay the onset of type 2 diabetes. The following organizations support the use of the Guiding Principles for the Care of People with or at Risk for Diabetes:
+• Academy of Nutrition and Dietetics • American Academy of Family Physicians • American Academy of Physician Assistants • American Association of Clinical Endocrinologists • American Association of Diabetes Educators • American Association of Nurse Practitioners • American College of Obstetrics and Gynecologists • American Diabetes Association • American Geriatrics Society • American Optometric Association • American Podiatric Medical Association • American Society for Metabolic and Bariatric Surgery • Endocrine Society • National Council of Asian Pacific Islander Physicians and AANHPI Diabetes Coalition • National Human Genome Research Institute • National Institute on Deafness and Other Communication Disorders • National Institute on Minority Health and Health Disparities • Obesity Medicine Association • Texas Diabetes Council • The Obesity Society
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | TABLE OF CONTENTS
+
+ii
+
+Table of Contents
+
+Acknowledgments
+
+iii
+
+Introduction
+
+1
+
+Principle 1: Identify People with Undiagnosed Diabetes and Prediabetes
+
+4
+
+Principle 2: Manage Prediabetes to Prevent or Delay the Onset of Type 2 Diabetes
+
+11
+
+Principle 3: Provide Comprehensive, Patient-centered Diabetes Care
+
+17
+
+Principle 4: Provide Ongoing Self-management Education and Support for People
+
+23
+
+with Diabetes
+
+Principle 5: Encourage Lifestyle Modification for People with Diabetes
+
+27
+
+Principle 6: Address Overweight and Obesity in the Management of Diabetes
+
+34
+
+Principle 7: Individualize Blood Glucose Management for People with Diabetes
+
+43
+
+Principle 8: Provide Multifactorial Cardiovascular Disease Risk Reduction
+
+52
+
+Principle 9: Detect and Monitor Diabetes Microvascular Complications
+
+62
+
+and Provide Treatment to Slow Their Progression
+
+Principle 10: Consider the Needs of Special Populations with Diabetes
+
+70
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | ACKNOWLEDGMENTS
+
+iii
+
+Acknowledgments
+Many National Diabetes Education Program (NDEP) partners contributed to the 2018 update of the Guiding Principles for the Care of People with or at Risk for Diabetes. A core writing and review team helped research, write, and refine content drafts. Their dedication and assistance were invaluable.
+• Farhad Zangeneh, M.D., FACP, FACE, American Association of Clinical Endocrinologists • John Boltri, M.D., FAAFP, American Academy of Family Physicians • Apostolos Dallas, M.D., FACP, American College of Physicians • Erika Gebel Berg, Ph.D., American Diabetes Association • Carol Mangione, M.D., M.S.P.H., FACP, American Geriatrics Society • Deepak L. Bhatt, M.D., M.P.H., American Heart Association • Howard Baum, M.D., Endocrine Society • Scott Kahan, M.D., M.P.H., FTOS, The Obesity Society
+Members of the 2018 NDEP Executive Committee also participated in research, writing, and review of content.
+• M. Sue Kirkman, M.D. • Judith Fradkin, M.D.
+Members of the NDEP Executive Committee and NDEP Staff
+• Linda Siminerio, R.N., Ph.D., C.D.E. • Ann Albright, Ph.D., R.D. • Diane Tuncer, M.P.H., Director, NDEP, NIH • Judith McDivitt, Ph.D., Director, NDEP, CDC • Lorrie Fritz, M.H.S., Scientific Consulting Group
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | INTRODUCTION
+
+1
+
+INTRODUCTION
+
+The diabetes problem
+Today, 30.3 million people (9.4 percent of the U.S. population) have diabetes, including 7.2 million who are undiagnosed.1 A major cause of blindness, renal failure, and amputation, diabetes also increases the risk of cardiovascular disease, cancer, and dementia and more than doubles individual health care costs.2 The total estimated cost of diagnosed diabetes in 2017 was $327 billion, including $237 billion in direct medical costs and $90 billion in reduced productivity.2
+Another 84.1 million Americans (33.9 percent of adults) have glucose levels that are higher than normal but not high enough to be characterized as diabetes.1 Because persons with these glucose levels are at increased risk of developing type 2 diabetes, this condition is termed prediabetes by the Centers for Disease Control and Prevention (CDC) and other organizations.
+Proper nutrition and physical activity are the cornerstones of treatment and prevention of type 2 diabetes. In addition to lifestyle modifications and tobacco avoidance, controlling blood glucose, blood pressure, and cholesterol dramatically improves health outcomes. As a result of improved risk factor control, rates of complications, particularly for cardiovascular disease, have declined among people with diabetes.3
+Yet diabetes management is suboptimal, particularly in disproportionately affected poor and minority populations.4 Analysis of national survey data from 1999 to 2010 for adults with diabetes found improvement in glycemic control, blood pressure, and blood lipids. However, 22 percent of adults with diabetes have A1C > 8; 28 percent have BP > 140/90; 51 percent are on statins; 44 percent have LDL > 100; and 20 percent use tobacco. Thus, a substantial proportion of people with diabetes do not meet goals generally agreed as appropriate for most individuals with diabetes.5
+The National Institutes of Health (NIH)-sponsored Diabetes Prevention Program clinical trial proved that type 2 diabetes can be delayed or prevented in high-risk individuals with prediabetes through lifestyle changes that result in modest weight loss or with the drug metformin.6 An estimated 89 percent of Americans with prediabetes are unaware of the condition.7 People at high risk for type 2 diabetes must be identified and targeted for ongoing diabetes primary prevention efforts if society is to realize the benefits of therapies proven to delay or prevent the disease. Building on this NIH research, Congress established the National Diabetes Prevention Program at the CDC.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | INTRODUCTION
+
+2
+
+About this resource
+The large health and financial impact of diabetes and the existing gaps in achievement of treatment and prevention goals prompted the National Diabetes Education Program (NDEP) to work with key partner organizations to develop 10 Guiding Principles in 2014. Over the years, multiple organizations have independently developed and updated evidence-based guidelines for the care of people with or at risk for diabetes. Although there is broad agreement among these organizations on many aspects of diabetes care and prevention, attention is often focused on the relatively minor areas of disagreement among such guidelines.
+The Guiding Principles aimed to identify and synthesize areas of general agreement among existing guidelines to help guide primary care professionals and health care teams* in delivering quality care to adults with or at risk for diabetes. This resource does not represent an effort to create new guidelines; no guidelines were developed specifically for the original or this updated resource. This document is not a guideline, nor is it a comprehensive evidence review, position statement, or consensus statement. Rather, Guiding Principles is the result of a major collaborative effort among leading professional organizations and the NDEP to highlight areas of broad consensus for diabetes care.
+Because adults with type 2 diabetes comprise such a large proportion of people with diabetes, the Guiding Principles focus primarily on prevention and management of type 2 diabetes in adults. While much of the material is also relevant to type 1 diabetes, gestational diabetes, type 2 diabetes in children, and other rarer forms of the disease, this resource covers them in less detail than type 2 diabetes. The Guiding Principles highlights the generally agreed-upon elements of current evidence-based diabetes management and prevention. References and key resources are provided at the end of each section.
+In 2017, the NDEP worked with representatives of the organizations listed below to update Guiding Principles. Organizations' guidelines have evolved since 2014 in response to changing or new evidence. The updated Guiding Principles put more stress on the importance of diabetes self-management education and support, and of providing patient-centered care using shared decision-making and individualized care. Although the original Guiding Principles included discussion of overweight and obesity in several principles, ongoing recognition of the obesity epidemic as a key driver of outcomes in diabetes led to the development of a new Principle in this updated document, "Address Overweight and Obesity in the Management of Diabetes."
+The 10 clinically useful principles presented here were developed by the NDEP and representatives from the following organizations
+• American Academy of Family Physicians • American Association of Clinical Endocrinologists • American College of Physicians**
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | INTRODUCTION
+
+3
+
+• American Diabetes Association • American Geriatrics Society • American Heart Association • Endocrine Society • The Obesity Society
+**Representation does not constitute organizational endorsement.
+These and other organizations and professional societies, as well as the numerous government organizations that are members of the Diabetes Mellitus Interagency Coordinating Committee, participated in an extensive and substantive review process.
+*Throughout this resource, the term "health care team" refers to the broad and multidisciplinary group of professionals who care for people with or at risk for diabetes, including, but not limited to, physicians, nurse practitioners, physician assistants, podiatrists, pharmacists, nurses, registered dietitians/registered dietitian nutritionists, diabetes educators, optometrists, ophthalmologists, psychiatrists, psychologists, case managers, social workers, dental professionals, community health workers, and other community partners.
+References
+1. Centers for Disease Control and Prevention. National Diabetes Statistics Report, 2017. Atlanta, GA: Centers for Disease Control and Prevention, US Department of Health and Human Services; 2017.
+2. American Diabetes Association. Economic costs of diabetes in the U.S. in 2017. Diabetes Care. 2018;41(5):917-928.
+3. Gregg EW, Li Y, Wang J, et al. Changes in diabetes-related complications in the United States, 1990-2010. The New England Journal of Medicine. 2014;370(16):1514-1523.
+4. Stark Casagrande S, Fradkin JE, Saydah SH, Rust KF, Cowie CC. The prevalence of meeting A1C, blood pressure, and LDL goals among people with diabetes, 1988-2010. Diabetes Care. 2013;36(8):2271-2279.
+5. Ali MK, Bullard KM, Saaddine JB, Cowie CC, Imperatore G, Gregg EW. Achievement of goals in U.S. diabetes care, 1999-2010. The New England Journal of Medicine. 2013;368(17):1613-1624.
+6. Knowler WC, Barrett-Connor E, Fowler SE, et al. Reduction in the incidence of type 2 diabetes with lifestyle intervention or metformin. The New England Journal of Medicine. 2002;346(6):393-403.
+7. Centers for Disease Control and Prevention. Awareness of Prediabetes--United States, 2005-2010. Morbidity and Mortality Weekly Report (MMWR). 2013;62(11):209-212.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+4
+
+PRINCIPLE 1:
+Identify People with Undiagnosed Diabetes and Prediabetes
+
+Why screen for diabetes and prediabetes
+Early in the course of type 2 diabetes, most people are without symptoms. Approximately 1 in 4 Americans with diabetes is undiagnosed, and among Asian Americans and Hispanic Americans with diabetes, approximately half are undiagnosed. Control of glucose and cardiovascular disease risk factors improves outcomes for people with diabetes. Prediabetes is asymptomatic, and the majority of people with the condition are unaware that they have it. Individuals with prediabetes can prevent or delay onset of type 2 diabetes with weight loss, increased physical activity, and/or medications such as metformin. Hence, detection of diabetes and prediabetes through targeted screening identifies individuals who can benefit from evidence-based therapies that can lower risk of adverse outcomes.
+Whom to screen for diabetes and prediabetes, and how often
+The U.S. Preventive Services Task Force (USPSTF) recommends screening for abnormal blood glucose as part of cardiovascular risk assessment in adults ages 40 to 70 who are overweight or obese.1 Screening might be considered in younger adults who are overweight or obese and who have one or more additional risk factors listed in Table 1. Such risk factor-based screening could be done based on a general assessment of standard risk factors or using validated tools. The USPSTF did not identify significant harms of screening.1 As is true of many screening tests, potential benefits of screening may be limited in those with shorter life expectancy or multiple comorbidities, and the decision to screen for abnormal blood glucose should include shared decision-making and consideration of competing priorities.
+Screening may be repeated at intervals of 1 to 3 years, with the frequency determined by the degree of risk as assessed by risk factors and results of previous screening tests. For example, people with an A1C or blood glucose concentration closer to the cut point for diabetes could be screened more frequently than those with an A1C or plasma glucose in the normal or near-normal range.
+Some women diagnosed with gestational diabetes (GDM) may actually have previously undiagnosed type 2 diabetes. Because of this risk, women who had GDM should be tested for persistent diabetes or prediabetes at the time of the postpartum visit (4 to 12 weeks postpartum). Either fasting glucose or a 75-gram oral glucose tolerance test (OGTT) may be done; the latter is more sensitive but more burdensome. Due to changes in red cell kinetics in pregnancy, the A1C test may be problematic and is not recommended for diagnosing diabetes or detecting prediabetes in the postpartum period.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+5
+
+About half of women with a history of GDM will develop type 2 diabetes within 2 decades after pregnancy.2 Therefore, women with a history of GDM should be screened yearly with a fasting glucose or hemoglobin A1C if prediabetes was found on the postpartum test, or at least once every 3 years if the postpartum test was normal.3 Screening is particularly important for women prior to subsequent pregnancy because the risk of fetal abnormalities is higher in women with undetected preconception diabetes.
+Generally, people with type 1 diabetes present with acute symptoms of diabetes and markedly elevated blood glucose levels, and some cases are diagnosed with life-threatening diabetic ketoacidosis (DKA). However, careful observation of high-risk relatives of people with type 1 diabetes have shown that the development of type 1 diabetes progresses sequentially through distinct stages for several years prior to the onset of symptoms.4 Consider informing people with type 1 diabetes that their first-degree relatives are eligible for clinical research projects that include type 1 diabetes-related autoantibody testing to determine risk for type 1 diabetes and the potential to test approaches for prevention or early intervention (e.g., Type 1 Diabetes TrialNet). Such testing and follow-up may alert people to the onset of type 1 diabetes and lower risk for DKA. However, the population impact of such screening is limited by the fact that only 10 percent of people with type 1 diabetes have a family history of the disease.4
+
+Table 1. Risk Factors for Type 2 Diabetes
+
+Risk of type 2 diabetes increases with age and is strongly associated with overweight or obesity--body mass index (BMI)  25 kg/m2 ( 23 kg/m2 for Asian Americans5)
+Additional risk factors include
+1. Family history of diabetes (i.e., parent or sibling)
+2. Member of high-risk population: African American, Hispanic/Latino, American Indian, Alaska Native, Asian American, Pacific Islander American
+3. History of GDM
+4. Physical inactivity
+5. Hypertension
+
+6. High-density lipoprotein cholesterol (HDL-C) level  35 mg/dL (0.90 mmol/L)
+7. Fasting triglyceride (TG) level  250 mg/dL (2.82 mmol/L)
+8. Acanthosis nigricans, nonalcoholic steatohepatitis, polycystic ovary syndrome, and other conditions associated with insulin resistance
+9. Atherosclerotic cardiovascular disease
+10. Depression
+11. Treatment with atypical antipsychotics, glucocorticoids
+Obstructive sleep apnea and chronic sleep deprivation (< 6 hours/day) are emerging risk factors.
+
+Adapted from American Diabetes Association Standards of Care in Diabetes--2018
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+6
+
+Screening tests for diabetes and prediabetes
+A1C and fasting glucose testing are less burdensome than the oral glucose tolerance test. A1C does not require fasting but is costlier than fasting blood glucose, may be unreliable in certain conditions,6 and is not covered by the Centers for Medicare & Medicaid Services for screening. If a screening test is above the diagnostic threshold, the diagnosis of diabetes should be confirmed by repeat testing, with a different test on the same or a subsequent day, or the same test on a subsequent day. Requiring two positive tests for diagnosis of diabetes helps reduce the chance of a false positive diagnosis. People in the early stages of diabetes or with prediabetes may have elevated test results that are not confirmed at a second point in time or by a different test on the same day. Therefore, close monitoring and follow-up in these individuals may be warranted.
+The threshold for the diagnosis of diabetes is based on levels of glycemia at which the risk of microvascular disease increases. There is some variation among guidelines on the cut point for identifying persons with prediabetes and the preferred test. All agree, however, that the risk of diabetes in those with risk factors is continuous. Lifetime risk of diabetes is not absent below the lower limit of the prediabetes glycemia ranges, and neither is risk equally high among all those with prediabetes. Those with glucose or A1C levels at the higher end of the prediabetes ranges are at significantly higher risk than those at the lower end.
+If health care professionals choose A1C testing for diagnostic purposes, a laboratory using a method that is NGSP-certified should perform the test. Point-of-care A1C tests and finger-stick blood glucose testing should not be used for diagnosis. The A1C test may not be accurate in people with some anemias, kidney failure, or liver disease and should not be used for diagnosis of GDM or cystic fibrosis-related diabetes. The glucose test may not be accurate in persons with recent illness or physical activity, and is subject to diurnal variation. Importantly, steps must be taken to reduce pre-analytic variability in glucose testing and prevent glycolysis.6
+Some hemoglobin variants can interfere with the measurement of A1C, although most assays in use in the United States are accurate in individuals heterozygous for the most common variants (see HbA1c Assay Interferences table). Marked discrepancies between measured A1C and glucose levels should prompt consideration that the A1C assay may not be reliable for that individual. Even A1C tests certified as free from clinically significant test interference may have more subtle statistically significant interference. This may explain the finding of lower A1C by about 0.3 percent for any level of mean glycemia in African Americans heterozygous for the common hemoglobin variant HbS compared to African Americans without the trait.7 Even in the absence of variant hemoglobins, some studies suggest African Americans may have slightly higher A1C levels than Caucasians for the same mean level of glycemia.8, 9 Other evidence suggests that mean glycemia is truly higher in African Americans and that any racial discordance between A1C and glucose measures is small.10 Population-level racial differences in A1C may reflect conditions, such as differences in hemoglobin, that are more frequent in some racial/ethnic groups.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+7
+
+Table 2. Screening Test Criteria for Prediabetes and Type 2 Diabetes
+
+Prediabetes
+
+1. A1C 5.7 percent to 6.4 percent or
+2. Fasting plasma glucose (FPG) 100 to 125 mg/dL [impaired fasting glucose (IFG)] or
+3. Two hours after 75 g oral glucose challenge, plasma glucose 140 to 199 mg/dL [impaired glucose tolerance (IGT)]
+For the three tests, the risk of diabetes is continuous, extending below the lower limit of the range and becoming disproportionately greater at the higher end of the range.
+
+Diabetes
+
+1. A1C  6.5 percent or
+2. FPG  126 mg/dL or
+3. Two-hour plasma glucose  200 mg/dL after 75 g oral glucose challenge or
+4. Random plasma glucose  200 mg/dL with symptoms (such as polyuria, polydipsia, and unexplained weight loss)
+For criteria 1-3: Repeat test to confirm unless symptoms are present. Repeating the same test for confirmation is preferable. If two different tests are used (e.g., FPG and A1C) and both indicate diabetes, consider the diagnosis confirmed. If the two different tests are discordant, repeat the test above the diagnostic cut point. 2
+
+Screening for gestational diabetes
+Women at high risk for type 2 diabetes should be tested prior to conception or at the first prenatal visit for pre-existing diabetes. Two approaches to GDM screening are outlined in Table 3. All women who are not already diagnosed with overt diabetes should undergo GDM screening, usually between 24 and 28 weeks' gestation. Use of the one-step screening approach results in a higher proportion of women receiving a diagnosis of GDM.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+8
+
+Table 3. Screening Test Criteria for Gestational Diabetes
+Two GDM screening approaches are presented below. All women should undergo GDM screening, usually between 24 and 28 weeks' gestation, if they were not previously diagnosed with overt diabetes. Use professional judgment to select the most appropriate test for each woman.
+A. A two-step approach endorsed by the American College of Obstetricians and Gynecologists and a consensus panel convened by the National Institutes of Health11
+1. Start with a 1-hour plasma glucose test after 50 g oral glucose challenge. Choose a cutoff of either  135 mg/dL or  140 mg/dL and ensure that this cutoff remains consistent.
+2. For individuals who meet or exceed the screening threshold, administer a 3-hour 100 g oral glucose tolerance test. Diagnose GDM when two or more of the plasma glucose values are exceeded on the 3-hour test. Choose either of two methods: (1) National Diabetes Data Group cutoff values of Fasting  105 mg/dL, 1-hour  190 mg/dL, 2-hour  165 mg/dL, or 3-hour  145 mg/dL; or (2) Carpenter and Coustan cutoff values of Fasting  95 mg/dL, 1-hour  180 mg/dL, 2-hour  155 mg/dL, or 3-hour  140 mg/dL.
+B. A one-step approach endorsed by the International Association of Diabetes and Pregnancy Study Groups2, 12
+Perform a 75 g oral glucose tolerance test. Diagnose GDM when one or more of the following plasma glucose values are exceeded: Fasting  92 mg/dL, 1-hour  180 mg/dL, or 2-hour  153 mg/dL.
+Resources
+• National Institute of Diabetes and Digestive and Kidney Diseases:
+• The A1C Test and Diabetes • Diabetes and Prediabetes Tests • Sickle Cell Trait and Other Hemoglobinopathies and Diabetes: for Providers
+• American College of Obstetricians and Gynecologists: Tool for Postpartum GDM Follow-up • American Diabetes Association: Type 2 Diabetes Risk Test • Centers for Medicare & Medicaid Services: Your Medicare Coverage: Diabetes screening tests
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+9
+
+• Centers for Disease Control and Prevention and the American Medical Association: Prevent
+Diabetes STAT toolkit
+• Type 1 Diabetes TrialNet: For Healthcare Professionals • NIH Consensus Development Conference: Diagnosing Gestational Diabetes Mellitus, 2013 • NGSP: HbA1c Assay Interferences
+References
+1. Siu AL; U.S. Preventive Services Task Force. Screening for abnormal blood glucose and type 2 diabetes mellitus: U.S. Preventive Services Task Force recommendation statement. Annals of Internal Medicine. 2015;163(11):861-868.
+2. American College of Obstetricians and Gynecologists. ACOG Practice Bulletin No. 190. Obstetrics and Gynecology. 2018;131(2):406-408.
+3. American Diabetes Association. 2. Classification and diagnosis of diabetes: standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Suppl 1):S13-S27.
+4. Insel RA, Dunne JL, Atkinson MA, et al. Staging presymptomatic type 1 diabetes: a scientific statement of JDRF, the Endocrine Society, and the American Diabetes Association. Diabetes Care. 2015;38(10):1964-1974.
+5. Hsu WC, Araneta MR, Kanaya AM, Chiang JL, Fujimoto W. BMI cut points to identify at-risk Asian Americans for type 2 diabetes screening. Diabetes Care. 2015;38(1):150-158.
+6. Sacks DB. A1C versus glucose testing: a comparison. Diabetes Care. 2011;34(2):518-523.
+7. Lacy MD, Wellenius GA, Sumner AE, et al. Association of sickle cell trait with hemoglobin A1c in African Americans. JAMA. 2017;317(5):507-515.
+8. Herman WH. Are there clinical implications of racial differences in HbA1c? Yes, to not consider can do great harm! Diabetes Care. 2016;39(8):1458-1461.
+9. Bergenstal RM, Gal RL, Connor CG, et al. Racial differences in the relationship of glucose concentrations and hemoglobin A1c levels. Annals of Internal Medicine. 2017;167(2):95-102.
+10. Selvin E. Are there clinical implications of racial differences in HbA1c? A difference, to be a difference, must make a difference. Diabetes Care. 2016;39(8):1462-1467.
+11. Vandorsten JP, Dodson WC, Espeland MA, et al. NIH consensus development conference: diagnosing gestational diabetes mellitus. NIH Consensus and State-of-the-Science Statements. 2013;29(1):1-31.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 1
+
+10
+
+12. International Association of Diabetes and Pregnancy Study Groups Consensus Panel, Metzger BE, Gabbe SG, et al. International association of diabetes and pregnancy study groups recommendations on the diagnosis and classification of hyperglycemia in pregnancy. Diabetes Care. 2010;33(3):676-682.
+Guidelines, Position Statements, and Consensus Reports
+• American Association of Clinical Endocrinologists and American College of Endocrinology -
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015
+• American College of Obstetricians and Gynecologists. Women's Prevention Services Initiative:
+Screening for Gestational Diabetes Mellitus
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Classification
+and Diagnosis of Diabetes
+• International Association of Diabetes and Pregnancy Study Groups Recommendations on
+the Diagnosis and Classification of Hyperglycemia in Pregnancy
+• USPSTF Final Recommendation Statement. Abnormal Blood Glucose and Type 2 Diabetes
+Mellitus: Screening
+• USPSTF Final Recommendation Statement. Gestational Diabetes Mellitus, Screening • VA/DoD Clinical Practice Guideline for the Management of Type 2 Diabetes Mellitus in Primary
+Care - 2017
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 2
+
+11
+
+PRINCIPLE 2:
+Manage Prediabetes to Prevent or Delay the Onset of Type 2 Diabetes
+
+Progression to type 2 diabetes among people with prediabetes is not inevitable. Modest, sustained weight loss, increased physical activity, and/or metformin therapy in these individuals can prevent or delay the onset of type 2 diabetes.
+The National Institutes of Health-led Diabetes Prevention Program (DPP)1 and the Finnish Diabetes Prevention Program2 aimed for and achieved a mean weight loss of 7 percent and 5 percent, respectively, in study participants randomized to the lifestyle intervention. In both studies, the lifestyle intervention, compared with placebo, reduced the incidence of diabetes by 58 percent over 3 years. In the DPP, these results were similar in all groups, including men and women, all racial and ethnic groups, as well as in women with a history of gestational diabetes (GDM). The DPP intensive lifestyle intervention was particularly effective in older participants, with 71 percent risk reduction at 3 years. Lifestyle participants followed a healthy low-calorie, low-fat diet and engaged in physical activity of moderate intensity, such as brisk walking, for at least 150 minutes per week. Some evidence suggests that interventions focused solely on increasing physical activity can contribute to the delay or prevention of type 2 diabetes.3
+In the DPP, metformin reduced type 2 diabetes incidence by 31 percent compared with placebo. This effect was reduced but still present after a "wash-out" period from the drug, with metformin associated with a 25 percent reduction in diabetes incidence that was independent of its glucose-lowering effects.4 Metformin was effective for both men and women, was most effective in younger (ages 25 to 44) and heavier (body mass index  35) people and in women with a history of GDM, and was least effective in older people.5, 6 Other randomized trials have shown prevention or delay of diabetes by thiazolidinediones, GLP-1 receptor agonists, orlistat, and acarbose, while sulfonylureas and glinides have not shown benefit.7, 8 Trials of agents other than metformin were limited by side effects, high dropout rates, and/or limited duration of follow-up.
+Metformin frequently causes gastrointestinal side effects that can often be ameliorated by slow titration from a low starting dose. The target dose studied in the DPP was 850 mg twice daily. Chronic use of metformin is associated with low vitamin B12 levels in some people. In the DPP and its ongoing follow-up study, the Diabetes Prevention Program Outcomes Study (DPPOS), long-term use of metformin increased the risk of low or frankly deficient vitamin B12 levels, and anemia. Those with low vitamin B12 levels were more likely to have peripheral neuropathy.9
+The DPPOS10, 11 found that at 10 and 15 years, lifestyle intervention reduced type 2 diabetes onset by 34 percent and 27 percent, respectively, and delayed the onset of type 2 diabetes by about 4 years compared with placebo. Because the placebo group received a modified lifestyle intervention at the end of the DPP, the 10- and 15-year results may underestimate the effect of
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 2
+
+12
+
+lifestyle change. Metformin reduced the rate of new diabetes by 18 percent at both 10 and 15 years, and delayed diabetes onset by 2 years. The DPP lifestyle intervention was cost-effective at 10 years, and there was a very small cost savings with metformin.12
+As is the case with most clinical trials, the DPP population did not fully represent the entire spectrum of the population. Although one-quarter of randomized participants were over the age of 60, the study population did not include frail individuals or those with multiple major comorbidities.
+Sustained benefits of lifestyle interventions on diabetes incidence have also been shown with long-term follow-up of cohorts in diabetes prevention studies in Finland and China.13, 14 Additionally, after 23 years, there were significant reductions in cardiovascular and all-cause mortality in people initially randomized to the lifestyle intervention in the latter study.15
+The intensive lifestyle intervention of the DPP has been translated into a lower cost community intervention that achieves significant, albeit smaller, weight loss and physical activity outcomes compared to those achieved in the DPP.16 The Centers for Disease Control and Prevention's (CDC) National Diabetes Prevention Program (National DPP) recognizes community programs meeting certain standards that demonstrate high fidelity to the DPP. These standards include following an approved curriculum, facilitation by a trained lifestyle coach, and submitting data each year to show that the program is having an impact. Some private insurers reimburse for the National DPP. Beginning in 2018, Medicare expanded coverage for the National DPP to Medicare beneficiaries. (See Resources.)
+Weight loss and physical activity for prevention of type 2 diabetes
+• Lifestyle intervention that includes regular physical activity and dietary changes leading to
+sustained weight loss should be the cornerstone of treatment for people with prediabetes.17 Consider referral to a
+• registered dietitian/registered dietitian nutritionist or diabetes educator • structured lifestyle intervention, such as CDC-recognized sites in the National DPP
+• Establish a weight-loss goal that is 5 percent to 10 percent of the person's body weight. • Specify physical activity goals of at least 30 minutes of moderate activity, such as brisk
+walking, at least 5 days per week.
+• Recommend reduced calories and reduced intake of calorie-dense foods.
+Metformin for type 2 diabetes prevention
+Consider metformin for the prevention of diabetes in those with prediabetes who have been unable to lose 7 percent of their weight; women with a history of GDM; or in younger, heavier persons. Metformin use should be undertaken in the context of shared decision-making, weighing the benefits found in study populations against potential adverse effects.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 2
+
+13
+
+Cardiovascular disease risk management
+People with prediabetes are at increased risk for cardiovascular disease (CVD). CVD risk factors should be monitored and treated based on general guidelines for the prevention and management of CVD. Targets for blood pressure and lipid management specific to prediabetes have not been established through randomized clinical trials. Lifestyle change and metformin have been shown to reduce CVD risk factors in people with prediabetes. Studies are ongoing to see if metformin or lifestyle therapy for individuals with prediabetes will affect cardiovascular outcomes.18
+Resources
+• National Diabetes Education Program:
+• Diabetes HealthSense • Game Plan for Preventing Type 2 Diabetes
+• Centers for Disease Control and Prevention: National Diabetes Prevention Program • AHA/ACC/CDC Science Advisory: An Effective Approach to High Blood Pressure Control: A
+Science Advisory From the American Heart Association, the American College of Cardiology, and the Centers for Disease Control and Prevention
+• Medicare Diabetes Prevention Program Expansion
+References
+1. Knowler WC, Barrett-Connor E, Fowler SE, et al. Reduction in the incidence of type 2 diabetes with lifestyle intervention or metformin. The New England Journal of Medicine. 2002;346(6):393-403.
+2. Lindström J, Louheranta A, Mannelin M, et al. The Finnish Diabetes Prevention Study (DPS): lifestyle intervention and 3-year results on diet and physical activity. Diabetes Care. 2003;26(12):3230-3236.
+3. Pan XR, Li GW, Hu YH, et al. Effects of diet and exercise in preventing NIDDM in people with impaired glucose tolerance. The Da Qing IGT and Diabetes Study. Diabetes Care. 1997;20(4):537-544.
+4. The Diabetes Prevention Research Group. Effects of withdrawal from metformin on the development of diabetes in the Diabetes Prevention Program. Diabetes Care. 2003;26(4):977-980.
+5. Knowler WC, Barrett-Conner E, Fowler SE, et al. Reduction in the incidence of type 2 diabetes with lifestyle intervention or metformin. The New England Journal of Medicine. 2002;346(6):393-403.
+6. Aroda VR, Christophi CA, Edelstein SL, et al. The effect of lifestyle intervention and metformin on preventing or delaying diabetes among women with and without gestational diabetes: the
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 2
+
+14
+
+Diabetes Prevention Program Outcomes Study 10-year follow-up. The Journal of Clinical Endocrinology and Metabolism. 2015;100(4):1646-1653.
+7. Phung OJ, Sood NA, Sill BE, Coleman CI. Oral anti-diabetic drugs for the prevention of type 2 diabetes. Diabetic Medicine. 2011;28(8):948-964.
+8. le Roux CW, Astrup A, Fujioka K, et al. 3 years of liraglutide versus placebo for type 2 diabetes risk reduction and weight management in individuals with prediabetes: a randomised, double-blind trial. Lancet. 2017;389(10077):1399-1409.
+9. Aroda VR, Edelstein SL, Goldberg RB, et al. Long-term metformin use and vitamin B12 deficiency in the Diabetes Prevention Program Outcomes Study. The Journal of Clinical Endocrinology and Metabolism. 2016;101(4):1754-1761.
+10. Diabetes Prevention Program Research Group, Knowler WC, Fowler SE, et al. 10-year follow-up of diabetes incidence and weight loss in the Diabetes Prevention Program Outcomes Study. Lancet. 2009;374(9702):1677-1686.
+11. Diabetes Prevention Program Research Group. Long-term effects of lifestyle intervention or metformin on diabetes development and microvascular complications over 15-year follow-up: the Diabetes Prevention Program Outcomes Study. The Lancet. Diabetes & Endocrinology. 2015;3(11):866-875.
+12. The Diabetes Prevention Program Research Group. The 10-year cost-effectiveness of lifestyle intervention or metformin for diabetes prevention: an intent-to-treat analysis of the DPP/DPPOS. Diabetes Care. 2012;35(4):723-730.
+13. Lindström J, Ilanne-Parikka P, Peltonen M, et al. Sustained reduction in the incidence of type 2 diabetes by lifestyle intervention: follow-up of the Finnish Diabetes Prevention Study. Lancet. 2006;368(9548):1673-1679.
+14. Li G, Zhang P, Wang J, et al. The long-term effect of lifestyle interventions to prevent diabetes in the China Da Qing Diabetes Prevention Study: a 20-year follow-up study. Lancet. 2008;371(9626):1783-1789.
+15. Li G, Zhang P, Wang J, et al. Cardiovascular mortality, all-cause mortality, and diabetes incidence after lifestyle intervention for people with impaired glucose tolerance in the Da Qing Diabetes Prevention Study: a 23-year follow-up study. The Lancet. Diabetes & Endocrinology. 2014;2(6):474-480.
+16. Ackermann RT, Liss DT, Finch EA, et al. A randomized comparative effectiveness trial for preventing type 2 diabetes. American Journal of Public Health. 2015;105(1):2328-2334.
+17. U.S. Preventive Services Task Force. Abnormal blood glucose and type 2 diabetes mellitus: screening. www.uspreventiveservicestaskforce.org/Page/Document/UpdateSummaryFinal/
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 2
+
+15
+
+screening-for-abnormal-blood-glucose-and-type-2-diabetes?ds=1&s=diabetes. Published October 2015. Accessed June 26, 2017.
+18. Ratner R, Goldberg R, Haffner S, et al. Impact of intensive lifestyle and metformin therapy on cardiovascular disease risk factors in the diabetes prevention program. Diabetes Care. 2005;28(4):888-894.
+Guidelines, Position Statements, and Consensus Reports
+• 2013 AHA/ACC Guideline on Lifestyle Management to Reduce Cardiovascular Risk: A Report
+of the American College of Cardiology/American Heart Association Task Force on Practice Guidelines
+• American Association of Clinical Endocrinologists and American College of Endocrinology -
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Prevention or
+Delay of Type 2 Diabetes
+• Primary Prevention of Cardiovascular Disease and Type 2 Diabetes in Patients at Metabolic
+Risk: An Endocrine Society Clinical Practice Guideline
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+16
+
+PRINCIPLE 3:
+Provide Comprehensive, Patient-centered Diabetes Care
+
+Providing patient-centered care is defined as "providing care that is respectful of and responsive to individual patient preferences, needs, and values and ensuring that patient values guide all clinical decisions."1 Shared decision-making--eliciting patient perspectives and presenting options and information so people can participate more actively in care--is a key component of patientcentered care.2, 3 Patient-centered care is also furthered by applying the medical home model that provides accessible, continuous, comprehensive, and coordinated care that is delivered by a health care team in the context of family and community.4
+Elements of patient-centered care for prevention and management of diabetes and its comorbidities include
+• a proactive approach to health promotion, disease prevention, and chronic disease
+management
+• respecting the person's values, preferences, and expressed needs • developing individualized care plans incorporating access to community resources5 • assessing the intersecting social, financial, clinical, and emotional needs of the patient • coordinating care among providers, including effective use of health information systems6, 7 • communicating effectively and providing care in a culturally and linguistically appropriate manner
+Collaborative multidisciplinary team care can enhance patient-centered care by providing continuous, supportive, and effective care for people with diabetes throughout the course of their disease. Well-implemented diabetes team care can be cost-effective or cost-neutral8 and is the preferred method of care delivery, particularly when services include health promotion and disease prevention in addition to comprehensive clinical management. The person with diabetes, often with support of family, plays a central role as self-care manager and decision maker. Team care integrates the skills of health care professionals including but not limited to primary care providers, specialists, diabetes educators, registered dietitians/registered dietitian nutritionists, podiatrists, and pharmacists with those of the patient and family into a comprehensive diabetes management program.9
+Patient-centered care is challenging but rewarding. The expansion of options for treatment and prevention of diabetes and its complications provides greater opportunities for choice. However, information for tailoring care based on individual patient characteristics is often lacking. Patient preferences and the general recommendations of evidence-based guidelines may not be congruent, but informed patient preferences should ultimately determine treatment plans. Although
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+17
+
+discussion of treatment options, pros and cons of these alternatives, and patients' goals and preferences requires time and effort, the process is key to patient satisfaction and good outcomes. People who report having a better experience with their health care professionals are more likely to take their medicines regularly and follow other components of treatment plans.
+Consideration of health literacy and numeracy
+Health literacy consists of a number of skills beyond basic literacy, including the ability to find, understand, interpret, and communicate health information, along with the ability to seek appropriate care and make critical health decisions. Numeracy, the ability to use numbers in everyday life, is closely tied to health literacy but requires distinct skills. Low numeracy may be especially problematic in people with diabetes, who frequently have to make self-management decisions based on blood glucose numbers. Older people, nonwhites, immigrants, and those with low incomes are disproportionately more likely to have trouble reading and understanding standard health-related information.10 Limited health literacy is associated with poorer health outcomes and higher health care costs.11 Although screening for health literacy has not been shown to improve outcomes, consideration of health literacy and routine use of low health literacy materials for all patients may enhance shared decision-making and improve self-management.12
+Consideration of patient self-management resources, including ability to afford care
+Diabetes is an expensive disease, both for society and for individuals. Sensitive assessment of a person's ability to afford office visits, laboratory and other tests, monitoring supplies, and medications is essential to providing patient-centered care. Even people with health insurance may have difficulty with high deductibles, large or multiple co-pays, and coverage gaps. Further, many patients do not have consistent, affordable access to healthy foods such as fresh fruits and vegetables. Food insecurity is common in the United States and may impair diabetes self-management and increase the risk for hypoglycemia.13 The challenge of living with limited resources may also increase chronic physiologic stress. Strategies to assist people with limited resources may include providing screenings in more accessible settings (e.g., retinal photography with remote reading), prescribing generic medications when possible, consideration of type of and delivery system for insulins, and assessing the frequency of home glucose monitoring in terms of maximum impact.
+Comprehensive and coordinated management of comorbid conditions
+In addition to increased risk of macrovascular and microvascular complications of diabetes, people with diabetes are at increased risk for many comorbid conditions, including but not limited to those listed below. Comorbid conditions can impair quality of life, increase the risk of
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+18
+
+polypharmacy, and worsen diabetes control and outcomes through a variety of mechanisms, including limiting the time and resources available for diabetes care and prevention. Patientcentered care of those with diabetes goes beyond care for diabetes alone and requires the health care team to regularly consider a number of clinical assessments and related interventions, such as those outlined below.
+
+Comorbidity to consider Depression Cognitive impairment
+Cancer
+Periodontal disease
+Liver disease
+Hearing loss
+
+Impact on diabetes or self-care, and clinical considerations
+More prevalent in those with diabetes; negatively affects self-care and outcomes. Consider depression screening and treatment or referral for those with depression.
+More prevalent and occurs earlier in those with diabetes; negatively affects self-care and outcomes. Increases risk of hypoglycemia. Consider screening for cognitive impairment in older adults who are having difficulty with self-management.
+Diabetes is associated with increased risk of cancers of the liver, pancreas, endometrium, colon/rectum, breast, and bladder.14 Encourage people with diabetes to undergo recommended ageand sex-appropriate cancer screenings and to reduce their modifiable cancer risk factors (obesity, smoking, physical inactivity).15
+Diabetes is associated with periodontal disease, which can lead to chewing difficulties and tooth loss. The inflammation associated with periodontal disease can worsen diabetes control.16 Both diabetes and periodontal disease are associated with increased cardiovascular disease risk. Encourage people with diabetes to receive regular dental care.
+Type 2 diabetes is a common associate of fatty liver disease, which can progress to cirrhosis and liver failure. Consider further evaluation for people with elevated liver enzymes, in the absence of other cause, for fatty liver disease.
+Controlled for age, rates of hearing loss are doubled in people with diabetes. Consider assessing for hearing loss and refer for further evaluation as needed.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+19
+
+Obstructive sleep apnea Fracture risk
+Osteoarthritis
+Infectious diseases
+
+More common in people with diabetes and may exacerbate hyperglycemia and hypertension. Ask about symptoms of sleep apnea and refer those with symptoms for testing.
+Hip fractures are more common in people with diabetes, even though bone density may be higher in those with type 2 diabetes than age-matched people without diabetes. Consider assessment and management of risk factors for falls and fractures, including neuropathy and vision impairment.
+More common in people with diabetes; may limit ability to exercise. Consider tailoring exercise recommendations for people with osteoarthritis.
+People with diabetes are at higher risk for morbidity from influenza, pneumococcal pneumonia, and hepatitis B infections. Provide age-appropriate vaccinations recommended by the CDC to people with diabetes.
+
+Resources
+Diabetes management
+• Centers for Disease Control and Prevention: Diabetes Type 1 and Type 2 and Adult Vaccination • National Diabetes Education Program:
+• Practice Transformation for Physicians and Health Care Teams • Working Together to Manage Diabetes: A Toolkit for Pharmacy, Podiatry, Optometry,
+and Dentistry (PPOD)
+• Promoting Medication Adherence in Diabetes
+• National Institute of Diabetes and Digestive and Kidney Diseases: Financial Help for
+Diabetes Care
+Health literacy and numeracy
+• Agency for Healthcare Research and Quality:
+• AHRQ Health Literacy Universal Precautions Toolkit
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+20
+
+• Health Literacy Measurement Tools • The SHARE Approach
+• Centers for Disease Control and Prevention: Health Literacy • The Diabetes Literacy and Numeracy Education Toolkit (DLNET) • Health.gov:
+• Health Literacy Improvement • Preventing Adverse Drug Events: Individualizing Glycemic Targets Using Health
+Literacy Strategies
+References
+1. Committee on Quality of Health Care in America. Crossing the Quality Chasm. A New Health System for the 21st Century. Washington, DC: National Academies Press; 2001.
+2. Charles C, Gafni A, Whelan T. Decision-making in the physician-patient encounter: revisiting the shared treatment decision-making model. Social Science & Medicine. 1999;49(5):651-661.
+3. Inzucchi SE, Bergenstal RM, Buse JB, et al. Management of hyperglycemia in type 2 diabetes: a patient-centered approach: position statement of the American Diabetes Association (ADA) and the European Association for the Study of Diabetes (EASD). Diabetes Care. 2012;35(6):1364-1379.
+4. American Academy of Family Physicians, American Academy of Pediatrics, American College of Physicians, American Osteopathic Association. Joint principles of the patient-centered medical home. 2007. http://www.aafp.org/dam/AAFP/ documents/practice_management/ pcmh/initiatives/PCMHJoint.pdf. Published March 7, 2007. Accessed on June 26, 2017.
+5. Margolius D, Bodenheimer T. Transforming primary care: from past practice to the practice of the future. Health Affairs. 2010;29(5):779-784.
+6. Wagner EH. The role of patient care teams in chronic disease management. British Medical Journal. 2000;320(7234):569-572.
+7. Bojadzievski T, Gabbay RA. Patient-centered medical home and diabetes. Diabetes Care. 2011;34(4):1047-1053.
+8. Scanlon DP, Hollenbeak CS, Beich J, Dyer AM, Gabbay RA, Milstein A. Financial and clinical impact of team-based treatment for Medicaid enrollees with diabetes in a federally qualified health center. Diabetes Care. 2008;31(11):2160-2165.
+9. Roman SH, Harris MI. Management of diabetes mellitus from a public health perspective. Endocrinology and Metabolism Clinics of North America. 1997;26(3):443-474.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+21
+
+10. Kutner M, Greenberg E, Jin Y, Paulsen C. The health literacy of America's adults: results from the 2003 National Assessment of Adult Literacy. https://nces.ed.gov/pubsearch/pubsinfo. asp?pubid=2006483. Published September 6, 2006. Accessed June 26, 2017.
+11. Agency for Healthcare Research and Quality. Literacy and health outcomes. https://archive. ahrq.gov/downloads/pub/evidence/pdf/literacy/literacy.pdf. Published January 2004. Accessed June 26, 2017.
+12. Hersh L, Salzman B, Snyderman D. Health literacy in primary care practice. American Family Physician. 2015;92(2):118-124.
+13. Seligman HK, Bolger AF, Guzman D, et al. Exhaustion of food budgets at month's end and hospital admissions for hypoglycemia. Health Affairs. 2014;33(1):116-123.
+14. Suh S, Kim KW. Diabetes and cancer: is diabetes causally related to cancer? Diabetes & Metabolism Journal. 2011;35(3):193-198.
+15. Giovannucci E, Harlan DM, Archer MC, et al. Diabetes and cancer: a consensus report. Diabetes Care. 2010;33(7):1674-1685.
+16. Sanz M, Ceriello A, Buysschaert M, et al. Scientific evidence on the links between periodontal diseases and diabetes: consensus report and guidelines of the joint workshop on periodontal diseases and diabetes by the International Diabetes Federation and the European Federation of Periodontology. Diabetes Research and Clinical Practice. 2018;137:231-241.
+Guidelines, Position Statements, and Consensus Reports
+• American Academy of Family Physicians, American Academy of Pediatrics, American College
+of Physicians, American Osteopathic Association. Joint Principles of the Patient-Centered Medical Home. Patient Centered Primary Care Collaborative. 2007.
+• American Association of Clinical Endocrinologists and American College of Endocrinology -
+Clinic al Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015.
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Improving
+Care a d Promoting Health in Populations
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Comprehensive
+Medical Evaluation and Assessment of Comorbidities
+• American Diabetes Association. Psychosocial Care for People with Diabetes: A Position
+Statement of the American Diabetes Association. 2016.
+• American Diabetes Association, American Cancer Society. Diabetes and Cancer: A consensus
+report. 2010.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 3
+
+22
+
+• American Diabetes Association, European Association for the Study of Diabetes. Management
+of Hyperglycemia in Type 2 Diabetes: A Patient-Centered Approach: Position Statement of the American Diabetes Association (ADA) and the European Association for the Study of Diabetes (EASD). 2012.
+• American Geriatrics Society. Guidelines for Improving the Care of Older Adults with Diabetes
+Mellitus: 2013 Update and Supplemental Information. 2013.
+• VA/DoD Clinical Practice Guidelines. Management of Type 2 Diabetes Mellitus in Primary
+Care - 2017.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 4
+
+23
+
+PRINCIPLE 4:
+Provide Ongoing Self-management Education and Support for People with Diabetes
+
+Effective self-management education and ongoing self-management support are essential to enable people with diabetes to make informed decisions and to assume responsibility for the day-to-day management of their disease and risk factors for complications.1-3
+Definition and purpose of diabetes self-management education and self-management support (DSMES)
+DSMES is an ongoing process to facilitate a person's knowledge, skill, and ability for managing their own diabetes over the course of a lifetime. The DSMES process incorporates the needs, goals, and life experiences of the person with diabetes and is guided by evidence-based standards. Objectives are to support informed and shared decision-making, self-management behaviors, problem solving, and active collaboration with the health care team to improve clinical outcomes, health status, and quality of life. Self-management support involves health care professionals in activities that help people with diabetes to implement and sustain ongoing behaviors needed to manage their diabetes. These activities include behavioral, educational, psychosocial, and clinical support.
+Engagement in DSMES has been shown to significantly decrease A1C by an average of 0.6 percent compared to usual care, with the greatest reductions in those with baseline A1C above 9 percent.1
+In addition, randomized trials of DSMES have shown reductions in hospital admissions and improvements in self-reported measures of quality of life, healthy eating and physical activity, diabetes distress, and depressive symptoms.4
+What is self-management?
+Self-management is an active, ongoing process that changes as the person's needs, priorities, and situations change. Diabetes educators and others on the health care team (see Resources) can help people with diabetes to understand diabetes pathophysiology and treatment options, and to understand, implement, and sustain
+• healthy eating • physical activity • medication usage • monitoring and using patient-generated health data • preventing, detecting, and treating acute and chronic complications • healthy coping with psychosocial issues and concerns
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 4
+
+24
+
+• problem solving • navigating the health care system • practicing self-advocacy • e-health education
+Based on 2017 American Diabetes Association/American Association of Diabetes Educators National Standards.5
+How to provide self-management education and support
+People with diabetes should receive DSMES according to national standards.5 No one education program or approach is "best"; however, strategies such as self-directed behavioral goal setting and problem solving improve outcomes.5 Motivational interviewing may help address individual barriers and readiness for change.5 Programs that address health literacy and are culturally and age-appropriate improve outcomes.6 Family members can potentially support and reinforce self-management education if they are included in the process.
+In addition to one-on-one encounters, approaches such as group visits, telehealth, and other technologies have been used effectively to provide education and support to people with diabetes.
+Providers should assess DSMES needs at the following times: (1) with a new diagnosis of diabetes, (2) annually for health maintenance, (3) when new complicating factors influence self-management, and (4) when transitions in care occur.4
+The amount of education necessary depends on the needs of each individual and the complexity of the treatment regimen. Systematic reviews have found that interventions involving 10 or more contact hours are associated with greater reductions in A1C than shorter interventions.1 Medicare Part B and many health insurance companies cover DSMES. Medicare covers up to 10 hours of initial education in a consecutive 12-month period, including 1 hour of individual and up to 9 hours of group instruction, for beneficiaries with diabetes, whether newly diagnosed or long-standing. Subsequently, Medicare will cover up to 2 hours of individual or group DSMES in each calendar year following the calendar year in which the initial education was completed. To be eligible for Medicare reimbursement, DSMES must be provided through an accredited program via a referral from the physician, physician assistant, or nurse practitioner who is managing the individual's diabetes. The content areas that need to be addressed are defined above.
+Ongoing support is critical to implement and sustain the level of self-management needed to manage diabetes over a lifetime. Although no definitive evidence supports specific frequencies of follow-up, frequency of reassessment should be based on the individual's and the health care team's perceptions of need.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 4
+
+25
+
+Community-based and other resources
+Providing people with diabetes links to resources such as peers and community health workers, community-based health programs, and support groups can be beneficial.1, 3 For people with socioeconomic barriers to diabetes self-management (e.g., food insecurity or difficulty affording medications or supplies), consider referral to community social service organizations.
+Evidence of the effectiveness of technology-based support is increasing.7 Consider using technology as an adjunct to traditional DSMES for assessment, instruction, monitoring, feedback, and supporting behavior change and coping strategies.
+Resources
+• National Diabetes Education Program: Diabetes HealthSense • American Diabetes Association:
+• Local resources: In My Community • Find a Recognized Education Program
+• American Association of Diabetes Educators:
+• Find an Accredited Diabetes Education Program • Find a Diabetes Educator • Practice Documents
+• Academy of Nutrition and Dietetics: Find a Registered Dietitian Nutritionist • Centers for Medicare & Medicaid Services: Intensive Behavioral Therapy for Obesity • Peers for Progress: Tools and Training
+References
+1. Chrvala CA, Sherr D, Lipman RD. Diabetes self-management education for adults with type 2 diabetes mellitus: a systematic review of the effect on glycemic control. Patient Education and Counseling. 2016;99(6):926-943.
+2. Brunisholz KD, Briot P, Hamilton S, et al. Diabetes self-management education improves quality of care and clinical outcomes determined by a diabetes bundle measure. Journal of Multidisciplinary Healthcare. 2014;7:533-542.
+3. Marrero DG, Ard J, Delamater AM, et al. Twenty-first century behavioral medicine: a context for empowering clinicians and patients with diabetes: a consensus report. Diabetes Care. 2013;36(2):463-470.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 4
+
+26
+
+4. Powers MA, Bardsley J, Cypress M, et al. Diabetes self-management education and support in type 2 diabetes: a joint position statement of the American Diabetes Association, the American Association of Diabetes Educators, and the Academy of Nutrition and Dietetics. Diabetes Care. 2015;38(7):1372-1382.
+5. Beck J, Greenwood DA, Blanton L, et al. 2017 national standards for diabetes self-management education and support. Diabetes Care. 2017;40(10):1409-1419.
+6. Christie D, Channon S. The potential for motivational interviewing to improve outcomes in the management of diabetes and obesity in paediatric and adult populations: a clinical review. Diabetes, Obesity & Metabolism. 2014;16(5):381-387.
+7. Hunt, CW. Technology and diabetes self-management: an integrative review. World Journal of Diabetes. 2015;6(2):225-233.
+Guidelines, Position Statements, and Consensus Reports
+• American Association of Clinical Endocrinologists and American College of Endocrinology -
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015
+• American Diabetes Association. Standards of Care in Diabetes--2018: Lifestyle Management • Diabetes Self-management Education and Support in Type 2 Diabetes. A Joint Position Statement
+of the American Diabetes Association, the American Association of Diabetes Educators, and the Academy of Nutrition and Dietetics. 2015.
+• VA/DoD Clinical Practice Guideline for the Management of Type 2 Diabetes Mellitus in Primary
+Care - 2017
+
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+27
+
+PRINCIPLE 5:
+Encourage Lifestyle Modification for People with Diabetes
+
+Nutrition and physical activity are the foundations of diabetes management. Individualized nutrition therapy helps people achieve blood glucose, blood pressure, blood lipid, and weight goals1-4; address individual nutrition needs; and prioritize food choices when indicated by scientific evidence. Regular physical activity helps improve insulin sensitivity and glycemic control, positively affects lipids and blood pressure, assists with weight maintenance, and is associated with reduced risk for cardiovascular disease (CVD).4-6
+Provide nutrition therapy and monitoring
+Ideally, people with diabetes are referred to a registered dietitian (RD)/registered dietitian nutritionist (RDN) for medical nutrition therapy (MNT) at the time of diagnosis and as needed thereafter.3 Medicare covers up to 3 hours of MNT initially for beneficiaries with diabetes, and up to 2 hours annually thereafter. Studies have shown that MNT can lead to decreases in A1C ranging from 0.5 percent to 2.0 percent, similar to the effects of many glucose-lowering medications.7 MNT involves a nutrition assessment, individualized nutrition interventions, and nutrition monitoring and evaluation with ongoing follow-up to support long-term lifestyle changes, evaluate outcomes, and modify interventions as needed.8
+Other health care team members, such as physicians and non-RD diabetes educators, may provide nutrition therapy in a broader sense,7 discussing general principles included in the following sections.
+Macronutrient intake for people with diabetes1-3,8
+In most cases, nutrition recommendations for people with diabetes are similar to recommendations for healthy eating for all adults. The following ranges for nutrients are provided for guidance, but specific therapy recommendations should be based on each person's health status, comorbidities, food preferences, and nutritional needs. Individualized meal plans should include optimization of food choices to meet recommended daily allowances and dietary reference intakes for all micronutrients.
+The mix of carbohydrate, protein, and fat should be individualized to meet diabetes management goals and patient preferences. An emphasis on portion control and reduced caloric intake is important for attaining weight-management goals. See Principle 6 for more on weight management.
+Fat Data on the ideal total dietary fat content for people with diabetes are inconclusive. Additionally, randomized controlled trials do not support a beneficial role for omega-3 fatty acid supplements.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+28
+
+Encourage people with diabetes to
+• minimize intake of trans fat • choose monounsaturated and polyunsaturated fats, including omega-3 fatty acids, such as
+those found in fatty fish, nuts, seeds, avocado, and oils, e.g., olive, canola, corn, safflower, and sunflower oils
+Carbohydrate
+Short-term evidence suggests that diets with a range of carbohydrate content, from very low-carbohydrate to moderate-carbohydrate to high-carbohydrate vegan diets, help control blood glucose. Encourage people with diabetes to
+• eat a variety of fruits and vegetables each day • choose high-fiber beans, vegetables, fruits, and whole grains, with a goal of consuming
+25 to 30 grams daily of fiber from food sources. A list of high-fiber foods is available at https://health.gov/dietaryguidelines/2015/guidelines/appendix-13/.
+• limit added sugars as much as possible • avoid sugar-sweetened beverages
+Protein
+Choose low-fat animal- and plant-based protein sources, e.g., lean meat, fish, poultry without skin, eggs, dried beans and peas, and soy products.
+Sodium, alcohol, and fluid intake
+• Limit sodium intake to 2,300 mg per day, same as for the general population.1 • Limit alcohol intake ( 2 drinks for men and  1 drink for women per day). • Drink water and other beverages with few or no calories.
+Helpful eating behaviors and practices for glycemic control9
+• For people with diabetes who use insulin, monitoring carbohydrate intake is a key strategy
+in achieving glycemic control, whether by carbohydrate counting, use of carbohydrate choices (formerly called exchanges), or experience-based estimation.
+• For people with diabetes who do not use insulin, monitoring portion sizes may be more
+important and can be accomplished through teaching tools for portion control and healthful food choices such as the plate method.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+29
+
+• Use of non-nutritive sweeteners can reduce overall calorie and carbohydrate intake if
+substituted for caloric sweeteners without compensatory increase from other dietary sources.
+• Treatment of mild hypoglycemia (plasma glucose < 70 mg/dL) requires ingestion of 15 to
+20 grams of glucose through carbohydrate-containing foods or glucose tablets. Because protein appears to increase insulin response without increasing glucose, people with diabetes should not use carbohydrate sources high in protein to prevent or treat hypoglycemia.
+Encourage physical activity 4-6,9
+Regular physical activity helps improve insulin sensitivity and glycemic control, positively affects lipids and blood pressure, assists with weight maintenance, and is associated with reduced risk for CVD.4-6 Regular physical activity also can improve psychological well-being, health-related quality of life, and depression in individuals with type 2 diabetes, among whom depression is more common than in the general population.5 Muscle-strengthening activity can increase bone strength and muscular fitness and help maintain muscle mass during a program of weight loss.5,6
+Most adults with diabetes, in consultation with their health care team and in the absence of contraindications, benefit from
+• engaging in at least 150 minutes per week of moderate-intensity aerobic physical activity.
+Activity should be spread over at least 3 days per week, with no more than 2 consecutive days without exercise. Shorter durations (minimum 75 min/week) of vigorous-intensity or interval training may be sufficient for younger and more physically fit individuals.
+• engaging in regular physical activity according to their abilities, even if unable to be active
+for 150 minutes per week.
+• performing muscle-strengthening activity two to three times per week on nonconsecutive
+days, targeting all major muscle groups.
+• reducing sedentary time by breaking up extended amounts of time (>30 minutes) spent
+sitting.10
+People who engage in both aerobic and muscle-strengthening forms of exercise are likely to attain the greatest benefit. Adults with diabetes who exercise more than 150 minutes per week have even greater reductions in A1C than those who exercise less than 150 minutes per week.11
+Advise older adults or those with limited mobility about safe ways to be more active, such as chair exercises, exercise classes designed for seniors, or aquatic exercise.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+30
+
+Aerobic physical activity5-6
+Any type of aerobic activity can be beneficial; see examples below. As a rule of thumb, a person doing moderate-intensity aerobic activity can talk, but not sing, during the activity. A person doing vigorous-intensity activity cannot say more than a few words without pausing for a breath. Both moderate- and vigorous-intensity aerobic activity should be performed in episodes of at least 10 minutes.
+Examples of different aerobic physical activities and intensities include
+Moderate intensity
+• Walking briskly (3 miles per hour or faster) • Water aerobics • Bicycling slower than 10 miles per hour • Tennis (doubles) • Ballroom dancing • General gardening
+Vigorous intensity
+• Race-walking, jogging, or running • Swimming laps • Tennis (singles) • Aerobic dancing • Bicycling 10 miles per hour or faster • Jumping rope • Heavy gardening (continuous digging or hoeing, with heart rate increases) • Hiking uphill or with a heavy backpack
+Muscle-strengthening activity5-6
+Muscle-strengthening activities are beneficial if they work the major muscle groups of the body: the legs, hips, back, chest, abdomen, shoulders, and arms. Resistance training, including weight training, is a familiar example of muscle-strengthening activity. Other examples include working with resistance bands; doing calisthenics that use body weight for resistance, such as push-ups, pull-ups, and sit-ups; carrying heavy loads; and heavy gardening, such as digging or hoeing.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+31
+
+When resistance training is used to enhance muscle strength, one set of 8 to 12 repetitions of each exercise is effective, although two or three sets may be more effective. Development of muscle strength and endurance is progressive over time.
+Goal setting5-6
+Encourage people with or at risk for diabetes to set a modest initial physical activity goal. Physical activity should be increased gradually over time, regardless of the person's current level of physical activity. Inactive people and those with low levels of physical activity should
+• generally, start with relatively light- to moderate-intensity aerobic activity, such as 5 to 15
+minutes of walking per session, two to three times a week.
+• first, gradually increase the number of minutes per session (duration) and the number of
+days per week (frequency) of moderate-intensity activity. Later, if desired, increase the intensity.
+• consider their age, level of fitness, and prior experience when individualizing the rate of increase. • focus on developing self-efficacy and fostering social support from family, friends, and the
+health care team.
+Appropriate precautions5-6
+• Evaluate people initially for contraindications and limitations to physical activity, and then,
+in consultation with them, develop an appropriate physical activity plan.
+• Gradual initiation of moderate-intensity activity is safe for most people with diabetes. Their
+primary care professional should asses their risk of CVD or injury before beginning a vigorous physical activity program.
+• Counsel people to pay special attention to blood glucose control and prevention of
+hypoglycemia when being active. People taking medications that can cause hypoglycemia should test blood glucose before and after exercise to monitor for hypoglycemia and carry a source of rapid-acting carbohydrate to treat hypoglycemia.
+• Encourage use of proper footwear; choosing safe environments, such as a gym, recreation
+center, or shopping mall, in which to be active; and making sensible choices about how, when, and where to be active.
+• Moderate or intense physical activity has no ocular contraindication for most people with
+diabetes or diabetic retinopathy. Due to potential risk of hemorrhage with straining, people being treated for proliferative retinopathy should seek counsel from their eye care professional before initiating vigorous aerobic or muscle-strengthening exercises.5
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+32
+
+Resources
+• Centers for Medicare & Medicaid Services:
+• Diabetes Self-Management Training • Medicare and Medicaid Programs; Regulatory Provisions To Promote Program
+Efficiency, Transparency, and Burden Reduction; Part II
+• U.S. Department of Agriculture:
+• Dietary Guidelines for Americans 2015-2020: Chapter 1: Key Elements of Healthy
+Eating Patterns
+• ChooseMyPlate
+• U.S. Department of Health and Human Services: Physical Activity Guidelines for Americans • American Association of Diabetes Educators: Find a Diabetes Education Program in Your Area • American Diabetes Association: Create Your Plate • Academy of Nutrition and Dietetics: Find a Registered Dietitian Nutritionist
+References
+1. U.S. Department of Health and Human Services and U.S. Department of Agriculture. 20152020 Dietary Guidelines for Americans. 8th Edition. https://health.gov/dietaryguidelines/2015/ guidelines. Published December 2015. Accessed June 29, 2017.
+2. Wheeler ML, Dunbar SA, Jaacks LM, et al. Macronutrients, food groups, and eating patterns in the management of diabetes: a systematic review of the literature, 2010. Diabetes Care. 2012;35(2):434-445.
+3. Franz MJ, Boucher JL, Green-Pastors J, Powers MA. Evidence-based nutrition practice guidelines for diabetes and scope and standards of practice. Journal of the American Dietetic Association. 2008;108(4 Suppl 1):S52-S58.
+4. Chen L, Pei JH, Kuang J, et al. Effect of lifestyle intervention in patients with type 2 diabetes: a meta-analysis. Metabolism. 2015;64:338-347.
+5. Colberg SR, Sigal RJ, Yardley JE, et al. Physical activity/exercise and diabetes: a position statement of the American Diabetes Association. Diabetes Care. 2016;39(11):2065-2079.
+6. U.S. Department of Health and Human Services. Physical activity guidelines for Americans website. https://health.gov/paguidelines/. Published 2008. Accessed June 29, 2017.
+7. American Diabetes Association. 7. Obesity management for the treatment of type 2 diabetes: standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Suppl 1):S65-S72.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 5
+
+33
+
+8. Evert AB, Boucher JL, Cypress M, et al. Nutrition therapy recommendations for the management of adults with diabetes. Diabetes Care. 2013;36(11):3821-3842.
+9. Lin X, Zhang X, Guo J, et al. Effects of exercise training on cardiorespiratory fitness and biomarkers of cardiometabolic health: a systematic review and meta-analysis of randomized controlled trials. Journal of the American Heart Association. 2015;4(7).
+10. Biswas A, Oh PI, Faulkner GE, et al. Sedentary time and its association with risk for disease incidence, mortality, and hospitalization in adults: a systematic review and meta-analysis. Annals of Internal Medicine. 2015;162(2):123-132.
+11. Umpierre D, Ribeiro PA, Kramer CK, et al. Physical activity advice only or structured exercise training and association with HbA1c levels in type 2 diabetes: a systematic review and meta-analysis. JAMA. 2011;305(17):1790-1799.
+Guidelines, Position Statements, and Consensus Reports
+• 2013 AHA/ACC Guideline on Lifestyle Management to Reduce Cardiovascular Risk: A Report
+of the American College of Cardiology/American Heart Association Task Force on Practice Guidelines
+• American Association of Clinical Endocrinologists and American College of Endocrinology -
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Lifestyle
+Management
+• The American Geriatrics Society. Guidelines for Improving the Care of Older Adults with
+Diabetes Mellitus: 2013 Update and Supplemental Information
+• Physical Activity/Exercise and Diabetes: A Position Statement of the American Diabetes
+Association. 2016.
+• U.S. Preventive Services Task Force. Final Recommendation Statement: Healthful Diet and
+Physical Activity for Cardiovascular Disease Prevention in Adults With Cardiovascular Risk Factors: Behavioral Counseling. 2014.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+34
+
+PRINCIPLE 6:
+Address Overweight and Obesity in the Management of Diabetes
+
+Assessment of overweight and obesity
+Health care professionals typically use body mass index (BMI) (body weight in kg divided by the square of height in meters) to classify people as having normal body weight, being overweight, or having obesity. BMI is not a perfect measure of adiposity; it may overestimate body fat in muscular individuals and underestimate it in individuals with low muscle mass, such as older adults. In Asian Americans, the BMI cutoff points to define overweight and obesity are lower than in other populations (Table 1). Measures such as waist circumference and total body fat may be more specific measures of adiposity, but BMI is more practical and already integrated into most care settings. At least annually, calculate BMI, classify BMI to determine the presence of overweight or obesity (Table 1), and document it in the patient's medical record. Obtain body weight at each subsequent routine patient encounter, and assess the trajectory of weight change, if any, since the prior visit. Advise people who are overweight or obese of the impact of high BMI on glycemic control and other measures such as lipids and blood pressure, as well as its association with cardiovascular disease and other adverse health outcomes. Assess each person's readiness to achieve weight loss and jointly determine weight-loss goals and intervention strategies.
+Table 1. Classification of Overweight and Obesity by BMI
+
+Classification
+BMI Range (kg/m2)
+
+Overweight Class 1 Obesity Class 2 Obesity Class 3 Obesity
+
+25.0-29.9
+
+30.0-34.9
+
+35.0-39.9
+
+ 40
+
+(23.0-27.4)*
+
+( 27.5)**
+
+*Cut point for overweight for Asian Americans **Cut point for obesity for Asian Americans
+Weight management for individuals with excess body weight
+Weight loss is an important goal in people with diabetes and excess body weight. Although the ideal goal is to achieve and maintain a "normal" body weight (i.e., BMI of 18.5 kg/m2 to 24.9 kg/m2; 18.5 kg/m2 to 22.9 kg/m2 for Asian Americans), this goal may not be realistic for many people. Even a 5 to 10 percent weight loss can improve health, regardless of baseline weight; and as little as a 3 percent weight loss improves glycemic control. Lifestyle interventions are the cornerstone of weight management. When lifestyle efforts are not sufficient, they can be augmented with pharmacotherapy or bariatric surgery.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+35
+
+Lifestyle interventions
+For many people with type 2 diabetes and excess body weight, health care professionals should provide recommendations and/or referrals for diet, physical activity, and behavioral therapy designed to achieve at least a 5 percent weight loss. A moderate energy deficit of 500 to 750 kcal/day will result in a slow but progressive weight loss (initially 1 to 2 lbs/week). Weight loss meal plans should be individualized and, in most cases, they should supply 1,200 to 1,500 kcal/ day for women and 1,500 to 1,800 kcal/day for men.1 Older or more frail people, even with a BMI in the overweight range, may have sarcopenia and be at risk for nutritional deficiencies, so weight loss recommendations should be carefully tailored in these people.
+The Look AHEAD (Action for Health in Diabetes) trial was designed to assess the cardiovascular effects of weight loss through an intensive lifestyle intervention in people with type 2 diabetes who were overweight or obese. Key components of the lifestyle intervention were a diet reducing fat and caloric intake and increased physical activity with a goal of at least 175 minutes per week of moderately intense exercise.2 The intervention was delivered through weekly group or individual sessions for the first 6 months, then via monthly contact for the remainder of the trial. Those randomized to the lifestyle intervention arm achieved a mean 8 percent weight loss at 1 year and maintained a mean 6 percent weight loss over the 10-year duration of the study. More than one in four intervention subjects maintained a greater than 10 percent weight loss at year 8. Although the lifestyle intervention did not reduce cardiovascular events, benefits found in secondary analyses included reduced sleep apnea, lower A1C with reduced need for diabetes medications, improved mobility and quality of life, fewer hospitalizations, and reduced health care costs.3 The Look AHEAD study excluded people over the age of 75 years and required that participants pass a timed exercise test, so the benefits and harms of such an intervention are less clear in older or more frail people.
+A variety of dietary patterns, in the setting of energy restriction, have been shown to be modestly effective for weight loss. These include Mediterranean-style, Dietary Approaches to Stop Hypertension (DASH)-style, plant-based (vegan or vegetarian), lower-fat, and lower-carbohydrate patterns.4 With each approach, weight loss peaks at around 6 months, and slow weight regain is common thereafter.3 Impact on cardiovascular risk factors may vary with different eating patterns, but few long-term studies exist. In people with diabetes, weight loss and cardiovascular risk factor improvements were most significant with intensive lifestyle interventions using either a calorierestricted Mediterranean-style diet or a portion-controlled diet including meal replacements.5 Commercially available meal replacements such as shakes or bars are covered by subsidized programs such as Women, Infants, and Children (WIC) or Supplemental Nutrition Assistance Program (SNAP).
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+36
+
+Helpful behaviors and practices for weight loss6
+Recommendations for a high-intensity lifestyle intervention to achieve a 5 percent to 10 percent loss of body weight include frequent (at least 14) counseling sessions during the initial 6 months of the intervention, or recommendations for similarly structured web-based interventions or commercial programs. Advise people to consume a calorie-restricted diet, with macronutrient composition based on individual preferences and likelihood of long-term adherence. The intervention should recommend and support exercising at least 150 minutes per week at a moderate intensity if tolerated and recommend self-monitoring and other behavioral changes as excerpted below.
+Once a person has lost 5 percent to 10 percent of body weight, ongoing support is critical for weight-loss maintenance. Ideally, this support includes at least monthly contact with a trained interventionist or program and ongoing self-monitoring and behavioral strategies.1 Continued caloric restriction and physical activity may need to be intensified due to compensatory changes in metabolism with weight loss.
+Several behaviors and practices have been shown to help people manage their food and beverage intake and calorie expenditure and, ultimately, body weight. The behaviors with the strongest evidence related to body weight that health care professionals can encourage people to follow include
+Behaviors related to food intake
+• Focus on the total number of calories consumed and portion sizes. • Consider use of meal replacements, such as commercially-available bars or shakes.7 • Monitor food intake. Recording intake of food and/or caloric intake can help individuals
+become more aware of what and how much they eat and drink.
+• Choose smaller portions or lower-calorie options when eating out. • Choose water or low-calorie beverages instead of sugar-sweetened beverages.
+Other behaviors
+• Increase physical activity and record progress. Refer to Principle 5 for more information
+about physical activity.
+• Limit screen time and avoid eating while watching television, which can result in overeating. • Self-weigh regularly--at least once per week.8
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+37
+
+Coverage for intensive behavioral therapy and nutrition counseling for people with diabetes and obesity
+The Centers for Medicare & Medicaid Services covers intensive behavioral therapy and nutrition counseling for Medicare beneficiaries with or without diabetes who have obesity (BMI  30 kg/m2). Counseling may be covered for up to 12 months if it is provided by a qualified primary care physician or other primary care professional in a primary care setting, and if the person achieves a weight loss of at least 3 kg within the first 6 months. Additionally, Medicare covers up to 3 hours of medical nutrition therapy initially for beneficiaries with diabetes and up to 2 hours annually thereafter.
+
+Effects on weight of medications for diabetes and other diseases
+The effect of diabetes medications on weight varies: Some agents are weight neutral; others contribute to weight gain or weight loss. In people with diabetes, the potential effects of diabetes medications on weight (Table 2) should be considered in shared decision-making, along with other factors such as cost, potential side effects, and risk of hypoglycemia.9 Certain concomitant medications can contribute to weight gain, including atypical antipsychotics, certain antidepressants, glucocorticoids, and others. Consider strategies to mitigate this impact in people with diabetes and excess body weight. These strategies may include choosing other medications as appropriate, limiting dose and duration if possible, and reinforcing lifestyle recommendations.
+
+Table 2. Effects of Diabetes Medications on Weight
+
+Classes that Are Associated with Weight Reduction
+
+Classes that Are Generally Weight-neutral
+
+Classes that Are Associated with Weight Gain
+
+Biguanides GLP-1 receptor agonists SGLT-2 inhibitors Amylin mimetics
+
+DPP-4 inhibitors Alpha-glucosidase inhibitors Bile acid sequestrants Dopamine-2 agonists
+
+Sulfonylureas Meglitinides Thiazolidinediones Insulins
+
+Pharmacotherapy
+Five weight-loss medications (orlistat, phentermine/topiramate ER, lorcaserin, naltrexone/bupropion ER, and liraglutide) are FDA-approved for long-term use in nonpregnant adults with BMI  27 kg/m2.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+38
+
+Each medication can lead to clinically significant weight loss when used in combination with lifestyle intervention. Weight loss studies are often limited by relatively high dropout rates and few head-to-head comparisons of weight loss medications exist. Studies that included people with diabetes found that glycemic control usually improves significantly with weight loss.10
+In general, combining medications with behavioral counseling leads to significantly greater weight loss than either alone. When choosing among weight-loss medications, consider patient preferences, costs/coverage, potential side effects, and contraindications. Once medications are started, monitor side effects and effectiveness. Common side effects can include nausea, headache, gastrointestinal upset, and others, depending on the medication. Hypoglycemia may occur, especially in people concurrently being treated with sulfonylureas or insulin. If the medication is ineffective (less than 5 percent weight loss in 3 months) or if there are safety or tolerability issues at any time, consider discontinuation. An alternate weight-loss medication can be considered, as they have different safety profiles and mechanisms of action.9 If the medication is tolerated and effective (generally defined as at least 5 percent weight loss at 3 months), it can be continued. When weight-loss medications have been effective, people tend to regain weight if medications are discontinued, pointing to the need to consider long-term treatment and emphasis on weight maintenance and relapse-prevention strategies.10
+Bariatric surgery
+Bariatric surgery can be highly effective for weight loss and glycemic improvement. Bariatric surgery for people with diabetes is sometimes referred to as "metabolic surgery," reflecting its impact on glycemia.
+In people with type 2 diabetes and obesity, bariatric surgery has been shown to induce significant improvements in glycemic control or even "remission" of diabetes,11 defined varyingly as normal or at-goal A1C without use of diabetes medications. In one large randomized clinical trial (RCT), such improvements in glycemic control persisted in many people at 5 years post-surgery.12 However, other RCTs with follow-up ranging from 1 to 5 years found that 35 percent to 50 percent or more of people who initially achieved remission eventually relapsed.13 Glycemic results after bariatric surgery are more favorable when surgery is performed in people with shorter diabetes duration, younger age, nonuse of insulin, and lower baseline A1C.13 Of note, trials of bariatric surgery have generally excluded participants who were older and more frail, and those with advanced comorbid illnesses.
+Current bariatric surgery procedures include laparoscopic adjustable gastric banding (LAGB), vertical sleeve gastrectomy (VSG), Roux-en-Y gastric bypass (RYGB), and biliopancreatic diversion (BPD). Procedures vary in their efficacy (weight loss and diabetes "remission") and safety. In general, efficacy but also long-term nutritional complications are progressively greater in order of the procedures listed above.13
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+39
+
+Past guidelines recommended bariatric surgery for people with type 2 diabetes and BMI > 35kg/m2. Based on evidence that diabetes remission rates are equally high in people with lower BMI, more recent recommendations include considering surgery in those with BMI as low as 30 kg/m2 (27.5 kg/m2 for Asian Americans) if glycemic control is inadequate despite optimal medical therapy.13 All surgical candidates should receive a preoperative evaluation, including a comprehensive medical and psychosocial assessment by a multidisciplinary team, physical examination, and appropriate laboratory testing to assess surgical risk. Contraindications to bariatric surgery include comorbidities that severely limit life expectancy or that greatly increase risk of the bariatric surgery procedure, active drug or alcohol abuse, uncontrolled psychiatric illness, lack of understanding of the expected risks and benefits of the procedure, and unwillingness to commit to the required long-term follow-up.13,14
+People who have undergone bariatric surgery require lifelong follow-up for ongoing reinforcement of lifestyle efforts, to monitor for weight regain and relapse of weight-related complications, and to monitor for potential complications of the surgery. Rates and severity of individual complications depend on the type of procedure performed and include reoperation, long-term nutritional and micronutrient deficiencies, bone demineralization, and symptomatic postprandial hypoglycemia.13 The rate of alcohol use disorder (AUD) appears to be higher in people seeking bariatric surgery than in people with obesity in general, and active AUD is a contraindication to surgery. Bypass procedures increase the rate of absorption of alcohol and may contribute to an increased risk of AUD following surgery.15 Perioperative mortality is a rare complication of bariatric surgery. Outcomes are better when surgery is performed at a center that does a significant volume of these procedures.13
+Resources
+• The National Institute of Diabetes and Digestive and Kidney Diseases (NIDDK): Body Weight
+Planner
+• Centers for Medicare & Medicaid Services: Decision Memo for Intensive Behavioral Therapy
+for Obesity
+• National Heart, Lung, and Blood Institute: DASH Eating Plan • Academy of Nutrition and Dietetics:
+• Find a Registered Dietitian Nutritionist • Position of the Academy of Nutrition and Dietetics: Interventions for the Treatment of
+Overweight and Obesity in Adults
+• American Board of Obesity Medicine: Directory of Diplomates
+
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+40
+
+References
+1. Jensen MD, Ryan DH, Apovian CM, et al. 2013 AHA/ACC/TOS guideline for the management of overweight and obesity in adults: a report of the American College of Cardiology/American Heart Association Task Force on Practice Guidelines and The Obesity Society. Circulation. 2014;129(25 Suppl 2):S102-S138.
+2. Look AHEAD Research Group, Wing RR, Bolin P, et al. Cardiovascular effects of intensive lifestyle intervention in type 2 diabetes. The New England Journal of Medicine. 2013;369(2):145-154.
+3. Pi-Sunyer X. The Look AHEAD Trial: a review and discussion of its outcomes. Current Nutrition Reports. 2014;3(4):387-391.
+4. Evert AB, Boucher JL, Cypress M, et al. Nutrition therapy recommendations for the management of adults with diabetes. Diabetes Care. 2013;36(11):3821-3842.
+5. Franz MJ, Boucher JL, Rutten-Ramos S, VanWormer JJ. Lifestyle weight-loss intervention outcomes in overweight and obese adults with type 2 diabetes: a systematic review and meta-analysis of randomized clinical trials. Journal of the Academy of Nutrition and Dietetics. 2015;115(9):1447-1463.
+6. U.S. Department of Health and Human Services and U.S. Department of Agriculture. 20152020 Dietary Guidelines for Americans. 8th Edition. https://health.gov/dietaryguidelines/2015/ guidelines/. Published December 2015. Accessed July 3, 2017.
+7. Raynor HA, Champagne CM. Position of the Academy of Nutrition and Dietetics: interventions for the treatment of overweight and obesity in adults. Journal of the Academy of Nutrition and Dietetics 2016;116(1):129-147.
+8. Butryn ML, Phelan S, Hill JO, Wing RR. Consistent self-monitoring of weight: a key component of successful weight loss maintenance. Obesity. 2007;15(12):3091-3096.
+9. Apovian CM, Aronne LJ, Bessesen DH, et al. Pharmacological management of obesity: an Endocrine Society clinical practice guideline. The Journal of Clinical Endocrinology and Metabolism. 2015;100(2):342-362.
+10. Cefalu WT, Bray GA, Home PD, et al. Advances in the science, treatment, and prevention of the disease of obesity: reflections from a Diabetes Care Editors' Expert Forum. Diabetes Care. 2015;38(8):1567-1582.
+11. Ribaric G, Buchwald JN, McGlennon TW. Diabetes and weight in comparative studies of bariatric surgery vs conventional medical therapy: a systematic review and meta-analysis. Obesity Surgery. 2014;24(3):437-455.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+41
+
+12. Schauer PR, Bhatt DL, Kirwan, JP, et al. Bariatric surgery versus intensive medical therapy for diabetes - 5-year outcomes. The New England Journal of Medicine. 2017;376(7):641-651.
+13. Rubino F, Nathan DM, Eckel RH, et al. Metabolic surgery in the treatment algorithm for type 2 diabetes: a joint statement by international diabetes organizations. Diabetes Care. 2016;39(6):861-877.
+14. Mechanick JI, Youdim A, Jones DB, et al. Clinical practice guidelines for the perioperative nutritional, metabolic, and nonsurgical support of the bariatric surgery patient--2013 update: cosponsored by American Association of Clinical Endocrinologists, The Obesity Society, and American Society for Metabolic & Bariatric Surgery. Endocrine Practice. 2013;19(2):337-372.
+15. Parikh M, Johnson JM, Ballem N, American Society for Metabolic and Bariatric Surgery Clinical Issues Committee. ASMBS position statement on alcohol use before and after bariatric surgery. Surgery for Obesity and Related Diseases. 2016;12(2):225-230.
+Guidelines, Position Statements, and Consensus Reports
+• 2013 AHA/ACC/TOS Guideline for the Management of Overweight and Obesity in Adults: A
+Report of the American College of Cardiology/American Heart Association Task Force on Practice Guidelines and The Obesity Society
+• American Association of Clinical Endocrinologists and American College of Endocrinology
+Comprehensive Clinical Practice Guidelines for Medical Care of Patients with Obesity. 2016.
+• American Diabetes Association Standards of Medical Care in Diabetes--2018: Obesity
+Management for the Treatment of Type 2 Diabetes
+• Clinical Practice Guidelines for the Perioperative Nutritional, Metabolic, and Nonsurgical
+Support of the Bariatric Surgery Patient - 2013 Update: Cosponsored by American Association of Clinical Endocrinologists, The Obesity Society, and American Society for Metabolic and Bariatric Surgery
+• Consensus Statement by the American Association of Clinical Endocrinologists and American
+College of Endocrinology on the Comprehensive Type 2 Diabetes Management Algorithm - 2018 Executive Summary
+• Metabolic Surgery in the Treatment Algorithm for Type 2 Diabetes: A Joint Statement by
+International Diabetes Organizations. 2016.
+• Pharmacological Management of Obesity: An Endocrine Society Clinical Practice Guideline.
+2015. Cosponsored by the European Society of Endocrinology and The Obesity Society.
+• Position of the Academy of Nutrition and Dietetics: Interventions for the Treatment of
+Overweight and Obesity in Adults. 2016.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 6
+
+42
+
+• The Obesity Society with the ACC/AHA Task Force on Practice Guidelines. Guidelines (2013) for
+Managing Overweight and Obesity in Adults
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+43
+
+PRINCIPLE 7:
+Individualize Blood Glucose Management for People with Diabetes
+
+Hyperglycemia is the cardinal characteristic of diabetes, and control of blood glucose is a central component of diabetes care. A patient-centered approach to treating type 2 diabetes includes careful consideration of patient factors and preferences that lead to individualized treatment goals and strategies that balance potential benefits against potential harms of blood glucose control.
+Benefits of blood glucose control
+Poor blood glucose control (A1C > 9.0 percent) is associated with symptoms that can include frequent urination, thirst, blurred vision, fatigue, and recurring infections. Treatment of adults with type 2 diabetes with poor glucose control to lower A1C to a mean of 7.5 percent has been shown to improve quality of life and work productivity.1 Beyond relief of immediate symptoms associated with poor control, the goal of blood glucose control is to reduce long-term complications of diabetes.
+Initial randomized controlled trials of more intensive vs conventional (at the time) blood glucose control were focused on microvascular complications. The Diabetes Control and Complications Trial (DCCT)2 found that measures of early microvascular complications were reduced 50 percent to 76 percent in participants with type 1 diabetes randomized to intensive glycemic control (achieved mean A1C of about 7 percent) compared with those randomized to conventional glycemic control (achieved mean A1C of about 9 percent). The Epidemiology of Diabetes Interventions and Complications (EDIC)3 follow-up observational study of the DCCT cohort demonstrated that the benefits of earlier glycemic control endured and grew over the following 2 decades, despite the fact that participants in both original arms had equivalent subsequent A1C levels. During EDIC, the intensively treated group had major reductions in eye, nerve, kidney, and heart complications, and fewer than half the number of cardiovascular disease (CVD) events than in the conventionally treated group.
+Similarly, in people with newly diagnosed type 2 diabetes, the United Kingdom Prospective Diabetes Study4 and its 10-year follow-up observational study5 found that reduced complications persisted for at least a decade after a finite period of intensive glycemic control (average A1C of 7 percent compared with 7.9 percent with standard treatment). Significant microvascular benefits persisted, and macrovascular benefits emerged with reduced rates of myocardial infarction.
+These early randomized trials of more versus less intensive glycemic control were focused on development of microvascular complications in people with relatively recent-onset diabetes. Subsequently, three randomized trials--Action to Control Cardiovascular Risk in Diabetes (ACCORD), Action in Diabetes and Vascular Disease: Preterax and Diamicron MR Controlled Evaluation (ADVANCE),
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+44
+
+and the Veterans Affairs Diabetes Trial (VADT)--were conducted to test the benefits of nearnormalization of blood glucose on cardiovascular outcomes in participants with long-standing type 2 diabetes and either known CVD or high cardiovascular risk. Participants in these trials had a mean age at enrollment in their 60s and mean duration of diabetes of about 10 years. Although specific protocols differed, participants randomized to intensive glycemic control were treated with multi-drug regimens, including insulin, to A1C goals of less than 6 percent or less than 6.5 percent (achieved A1C 6.3 percent to 6.9 percent). Use of other cardioprotective medications (statins, aspirin) was generally high. All three trials found no significant benefit of intensive glycemic control on their primary cardiovascular outcomes.6-8 The ACCORD trial was halted early due to increased mortality in the participants randomized to intensive glycemic control.6 See a comparison table for more details on baseline characteristics, protocols, and outcomes of these trials.9 ACCORD, ADVANCE, and VADT did demonstrate reduction in some early microvascular disease measures, such as albuminuria, with lowering of A1C below 7 percent. Follow-up of these trial cohorts has shown persistent microvascular benefits, including reductions in more advanced eye and kidney events.
+More intensive glycemic control appears primarily to reduce onset and progression of microvascular complications, and that reduction in clinically meaningful events may take more than a decade to become evident. The impact of intensive glycemic control on CVD is likely limited and may only occur in those treated early in the course of their disease. This suggests that the benefits of more intensive glucose control may primarily accrue to people with anticipated long-life expectancy and few competing comorbidities. In terms of cardiovascular benefit, the choice of drugs may make a difference in those with more advanced disease. Certain diabetes medications have been shown to reduce major cardiovascular events in people with known CVD (see Principle 8 for more details), and in several of these trials the medications also slowed progression of kidney disease (see Principle 9 for more details).
+Risks of blood glucose control
+Findings from three recent large clinical trials indicate that caution is needed in treating diabetes aggressively to near-normal A1C goals in people with long-standing type 2 diabetes who have CVD or multiple CVD risk factors.6-8 The ACCORD, ADVANCE, and VADT trials showed that those randomized to near-normal glucose control had significantly increased risk of severe hypoglycemia. Moreover, the intensive blood glucose control group of the ACCORD6 trial was stopped early at 3.5 years due to a 20 percent relative risk increase in mortality in the intensive control group compared to standard glucose control (A1C goal 7 percent to 7.9 percent). The increase in mortality overshadowed the modest reduction in myocardial infarction risk.
+A randomized trial of early insulin replacement to normalize blood glucose in people with prediabetes or early type 2 diabetes found a neutral effect on CVD, increased hypoglycemia, and modest weight gain.10
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+45
+
+Hypoglycemia is the leading limiting factor in the glycemic management of type 1 and insulintreated type 2 diabetes.11 Mild hypoglycemia can interfere with usual daily activities and may be frightening to people with diabetes, and more severe hypoglycemia can result in falls, seizures, machinery/motor vehicle accidents, or other injury. Treatment of hypoglycemia (plasma glucose < 70 mg/dL) requires ingestion of 15 to 20 grams of glucose- or carbohydrate-containing foods. An individual with severe hypoglycemia who is unable to ingest fast-acting carbohydrates should be treated using emergency glucagon kits, which require a prescription. Those in close contact with people who have hypoglycemia-prone diabetes should be instructed in the use of such kits.
+Prevention of hypoglycemia is particularly critical for people treated with insulin and/or sulfonylureas, including when new medications--even if not hypoglycemia-provoking on their own--are added to one of the former drugs. People with diabetes should understand factors, such as physical activity or missed meals, that increase their risk of hypoglycemia and ways to prevent and treat it.
+In type 1 diabetes and severely insulin-deficient type 2 diabetes, the syndrome of hypoglycemia unawareness, or hypoglycemia-associated autonomic failure, can severely compromise stringent diabetes control and quality of life. The deficient counter-regulatory hormone release and autonomic responses in this syndrome are both risk factors for and caused by hypoglycemia. Temporary relaxation of glycemic control to avoid hypoglycemia may reverse hypoglycemia unawareness.11
+In addition to hypoglycemia, other risks or harms of more aggressive blood glucose lowering include patient burden from polypharmacy, medication side effects, increased costs of medications and monitoring, and, with some therapies, weight gain.
+Glycemic treatment goals
+Because the potential benefits of intensive glucose control emerge slowly, while the harms can be more immediate, people with longer life expectancy have more to gain from intensive glucose control. Treatment targets should be individualized based on duration of diabetes, age/life expectancy, comorbid conditions, known CVD or advanced microvascular complications, hypoglycemia unawareness, and patient preferences after discussion of the potential benefits and risks of specific levels of glycemic control and treatment strategies.12
+• Individualize glycemic goals based on the characteristics and preferences of the person with
+diabetes in the context of shared decision-making.
+• Consider an A1C < 7 or near-normalization of A1C in persons who have sufficiently long-life
+expectancy to see potential long-term benefits on microvascular risks and who are at low risk of potential harms. This might include younger people with short duration of diabetes and no significant complications or comorbidities. Goal setting should be done in the con text of shared decision-making, balancing the potential for relatively small incremental benefit with potential harms of medication side effects and costs.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+46
+
+• Moderate A1C goals, such as < 8 percent, are appropriate for persons with a history of or
+risk factors for severe hypoglycemia, limited life expectancy, advanced microvascular or macrovascular complications, multiple or advanced comorbid conditions, or long-standing diabetes.
+• Reassess A1C targets, patient preferences, and treatment strategies over time, and modify
+therapeutic goals as appropriate.
+Limitations of A1C
+As with any laboratory test, there is some variability in the measurement of A1C. Although such variability is considerably less on an intra-individual basis than that of blood glucose measurements, clinicians should exercise judgment when using A1C as the sole basis for assessing glycemic control, particularly if the result is close to the threshold that might prompt a change in medication therapy. Additionally, the published relationships between A1C and mean glucose assume that people have normal red blood cell (RBC) turnover. Conditions that alter RBC turnover (hemolytic and other anemias, recent blood transfusion, use of drugs that stimulate erythropoiesis, end-stage kidney disease, pregnancy) will make the A1C result discrepant from the patient's true mean glycemia.13
+Some hemoglobin variants can interfere with the measurement of A1C, although most assays in use in the United States are accurate in individuals heterozygous for the most common variants (see HbA1c Assay Interferences table). Discrepancies between measured A1C and glucose patterns should prompt consideration that the A1C assay may not be reliable for that individual. Some analyses suggest that even in the absence of variant hemoglobins, African Americans have higher A1C levels than Caucasians for the same mean level of glycemia,14,15 while other researchers conclude that mean glycemia is truly higher in African Americans.16
+Finally, clinicians should remember that a measure of average glycemia will include both hyper- and potentially hypoglycemic glucose levels over the prior months. People experiencing hypoglycemia, even with A1C above their target, likely need reconsideration of their therapy, such as a reduction in dose or a change in medication class. For all people, interpret the A1C in the context of the totality of data--medical history, results of home glucose monitoring, and prior A1C patterns.
+Blood glucose management strategies
+Medical nutrition therapy and physical activity are essential from diagnosis onward for people with diabetes. People on insulin or oral agents that stimulate insulin secretion are at increased risk for hypoglycemia.
+• For people with type 2 diabetes, there is general agreement that metformin, together with
+lifestyle modification, is the preferred initial therapy at time of diagnosis unless metformin is contraindicated.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+47
+
+• Over time, people with type 2 diabetes may require combination therapy with other
+glucose-lowering medications to maintain their individualized target A1C. Information about advantages and disadvantages of the available medication classes can help guide therapy selection.*17-19
+Use of strategies to help people with diabetes take their medicines as directed can improve adherence, clinical outcomes, productivity, and quality of life.20
+*Glucose-lowering medications differ in their mechanisms of action. Risks, costs, effects on weight, and side effects also vary. Comparative effectiveness studies provide insufficient evidence on long-term risks and benefits of other oral agents, glucagon-like peptide-1 receptor agonists, or insulin to guide the selection of a second agent when metformin is not sufficient to meet treatment goals. Individualization of therapy and assessment of patient preferences are key to choosing among the many available drug classes.19
+Blood glucose assessment
+• Use A1C values to help guide therapy to achieve individualized glycemic targets.17,21,22
+Although point-of-care A1C tests give immediate results and may be useful for changing therapy, they are less accurate than clinical laboratory results, and there is no evidence that immediate results lead to better outcomes for people with diabetes than conventional laboratory testing.23
+• Regular self-monitoring of blood glucose (SMBG) may help with self-management and
+therapy adjustment and with assessment of hypoglycemia and hyperglycemia. SMBG is useful for individuals taking insulin. While observational studies of people not using insulin have shown associations between more frequent SMBG and better glycemic control, randomized controlled trials have not.24 Individual characteristics should determine how often self-monitoring is done; the specific testing method; and the way results are used, recorded, and reported.
+• To be useful, individuals must use SMBG data and communicate that data to the health
+care team in an effective and timely manner for integration into self-management plans.25
+The following correlations between A1C values and mean plasma glucose may help health care professionals set appropriate blood glucose targets for people required to self-monitor their blood glucose.26
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+48
+
+Table. Mean glucose levels for specified A1C levels or target ranges These estimates are based on ADAG data of ~2,700 glucose measurements over 3 months per A1C measurement in 507 adults with type 1, type 2, and no diabetes. The correlation between A1C and average glucose was 0.92.27
+A calculator for converting A1C results into eAG, in either mg/dL or mmol/L, is available at http://professional.diabetes.org/eAG.
+Table modified from Wei et al.26
+
+A1C Level or Range
+% 6.0 5.5-6.5 6.5-7.0 7.0 7.0-7.5 7.5-8.0 8.0 8.0-8.5 9.0 10.0 11.0 12.0
+
+Mean plasma glucose (95% CI) mg/dL 126 (100-152)
+154 (123-185)
+183 (147-217)
+212 (170-249)
+240 (193-282)
+240 (193-282)
+298 (240-347)
+
+Mean fasting glucose (95% CI)
+
+Mean premeal glucose (95% CI)
+
+Mean postmeal glucose (95% CI)
+
+Mean bedtime glucose (95% CI)
+
+mg/dL
+
+mg/dL
+
+mg/dL
+
+mg/dL
+
+122 (117-127)
+142 (135-150)
+
+118 (115-121)
+139 (134-144)
+
+144 (139-148)
+164 (159-169)
+
+136 (131-141)
+153 (145-161)
+
+152 (143-162)
+167 (157-177)
+
+152 (147-157)
+155 (148-161)
+
+176 (170-183)
+189 (180-197)
+
+177 (166-188)
+175 (163-188)
+
+178 (164-192
+
+179 (167-191)
+
+206 (195-217)
+
+222 (197-248)
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+49
+
+Resources
+• National Institute of Diabetes and Digestive and Kidney Diseases:
+• The A1C Test and Diabetes • Sickle Cell Trait and Other Hemoglobinopathies and Diabetes: for Providers
+• Office of Disease Prevention and Health Promotion: National Action Plan for ADE Prevention
+References
+1. Testa MA, Simonson DC. Health economic benefits and quality of life during improved glycemic control in patients with type 2 diabetes mellitus: a randomized, controlled, double-blind trial. JAMA.1998;280(17):1490-1496.
+2. Diabetes Control and Complications Trial Research Group. The effect of intensive treatment of diabetes on the development and progression of long-term complications in insulin-dependent diabetes mellitus. The New England Journal of Medicine.1993;329(14):977-986.
+3. Nathan DM, Cleary PA, Backlund JY, et al. Intensive diabetes treatment and cardiovascular disease in patients with type 1 diabetes. The New England Journal of Medicine. 2005;353(25):2643-2653.
+4. United Kingdom Prospective Diabetes Study Group. Intensive blood-glucose control with sulphonylureas or insulin compared with conventional treatment and risk of complications in patients with type 2 diabetes (UKPDS 33). Lancet. 1998;352:837-853.
+5. Holman RR, Paul SK, Bethel MA, Matthews DR, Neil HA. 10-year follow-up of intensive glucose control in type 2 diabetes. The New England Journal of Medicine. 2008;359(15):1577-1589.
+6. Gerstein HC, Miller ME, Byington RP, et al. Effects of intensive glucose lowering in type 2 diabetes. The New England Journal of Medicine. 2008;358(24):2545-2559.
+7. Patel A, MacMahon S, Chalmers J, et al. Intensive blood glucose control and vascular outcomes in patients with type 2 diabetes. The New England Journal of Medicine. 2008;358(24):2560-2572.
+8. Duckworth W, Abraira C, Moritz T, et al. Glucose control and vascular complications in veterans with type 2 diabetes. The New England Journal of Medicine. 2009;360(2):129-139.
+9. Skyler JS, Bergenstal R, Bonow RO, et al. Intensive glycemic control and the prevention of cardiovascular events: implications of the ACCORD, ADVANCE, and VA Diabetes Trials. Diabetes Care. 2009;32(1):187-192.
+10. Gerstein HC, Bosch J, Dagenais GR, et al. Basal insulin and cardiovascular and other outcomes in dysglycemia. The New England Journal of Medicine. 2012;367(4):319-328.
+11. Cryer PE. Hypoglycaemia: the limiting factor in the glycaemic management of type I and type II diabetes. Diabetologia. 2002;45(7):937-948.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+50
+
+12. Ismail-Beigi F, Moghissi E, Tiktin M, Hirsch IB, Inzucchi SE, Genuth S. Individualizing glycemic targets in type 2 diabetes mellitus: implications of recent clinical trials. Annals of Internal Medicine. 2011;154(8):554-559.
+13. Welsh KJ, Kirkman MS, Sacks DB. Role of glycated proteins in the diagnosis and management of diabetes: research gaps and future directions. Diabetes Care. 2016; 39(8):1299-1306.
+14. Herman WH. Are there clinical implications of racial differences in HbA1c? Yes, to not consider can do great harm! Diabetes Care. 2016;39(8):1458-1461.
+15. Bergenstal RM, Gal RL, Connor CG, et al. Racial differences in the relationship of glucose concentrations and hemoglobin A1c levels. Annals of Internal Medicine. 2017;167(2):95-102.
+16. Selvin E. Are there clinical implications of racial differences in HbA1c? A difference, to be a difference, must make a difference. Diabetes Care. 2016;39(8):1462-1467.
+17. Management of Diabetes Mellitus Update Working Group. VA/DoD Clinical Practice Guideline for the Management of Type 2 Diabetes Mellitus in Primary Care. Version 5.0. Washington, DC: Veterans Health Administration and Department of Defense; 2017.
+18. Garber AJ, Abrahamson MJ, Barzilay JI, et al. Consensus statement by the American Association of Clinical Endocrinologists and American College of Endocrinology on the comprehensive type 2 diabetes management algorithm--executive summary. Endocrine Practice. 2017;23(2):207-238.
+19. Inzucchi SE, Bergenstal RM, Buse JB, et al. Management of hyperglycemia in type 2 diabetes, 2015: a patient-centered approach: update to a position statement of the American Diabetes Association and the European Association for the Study of Diabetes. Diabetes Care. 2015;38(1):140-149.
+20. Viswanathan M, Golin CE, Jones CD, et al. Interventions to improve adherence to selfadministered medications for chronic diseases in the United States: a systematic review. Annals of Internal Medicine. 2012;157(11):785-795.
+21. Sacks DB. Hemoglobin A1c in diabetes: panacea or pointless? Diabetes. 2013;62(1):41-43.
+22. American Diabetes Association. 6. Glycemic targets: standards of medical care in diabetes-2018. Diabetes Care. 2018;41(Suppl 1):S55-S64.
+23. Al-Ansary L, Farmer A, Hirst J, et al. Point-of-care testing for Hb A1c in the management of diabetes: a systematic review and metaanalysis. Clinical Chemistry. 2011;57(4):568-576.
+24. Young LA, Buse JB, Weaver MA, et al. Glucose self-monitoring in non-insulin-treated patients with type 2 diabetes in primary care settings: a randomized trial. JAMA Internal Medicine. 2017;177(7):920-929.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 7
+
+51
+
+25. Bailey TS, Grunberger G, Bode BW, et al. American Association of Clinical Endocrinologists and American College of Endocrinology 2016 outpatient glucose monitoring consensus statement. Endocrine Practice. 2016;22(2):231-261.
+26. Wei N, Zheng H, Nathan DM. Empirically establishing blood glucose targets to achieve HbA1c goals. Diabetes Care. 2014;37(4):1048-1051.
+27. Nathan DM, Kuenen J, Borg R, et al. Translating the A1C assay into estimated average glucose values. Diabetes Care. 2008;31(8):1473-1478.
+Guidelines, Position Statements, and Consensus Reports
+• American Association of Clinical Endocrinologists and American College of Endocrinology.
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015.
+• American College of Physicians. Hemoglobin A1c Targets for Glycemic Control With
+Pharmacologic Therapy for Nonpregnant Adults With Type 2 Diabetes Mellitus: A Guidance Statement Update. 2018.
+• American College of Physicians. Oral Pharmacologic Treatment of Type 2 Diabetes Mellitus:
+A Clinical Practice Guideline
+• American Diabetes Association. Standards of Medical Care in Diabetes--2018: Glycemic Targets • American Geriatrics Society. Guidelines for Improving the Care of Older Adults with Diabetes
+Mellitus: 2013 Update and Supplemental Information.
+• Consensus Statement by the American Association of Clinical Endocrinologists and American
+College of Endocrinology on the Comprehensive Type 2 Diabetes Management Algorithm - 2018 Executive Summary
+• Endocrine Society. Diabetes Technology--Continuous Subcutaneous Insulin Infusion Therapy
+and Continuous Glucose Monitoring in Adults. 2016.
+• VA/DoD Clinical Practice Guideline. Management of Type 2 Diabetes Mellitus in Primary Care
+- 2017
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+52
+
+PRINCIPLE 8:
+Provide Multifactorial Cardiovascular Disease Risk Reduction
+
+Cardiovascular disease (CVD) is the leading cause of death for people with diabetes and is a major contributor to health care costs related to diabetes. The prevalence of overall heart disease is higher among adults with diabetes than adults without diabetes with an age-standardized risk ratio varying from 1.9 to 2.5.1,2 People with type 2 diabetes frequently have other risk factors for CVD, such as chronic kidney disease, hypertension, dyslipidemia, and obesity.1,2 Numerous studies have demonstrated the benefits of controlling CVD risk factors in people with diabetes. Implementation of evidence-based interventions has likely contributed to the significant reductions in CVD events and mortality seen in people with diabetes in recent decades.3
+People with type 1 diabetes are also at high risk of CVD, particularly after several decades of the disease. Although clinical trials to address CVD risk factors have not been conducted in people with type 1 diabetes, interventions proven to reduce CVD events in people with type 2 diabetes may be beneficial in adults with type 1 diabetes as well.4
+Evidence for blood pressure control
+Epidemiologic studies suggest that blood pressure higher than 115/75 mmHg is associated with progressive increases in CVD events and mortality in people with and without diabetes.5 Early randomized controlled trials in people with type 2 diabetes demonstrated significant benefits of lowering systolic blood pressure to less than about 150 mmHg. For example, the United Kingdom Prospective Diabetes Study (UKPDS) found that blood pressure control with a target of less than 150/85 mmHg (achieved 144/82 mmHg) significantly reduced risk for diabetes-related deaths, stroke, heart failure, microvascular disease, retinopathy progression, and deterioration of vision in people with type 2 diabetes compared to a target of less than 180/105 mmHg.6 Since then, multiple randomized controlled trials (RCTs) have demonstrated benefits on CVD outcomes, mortality, and renal and retinal disease with lowering blood pressure to below 140 mmHg systolic.7-9
+However, it remains unclear whether treatment to more aggressive blood pressure goals provides additional benefit. The Action to Control Cardiovascular Risk in Diabetes (ACCORD) trial found no substantial advantage in lowering systolic blood pressure to less than 120 mmHg compared to less than 140 mmHg in people with type 2 diabetes and found a higher risk of serious adverse events with lower blood pressure targets. However, the incidence of stroke was statistically significantly reduced in those randomized to the lower target, although the absolute number of events was low.10 A meta-analysis of randomized trials in adults with type 2 diabetes found that treating to intensive blood pressure targets (upper limit of 130 mmHg systolic and 80 mmHg diastolic) was associated with a small but significant reduction in stroke but no significant decrease in mortality or myocardial infarction.11 The Systolic Blood Pressure Intervention (SPRINT) trial found
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+53
+
+cardiovascular benefit of more intensive blood pressure targets in a trial population that excluded people with diabetes,12 and meta-analyses7 suggest that cardiovascular benefits of more intensive blood pressure targets might be greater in people without diabetes.
+The American Heart Association, American College of Cardiology, and several other organizations recently issued updated recommendations for the detection and treatment of high blood pressure.13 These guidelines recommended that high blood pressure be treated to targets of < 130/80 in most people with hypertension, with or without diabetes. The recommendation was based on the SPRINT trial and meta-analyses of multiple trials, most of which did not include people with diabetes. Although the consensus to treat most people to targets < 140/90 is strong, whether lower targets are recommended for people with diabetes remains unsettled. Health care professionals should develop individualized blood pressure targets with their patients with diabetes in the context of shared decision-making that incorporates patient preferences.14
+Angiotensin converting enzyme (ACE) inhibitors and angiotensin receptor blockers (ARBs) have traditionally been recommended as first-line therapy in people with diabetes, due to their known effects on ameliorating progression of diabetic nephropathy. However, other drug classes have been shown to have cardiovascular benefits. A recent systematic review and meta-analysis of studies comparing blood pressure medications in people with diabetes suggested that ACE inhibitors or ARBs provided no greater cardiovascular or renal benefits than other anti-hypertensive classes (thiazides diuretics, calcium channel blockers, or beta blockers).8 This would suggest that any of these drug classes are appropriate first-line anti-hypertensive therapy for people with diabetes, in the absence of a clear indication for an ACE inhibitor or ARB such as albuminuria.
+Blood pressure management
+• Measure blood pressure at every routine medical visit. • Consider home blood pressure monitoring when office/clinic measurements are borderline
+or elevated.
+• The following strategies may have antihypertensive effects similar to pharmacologic
+monotherapy
+• Reduce sodium intake by selecting low-sodium foods, not adding sodium to food, and
+limiting processed foods.
+• Reduce excess body weight by increasing consumption of fruits, vegetables, and low-fat
+dairy products; avoiding excessive alcohol consumption; and increasing activity levels.
+• Follow the Dietary Approaches to Stop Hypertension (DASH) Eating Plan. (See Resources.) • Engage in regular aerobic physical activity at a moderate to vigorous intensity.15
+• Referral to a registered dietitian/registered dietitian nutritionist can also be helpful.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+54
+
+Therapy considerations
+• In the context of shared decision-making, people with a systolic blood pressure of 130 to
+139 mmHg or a diastolic blood pressure of 80 to 89 mmHg may initially be treated with lifestyle therapy alone, while those with higher blood pressure generally will start both pharmacologic and lifestyle therapy at the time of diagnosis of hypertension.
+• The primary goal of therapy is blood pressure less than 140/90 mmHg. Lower blood pressure
+targets can be individualized, based upon shared decision-making that addresses preferences regarding stroke risk reduction and risks of adverse events and polypharmacy.
+• Consider initial therapy with a thiazide diuretic, calcium channel blocker, ACE inhibitor, or an ARB. • Prescribe an ACE inhibitor or ARB if albuminuria is present.
+Multi-drug therapy (two or more agents at maximal doses) is often needed to achieve and maintain blood pressure targets.10 Individualize further medication choices according to patient characteristics such as age, race, and response to therapy. Measure blood pressure at every health visit and adjust treatment as necessary. In women of child-bearing potential, exercise caution in the choice of blood pressure therapy. ACE inhibitors and ARBs are contraindicated in pregnancy, and a high proportion of pregnancies are unplanned.
+Evidence for lipid therapy
+People with type 2 diabetes commonly have lipid patterns characterized by elevated triglyceride and reduced high-density lipoprotein cholesterol levels. Although their low-density lipoprotein (LDL) cholesterol values are generally not higher than those in non-diabetic individuals, they often have a greater number of smaller, denser, and more atherogenic LDL particles.1 Studies using the HMG-CoA reductase inhibitors (statins) have clearly shown that moderate to intensive statin therapy can reduce CVD events in people with diabetes.3 Rather than targeting specific levels of LDL cholesterol, these studies have generally achieved 30 percent to 40 percent reductions from baseline LDL cholesterol levels.3 In people with diabetes over age 40 and with other CVD risk factors, moderate to high-intensity statin therapy reduces CVD risk regardless of the baseline LDL cholesterol level. As is the case in people without diabetes, high-intensity statin therapy has a strong evidence base for secondary prevention in people with diabetes who have had a prior CVD event.
+The addition of fenofibrate or niacin to statin therapy has not been shown to provide additional CVD event reduction.16,17 PCSK-9 inhibitors are potent LDL-cholesterol lowering agents. The PCSK-9 inhibitor evolocumab, added to statin therapy, reduced major CVD events by 15 percent over 2 years in people with known CVD, approximately one-third of whom had diabetes.18 Ezetimibe (an inhibitor of intestinal cholesterol absorption), added to statin therapy within 10 days of hospitalization for acute coronary syndrome, reduced major CVD events by 6 percent over 7
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+55
+
+years; about one-quarter of this study population had diabetes.19 Of note, both these studies of combined LDL-cholesterol-lowering drugs were done in people with established CVD, and the absolute risk reductions were approximately 2 percent over several years.
+Lipid management
+• Lifestyle modification to improve lipid profiles is indicated in people with diabetes. This
+approach involves actions to reduce intake of saturated fat, trans fat, and cholesterol; to increase intake of omega-3 fatty acids, viscous fiber, and plant stanols/sterols; to increase physical activity; and to reduce weight (if indicated). See Principle 5 for more information about nutrition and physical activity therapy.
+• Add high-intensity statin therapy to lifestyle therapy, regardless of baseline lipid levels, for
+people with diabetes who have overt CVD.
+• Consider statin therapy in individuals with diabetes ages 40 to 75 years who are without
+overt CVD. Discuss the use of moderate-dose statin therapy in those without additional risk factors and high-dose statin therapy in those with additional risk factors.
+• Consider use of statins for primary prevention in those under age 40 years or over age
+75 years for people with multiple cardiovascular risk factors in the context of shared decision-making regarding the lack of strong evidence.
+Carefully titrate statin therapy dosage according to individual responses to therapy and the occurrence of muscular and other side effects. Measurement of blood lipids may provide information on adherence to therapy. Statin treatment of women of childbearing potential requires caution, since the drugs are contraindicated in pregnancy.
+Anti-platelet therapy
+Aspirin has been shown to be effective in reducing cardiovascular morbidity and mortality in people with diabetes and previous myocardial infarction or stroke (secondary prevention). However, studies have not found a clear benefit of low-dose aspirin for primary prevention of atherosclerotic CVD in people without prior CVD events. Meta-analyses of primary prevention studies that included subgroups of people with diabetes, or that included only people with diabetes, have concluded that there is no significant reduction in major cardiovascular events with aspirin therapy.20 Since many of the primary prevention studies included people at fairly low average cardiovascular risk, low-dose aspirin might still be considered for primary prevention in those with other major CVD risk factors or at high risk based on validated risk calculators.21 Since aspirin increases the risk of major gastrointestinal and cerebral bleeding, its use for primary prevention should be undertaken in the context of shared decision-making.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+56
+
+• Use low-dose aspirin (e.g., 81 mg daily) in adults with diabetes and a history of atherosclerotic CVD. • Consider use of low-dose aspirin for primary prevention for those with multiple cardiovascular
+risk factors in the context of shared decision-making regarding the lack of strong evidence of benefit and the potential bleeding risks.
+Tobacco use cessation
+Smoking more than doubles the risk for CVD in people with diabetes.22 While smokeless tobacco poses a lesser risk for CVD than cigarette smoking, discourage all forms of tobacco.23 People who stop using tobacco greatly reduce their risk of premature death. Medications, counseling, telephone help lines, and smoking cessation programs increase a person's chances of success at stopping tobacco use. Additional effective therapies include nicotine replacement products (e.g., gum, inhaler, and patch).
+Blood glucose medications and cardiovascular disease
+Medications to treat diabetes have historically focused on their effects to lower glucose. However, there have been concerns over the years about the cardiovascular safety of some medications, particularly sulfonylureas, insulin, and thiazolidinediones. Studies evaluating the cardiovascular safety of sulfonylureas have primarily been observational and have had various methodologic flaws.24 A randomized trial of early insulin replacement to normalize blood glucose in people with prediabetes or early type 2 diabetes found a neutral effect on CVD.25 In 2007, a meta-analysis of trials with the thiazolidinedione rosiglitazone suggested that the drug was associated with increased risk of myocardial infarction,26 although a subsequent RCT of rosiglitazone did not show an increase in cardiovascular risk.27
+In 2008, in response to the concerns raised regarding uncertainty with respect to the cardiovascular safety of drugs intended to improve glycemic control, the FDA issued a Guidance for Industry recommending that cardiovascular risk be more thoroughly addressed during drug development for new antidiabetic therapies and that an unacceptable degree of increased cardiovascular risk should be excluded. In order for accrual of a sufficient number of endpoints to allow for a meaningful estimate of risk, FDA recommended that these studies include people at high risk for cardiovascular events.
+Many of these cardiovascular outcomes trials have been completed. To date, none have shown increased cardiovascular risk for the composite of myocardial infarction, stroke, or cardiovascular death with the studied drug compared to standard of care background therapies.
+More recently, four glucose-lowering medications have shown superiority for reduction in major adverse cardiovascular events (myocardial infarction, stroke, or cardiovascular death) in high-risk patients, predominantly those with prior CVD events: the SGLT-2 inhibitors empagliflozin28 and
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+57
+
+canagliflozin,29 and the GLP-1 agonists liraglutide30 and semaglutide.31 The MACE component driving the positive primary outcome result differed somewhat among the trials. In the empagliflozin trial the reduction in mortality emerged within the first 6 months of the trial, suggesting that potential benefits of the drug may not be related to atherosclerosis reduction but rather to hemodynamic or other factors.28 In the canagliflozin trial, a small but statistically significant increase in minor and major lower extremity amputations was seen.29
+Of note, these trials were done in people with known CVD or at high risk for CVD due to multiple risk factors, and the positive results were driven by event reductions in those with prior CVD events. A primary prevention effect in those at lower risk has not been demonstrated. For now, it may be reasonable to prescribe one of these drugs specifically to prevent cardiovascular events or mortality in people with type 2 diabetes with known CVD. Ongoing and future studies should shed more light on the potential cardiovascular effects of diabetes medications.
+Multiple risk factor reduction and the importance of assessing medication adherence
+In the Steno-2 Study,32 a target-driven, long-term, intensified intervention aimed at multiple risk factors in people with type 2 diabetes and microalbuminuria, the risk of cardiovascular and microvascular events was reduced by about 50 percent. This study demonstrated the value of comprehensively addressing CVD risk factors. Long-term follow-up of the participants found significant reductions in CVD deaths.33 Failure to take medication regularly as directed should be considered in people who do not meet blood pressure targets on multiple anti-hypertensive medications or show evidence of cholesterol lowering with statins. Using strategies to help people with diabetes take their medicines as directed can improve adherence and affect their clinical outcomes, productivity, and quality of life.34
+Resources
+Blood pressure management
+• National Heart, Lung, and Blood Institute: DASH Eating Plan
+Cardiovascular risk assessment
+• Atherosclerosis Risk in Communities Study: Coronary Heart Disease Risk Calculator • Diabetes Trials Unit: UKPDS Risk Engine for assessment of risk • ACC/AHA Heart Risk Calculator
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+58
+
+Tobacco use cessation
+• Community Preventive Services Task Force: Tobacco Use and Secondhand Smoke Exposure:
+Incentives and Competitions to Increase Smoking Cessation Among Workers
+• National Cancer Institute:
+• www.smokefree.gov • 1-877-44U-QUIT • 1-800-QUIT-NOW (1-800-784-8669)
+References
+1. Fox CS, Hill Golden S, Anderson C, et al. Update on prevention of cardiovascular disease in adults with type 2 diabetes mellitus in light of recent evidence: A scientific statement from the American Heart Association and the American Diabetes Association. Circulation. 2015;132(8):691-718.
+2. Barrett-Connor E, Wingard D, Wong N, Goldberg R. Heart disease and diabetes. In: Diabetes in America, 3rd ed. Cowie CC, Casagrande SS, Menke A, et al, Eds. Bethesda, MD: National Institutes of Health; 2017:18-1-18-30. www.niddk.nih.gov/about-niddk/strategic-plans-reports/ diabetes-in-america-3rd-edition. Accessed May 17, 2018.
+3. American Diabetes Association. Standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Suppl 1):S86-104.
+4. De Ferranti SC, de Boer IH, Fonseca V, et al. Type 1 diabetes mellitus and cardiovascular disease: a scientific statement from the American Heart Association and American Diabetes Association. Diabetes Care. 2014;37(10):2843-2863.
+5. Lewington S, Clarke R, Qizilbash N, et al. Age-specific relevance of usual blood pressure to vascular mortality: a meta-analysis of individual data for one million adults in 61 prospective studies. Lancet. 2002;360(9349):1903-1913.
+6. UK Prospective Diabetes Study (UKPDS) Group. Tight blood pressure control and risk of macrovascular and microvascular complications in type 2 diabetes: UKPDS 38. BMJ. 1998;317(7160):703-713.
+7. Thomopoulos C, Parati G, Zanchetti A. Effects of blood-pressure-lowering treatment on outcome incidence in hypertension: 10 - Should blood pressure management differ in hypertensive patients with and without diabetes mellitus? Overview and meta-analyses of randomized trials. Journal of Hypertension. 2017;35(5):922-944.
+8. Bangalore S, Fakheri R, Toklu B, Messerli FH. Diabetes mellitus as a compelling indication for use of renin angiotensin system blockers: systematic review and meta-analysis of randomized trials. BMJ. 2016;352:i438.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+59
+
+9. Brunström M, Carlberg B. Effect of antihypertensive treatment at different blood pressure levels in patients with diabetes mellitus: systematic review and meta-analyses. BMJ. 2016;352:i717.
+10. Cushman WC, Evans GW, Byington RP, et al. Effects of intensive blood-pressure control in type 2 diabetes mellitus. The New England Journal of Medicine. 2010;362(17):1575-1585.
+11. McBrien K, Rabi DM, Campbell N, et al. Intensive and standard blood pressure targets in patients with type 2 diabetes mellitus: systematic review and meta-analysis. Archives of Internal Medicine. 2012;172(17):1296-1303.
+12. The SPRINT Research Group. A randomized trial of intensive versus standard blood-pressure control. The New England Journal of Medicine. 2015;373(22)2103-2116.
+13. Whelton PK, Carey RM, Aronow WS, et al. 2017 ACC/AHA/AAPA/ABC/ ACPM/AGS/APhA/ASH/ ASPC/NMA/PCNA Guideline for the Prevention, Detection, Evaluation, and Management of High Blood Pressure in Adults: Executive Summary: A Report of the American College of Cardiology/American Heart Association Task Force on Clinical Practice Guidelines. Journal of the American College of Cardiology. 2018;71(19):2199-2269.
+14. American Diabetes Association. 9. Cardiovascular disease and risk management: standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Supplement 1):S86-S104.
+15. Eckel RH, Jakicic JM, Ard JD, et al. 2013 AHA/ACC Guideline on lifestyle management to reduce cardiovascular risk: a report of the American College of Cardiology/American Heart Association task force on practice guidelines. Circulation. 2013;129(25 Suppl 2):S76-99.
+16. The ACCORD Study Group. Effects of combination lipid therapy in type 2 diabetes mellitus. The New England Journal of Medicine. 2010;362(17):1563-1574.
+17. Boden WE, Probstfield JL, Anderson T, et al. Niacin in patients with low HDL cholesterol levels receiving intensive statin therapy. The New England Journal of Medicine. 2011;365(24):2255-2267.
+18. Sabatine MS, Giugliano RP, Keech AC, et al. Evolocumab and clinical outcomes in patients with cardiovascular disease. The New England Journal of Medicine. 2017;376(18):1713-1722.
+19. Cannon CP, Blazing MA, Giugliano RP, et al. Ezetimibe added to statin therapy after acute coronary syndromes. The New England Journal of Medicine. 2015;372(25):2387-2397.
+20. Simpson SH, Gamble JM, Mereu L, Chambers T. Effect of aspirin dose on mortality and cardiovascular events in people with diabetes: a meta-analysis. Journal of General Internal Medicine. 2011;26(11):1336-1344.
+21. Pignone M, Alberts MJ, Colwell JA, et al. Aspirin for primary prevention of cardiovascular events in people with diabetes: a position statement of the American Diabetes Association, a scientific statement of the American Heart Association, and an expert consensus document of the American College of Cardiology Foundation. Diabetes Care. 2010;33(6):1395-1402.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+60
+
+22. Grundy SM, Benjamin IJ, Burke GL, et al. Diabetes and cardiovascular disease: a statement for healthcare professionals from the American Heart Association. Circulation. 1999;100(10):1134-1146.
+23. Piano MR, Benowitz NL, FitzGerald GA, et al. Impact of smokeless tobacco products on cardiovascular disease: implications for policy, prevention, and treatment--a policy statement from the American Heart Association. Circulation. 2010;122(15):1520-1544.
+24. Azoulay L, Suissa S. Sulfonylureas and the risks of cardiovascular events and death: a methodological meta-regression analysis of the observational studies. Diabetes Care. 2017;40(5):706-714.
+25. Gerstein HC, Bosch J, Dagenais GR, et al. Basal insulin and cardiovascular and other outcomes in dysglycemia. The New England Journal of Medicine. 2012;367(4):319-328.
+26. Nissen SE, Wolski K. Effect of rosiglitazone on the risk of myocardial infarction and death from cardiovascular causes. The New England Journal of Medicine. 2007; 356:2457-2471.
+27. Home PD, Pocock SJ, Beck-Nielsen H, et al. Rosiglitazone evaluated for cardiovascular outcomes in oral agent combination therapy for type 2 diabetes (RECORD): a multicentre, randomised, open-label trial. Lancet. 2009;373(9681):2125-2135.
+28. Zinman B, Wanner C, Lachin JM, et al. Empagliflozin, cardiovascular outcomes, and mortality in type 2 diabetes. The New England Journal of Medicine. 2015;373(22):2117-2128.
+29. Neal B, Perkovic V, Mahaffey KW, et al. Canagliflozin and cardiovascular and renal events in type 2 diabetes. The New England Journal of Medicine. 2017;377(7):644-657.
+30. Marso SP, Daniels GH, Brown-Frandsen K, et al. Liraglutide and cardiovascular outcomes in type 2 diabetes. The New England Journal of Medicine. 2016;375(4):311-322.
+31. Marso, SP, Bain SC, Consoli a, et al. Semaglutide and cardiovascular outcomes in patients with type 2 diabetes. The New England Journal of Medicine. 2016;375(19):1834-1844.
+32. Gaede P, Vedel P, Larsen N, Jensen GV, Parving HH, Pedersen O. Multifactorial intervention and cardiovascular disease in patients with type 2 diabetes. The New England Journal of Medicine. 2003;348(5):383-393.
+33. Gaede P, Lund-Andersen H, Parving HH, Pedersen O. Effect of a multifactorial intervention on mortality in type 2 diabetes. The New England Journal of Medicine. 2008;358(6):580-591.
+34. Viswanathan M, Golin CE, Jones CD, et al. Interventions to improve adherence to selfadministered medications for chronic diseases in the United States: a systematic review. Annals of Internal Medicine. 2012;157(11):785-795.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 8
+
+61
+
+Guidelines, Position Statements, and Consensus Reports
+• 2013 ACC/AHA Guideline on the Treatment of Blood Cholesterol to Reduce Atherosclerotic
+Cardiovascular Risk in Adults: A Report of the American College of Cardiology/American Heart Association Task Force on Practice Guidelines
+• American Association of Clinical Endocrinologists and American College of Endocrinology.
+Clinical Practice Guidelines for Developing a Diabetes Mellitus Comprehensive Care Plan - 2015.
+• American Diabetes Association Standards of Care in Diabetes--2018: Cardiovascular Disease
+and Risk Management
+• American Geriatrics Society. Guidelines for Improving the Care of Older Adults with Diabetes
+Mellitus: 2013 Update and Supplemental Information.
+• The Obesity Society, American College of Cardiology, American Heart Association. Guidelines
+(2013) for Managing Overweight and Obesity in Adults.
+• Update on Prevention of Cardiovascular Disease in Adults With Type 2 Diabetes Mellitus in
+Light of Recent Evidence: A Scientific Statement From the American Heart Association and the American Diabetes Association. 2015.
+• USPST Final Recommendation Statement. Aspirin Use to Prevent Cardiovascular Disease and
+Colorectal Cancer: Preventive Medication
+• USPSTF Final Recommendation Statement. Statin Use for the Primary Prevention of
+Cardiovascular Disease in Adults: Preventive Medication
+• USPSTF Final Recommendation Statement. Tobacco Smoking Cessation in Adults, Including
+Pregnant Women: Behavioral and Pharmacotherapy Interventions
+• VA/DoD Clinical Practice Guideline for the Management of Type 2 Diabetes Mellitus in Primary
+Care - 2017.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+62
+
+PRINCIPLE 9:
+Detect and Monitor Diabetes Microvascular Complications and Provide Treatment to Slow Their Progression
+
+Nephropathy
+Diabetes is the leading cause of end-stage renal disease (ESRD). Intensive glucose control has been shown to reduce onset and progression of nephropathy in type 1 and type 2 diabetes, and blood pressure reduction decreases onset and progression in type 2.1-6 While blood pressure control is important for all people with diabetes and hypertension, it is particularly imperative in people with diabetic nephropathy, to prevent progression of nephropathy and because nephropathy is a risk factor for cardiovascular disease (CVD). Early recognition of kidney damage in people with diabetes allows for preventive measures to slow or prevent progressive loss of kidney function.
+Use of angiotensin converting enzyme (ACE) inhibitors or angiotensin receptor blockers (ARBs) to lower systolic blood pressure in people with diabetes, hypertension, and albuminuria slows the rise in levels of albuminuria and the progression to chronic kidney disease.7-9 Use of ACE or ARB therapy in nonhypertensive people with lower levels of albuminuria (30 to 300 mg/g creatinine) is less well supported by the literature, and there is evidence that these drugs do not prevent onset of albuminuria in normotensive individuals.10 Two randomized trials have shown that the combination of an ACE inhibitor and an ARB does not improve cardiovascular or renal outcomes, but causes more hyperkalemia and acute kidney injury.11,12 ACE inhibitors and ARBs are contraindicated in pregnancy, so their use in women of child-bearing potential requires caution.
+Persistent albuminuria is an early marker of diabetic kidney disease and is useful for monitoring progression and prognosis. Urine albumin excretion exceeding 30 mg/day, below what is detected by dipstick (equivalent to ~300 mg/day), is an early marker of diabetic nephropathy and a risk factor for CVD. Albuminuria increases with nephropathy progression. High levels of albuminuria are associated with rapid progression of kidney disease. However, decreased glomerular filtration rate (GFR) can occur in the absence of albuminuria in people with type 2 diabetes.10
+In recent cardiovascular outcome trials, several glucose-lowering drugs, including empagloflozin,13 canagliflozin,14 and liraglutide,15 have demonstrated benefits in biomarkers of kidney disease. The effects of specific classes of drugs on kidney health might be considered among other factors when making choices among medications for hyperglycemia.
+Nephropathy assessment
+• Annually assess urine albumin excretion in people with type 1 diabetes with diabetes duration
+of 5 years or more and in people with type 2 diabetes starting at diagnosis. Use the
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+63
+
+albumin-to-creatinine ratio in a random spot urine collection to assess urine albumin excretion. Results are reported as albumin in mg/g creatinine and are roughly equivalent to albumin excretion in mg/day. Confirm abnormal results on repeat testing.
+• Annually measure serum creatinine in all adults with diabetes regardless of the degree of
+urine albumin excretion. Use the serum creatinine to estimate GFR.
+Nephropathy management
+• Hyperglycemia and hypertension are major risk factors for the onset and progression of
+nephropathy. Multiple drugs are often required to control blood pressure. Individualize therapy based on risks and benefits. For more information about blood glucose and blood pressure control, refer to Principles 6 and 7.
+• Use an ACE inhibitor or an ARB to manage nonpregnant people with hypertension and
+albuminuria. People without hypertension and with urine albumin-to-creatinine ratio (UACR) higher than 300 mg/g should also receive an ACE inhibitor or ARB. For those without hypertension and with lower levels of albuminuria, one of these drugs might be used based on shared decision-making regarding the lack of strong evidence.
+• Do not use ACE inhibitors in combination with ARBs. • Do not use ACE inhibitors or ARBs in pregnant women, women considering pregnancy, or
+women at risk for unplanned pregnancy.
+• Refer people with more advanced kidney disease to a registered dietitian/registered dietitian
+nutritionist specializing in kidney disease to help moderate intake of dietary sodium, phosphorus, potassium, and protein as necessary.
+• Screen for anemia, malnutrition (e.g., low serum albumin), and mineral and bone disease
+(potassium, bicarbonate, calcium, phosphorus, and vitamin D deficiency) when the estimated GFR is less than 60 mL per minute per 1.73 m2.
+• Consider referral to a physician experienced in the care of kidney disease when there is
+uncertainty about the etiology of kidney disease (active urine sediment, heavy proteinuria, absence of retinopathy, or rapid decline in GFR), or when there are difficult management issues or advanced kidney disease.
+• Educate people with nephropathy about the progressive nature of kidney disease, the renal
+preservation benefits of optimal management of blood pressure and blood glucose, the importance of a low-sodium diet, and the potential need for renal replacement therapy.
+Retinopathy
+Diabetic retinopathy is the leading cause of blindness in working-age adults. Optimal glycemic management and blood pressure control can reduce risk of retinopathy or slow its progression.1,2,6,16
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+64
+
+Regular screening for retinopathy is important to identify people with diabetes at risk for vision loss who can benefit from interventions. Such screening should begin at the time of diagnosis in those with type 2 diabetes and 5 years after diagnosis in those with type 1 diabetes. Most guidelines recommend annual follow-up examinations. However, less frequent examinations (every 2 to 3 years) may be reasonable after prior normal examinations, depending on an individual's risk factors for development of significant retinopathy between screenings. These risk factors include diabetes duration, A1C, blood pressure, and patient understanding of and adherence to principles of good diabetes self-care.17,18
+In people with high-risk proliferative retinopathy (PDR) or clinically significant macular edema (CSME), laser photocoagulation therapy has been known for many years to reduce the risk of vision loss. More recently, intravitreal treatment with a vascular endothelial growth factor (VEGF) inhibitor has been shown to reduce risk of vision loss, improve vision, and improve patient quality of life in those with CSME or PDR.17
+Retinopathy assessment
+• Refer adults and children over 10 years of age with type 1 diabetes for an initial dilated and
+comprehensive eye examination by an eye care professional (optometrist or ophthalmologist) starting 3 to 5 years after the onset of diabetes.
+• Refer people with type 2 diabetes for an initial dilated and comprehensive eye examination
+by an eye care professional shortly after the diagnosis of diabetes.
+• Repeat dilated comprehensive eye examinations at least annually for persons with
+established retinopathy. Individualize the frequency and type of professional follow-up referral (such as to a retinal specialist) as needed. Consider less frequent examinations (every 2 to 3 years) following one or more normal eye examinations based on individual risk factors for development of significant retinopathy between examinations.
+• Because ocular complications of diabetes are myriad - including cataract, glaucoma, ocular
+surface disease, hypertensive retinopathy, retinal vascular occlusive disease, and ischemic optic neuropathy, all people with diabetes should have regular comprehensive eye examinations.
+• Eye care professionals should stress the importance of early, good glycemic control as a
+protective factor against the onset and progression of diabetic retinopathy and other ocular complications of diabetes, and should promptly communicate eye examination findings to the patient's primary care provider and/or endocrinologist.
+• The use of retinal photography with remote reading by experts may improve detection and
+management of sight-threatening diabetic retinopathy and has great potential in areas where qualified eye care professionals are not available. Photos are not a substitute for a comprehensive eye examination for conditions other than diabetic retinopathy (e.g., glaucoma and cataract), which should be performed at least initially and at intervals thereafter as recommended by an eye careprofessional.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+65
+
+Retinopathy management
+• Optimize the control of blood glucose, blood pressure, and blood lipids to reduce the risk for
+or slow the progression of retinopathy.
+• Promptly refer people with any level of macular edema, severe non-proliferative PDR, or any
+PDR to an ophthalmologist experienced in the management of retinal disease.
+• Retinopathy is not a contraindication to low-dose aspirin use for CVD prevention.
+Neuropathy
+Early recognition and appropriate management of neuropathy is important because a number of symptomatic treatment options exist for diabetic neuropathy. Most common among the neuropathies are chronic sensorimotor distal symmetric polyneuropathy (DPN) and autonomic neuropathy. Up to 50 percent of DPN patients may be asymptomatic and at risk of insensate injury to their feet. Autonomic neuropathy may involve every system in the body, and cardiovascular autonomic neuropathy causes substantial morbidity and is associated with increased mortality. Optimal glycemic control may slow progression of neuronal loss. Certain medications can treat pain from DPN, or specific symptoms of autonomic neuropathy (erectile dysfunction, gastroparesis, orthostatic hypotension), but do not alter the course of neuronal loss.19
+Metformin, the most commonly used medication for glycemic control in type 2 diabetes, has long been associated with low vitamin B12 levels. An analysis of participants in the Diabetes Prevention Program/Diabetes Prevention Program Outcomes Study showed that long-term use of metformin increased the risk of low or frankly deficient vitamin B12 levels, anemia, and, in those with low vitamin B12 levels, peripheral neuropathy.20
+Neuropathy assessment
+• Screen all people with diabetes for DPN or loss of protective sensation at diagnosis of type 2
+diabetes and 5 years after diagnosis of type 1 diabetes and at least annually thereafter, using simple clinical tests such as monofilament pressure sensation, pinprick sensation, vibration perception, and ankle reflexes.
+• Assess people found to have peripheral neuropathy for B12 and other vitamin deficiencies,
+alcohol use disorder, hypothyroidism, and heavy metal or toxin exposure.
+• Screen for signs and symptoms of cardiovascular autonomic neuropathy, such as resting
+tachycardia and orthostatic hypotension, in people with evidence of other microvascular or neuropathic complications.
+• Assess adults for symptoms of gastrointestinal neuropathy and genitourinary tract problems,
+including erectile dysfunction in men.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+66
+
+Neuropathy management
+• Optimize the control of blood glucose to reduce the risk for or slow the progression of
+neuropathy.
+• Ask about pain or bothersome paresthesias and, if present, consider medications for the
+relief of symptoms related to DPN.
+• Consider treatments for the relief of specific symptoms related to autonomic neuropathy
+(erectile dysfunction, gastroparesis, orthostatic hypotension).
+• Medications do not slow progression of neuropathy and must be carefully titrated, balancing
+reduction in symptoms against costs and side effects with the goal of improving quality of life. If medications are not sufficiently effective in relieving symptoms, discontinue them and consider trying another class.
+Foot Care
+Foot ulcers and lower extremity amputations are major causes of morbidity in people with diabetes. They are generally associated with both DPN and peripheral arterial disease. Additional risk factors include tobacco use, male gender, and presence of other diabetes complications, particularly ESRD. As discussed in Principle 8, canagliflozin is associated with increased risk of lower extremity amputation.14 Lower extremity amputations in people with diabetes are potentially preventable, and rates have been declining in recent years.21 Preventive strategies for foot ulcers and amputations include patient education about foot care, regular assessments of foot health, and appropriate referrals for high-risk patients.22 Referral to specialists may improve the management of high-risk feet. When the individual or health care team detects a foot ulcer, prompt referral to a foot specialist may prevent the development of osteomyelitis, a proximate cause of amputations.23
+Foot assessment and patient education
+• Starting at the time of diagnosis of type 2 diabetes and 5 years after diagnosis of type 1 diabetes,
+conduct a comprehensive foot examination at least annually. This includes inspection of the skin (dryness, sweating, fungal infection, cracking, ulceration, calluses, and blistering), inspection for foot deformities that increase the risk of ulcer (hammer toe, hallux valgus, loss of arch), tests for DPN and loss of protective sensation (vibration test, reflexes, monofilament test), assessment of pedal pulses, and assessment of the appropriateness of the individual's footwear.24
+• Provide general foot health education to all adults with diabetes, including preventive strategies
+such as appropriate footwear and tobacco cessation.
+• Provide enhanced education to adults with DPN or loss of protective sensation about self-care
+of the feet. This education includes advice regarding
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+67
+
+• daily foot inspection, skin and nail care, use of emollients, and avoidance of
+self-treatments that involve cutting or use of caustic materials on the feet.
+• avoiding going barefoot and always wearing appropriate shoes. General recommendations
+include shoes with a broad and square toe box, padded tongue, quality lightweight materials, and sufficient size to accommodate a cushioned insole. Use of custom therapeutic footwear may provide additional benefit to those at high risk due to foot deformities.
+• prompt reporting of blisters, abrasions, or other lesions of the feet.
+Referral of people with foot ulcers or high-risk conditions
+• Refer people with high-risk feet, including those with history of foot ulcer or amputation,
+major deformities such as Charcot feet, or current foot ulcers, to a foot care specialist for management and ongoing surveillance.
+Resources
+Nephropathy
+• National Institute of Diabetes and Digestive and Kidney Diseases: Glomerular Filtration Rate
+(GFR) Calculators
+• National Kidney Foundation Kidney Disease Outcomes Quality Initiative: Clinical Practice
+Guidelines and Clinical Practice Recommendations for Diabetes and Chronic Kidney Disease
+Neuropathy
+• American Academy of Neurology: Evidence-Based Guideline: Treatment of Painful Diabetic
+Neuropathy
+• American Diabetes Association:
+• Comprehensive Foot Examination and Risk Assessment • Diabetic Neuropathy: A Statement by the American Diabetes Association
+• Indian Health Service Division of Diabetes Treatment and Prevention: Diabetes Foot Care
+Training
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+68
+
+References
+1. de Boer IH, Sun W, Cleary PA, et al. Intensive diabetes therapy and glomerular filtration rate in type 1 diabetes. The New England Journal of Medicine. 2011;365(25):2366-2376.
+2. United Kingdom Prospective Diabetes Study Group. Intensive blood-glucose control with sulphonylureas or insulin compared with conventional treatment and risk of complications in patients with type 2 diabetes (UKPDS 33). Lancet. 1998;352(9131):837-853.
+3. Ismail-Beigi F, Craven T, Banerji MA, et al. Effect of intensive treatment of hyperglycaemia on microvascular outcomes in type 2 diabetes: an analysis of the ACCORD randomised trial. Lancet. 2010;376(9739):419-430.
+4. Emdin CA, Rahimi K, Neal B, et al. Blood pressure lowering in type 2 diabetes: a systematic review and metaanalysis. JAMA. 2015;313:603-615.
+5. ACCORD Study Group, Cushman WC, Evans GW, et al. Effects of intensive blood-pressure control in type 2 diabetes mellitus. The New England Journal of Medicine. 2010;362:1575-1585.
+6. UK Prospective Diabetes Study Group. Tight blood pressure control and risk of macrovascular and microvascular complications in type 2 diabetes: UKPDS 38. BMJ. 1998;317:703-713.
+7. Brenner BM, Cooper ME, de Zeeuw D, et al. Effects of losartan on renal and cardiovascular outcomes in patients with type 2 diabetes and nephropathy. The New England Journal of Medicine. 2001;345:861-869.
+8. Lewis EJ, Hunsicker LG, Bain RP, Rohde RD. The effect of angiotensin-converting-enzyme inhibition on diabetic nephropathy. The New England Journal of Medicine. 1993;329:1456-1462.
+9. Lewis EJ, Hunsicker LG, Clarke WR, et al. Renoprotective effect of the angiotensin-receptor antagonist irbesartan in patients with nephropathy due to type 2 diabetes. The New England Journal of Medicine. 2001;345:851-860.
+10. National Kidney Foundation Kidney Disease Outcomes Quality Initiative. NKF KDOQI Clinical Practice Guideline for Diabetes and CKD: 2012 Update. American Journal of Kidney Disease. 2012;60(5):850-886.
+11. ONTARGET Investigators, Yusuf S, Teo KK, et al. Telmisartan, ramipril, or both in patients at high risk for vascular events. The New England Journal of Medicine. 2008;358(15):1547-1559.
+12. Fried LF, Emanuele N, Zhang JG, et al. Combined angiotensin inhibition for the treatment of diabetic nephropathy. The New England Journal of Medicine. 2013;369(20):1892-1903.
+13. Wanner C, Inzucchi SE, Lachin JM, et al. Empagliflozin and progression of kidney disease in type 2 diabetes. The New England Journal of Medicine. 2016;375:323-334.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 9
+
+69
+
+14. Neal B, Perkovic V, Mahaffey KW, et al. Canagliflozin and cardiovascular and renal events in type 2 diabetes. The New England Journal of Medicine. 2017;377(7):644-657.
+15. Marso SP, Daniels GH, Brown-Frandsen K, et al. Liraglutide and cardiovascular outcomes in type 2 diabetes. The New England Journal of Medicine. 2016;375:311-322.
+16. Chew EY, Ambrosius WT, Davis MD, et al. Effects of medical therapies on retinopathy progression in type 2 diabetes. The New England Journal of Medicine. 2010;363(3):233-244.
+17. Solomon SD, Chew E, Duh EJ, et al. Diabetic retinopathy: a position statement by the American Diabetes Association. Diabetes Care. 2017; 40(3):412-418.
+18. Nathan DM, Bebu I, Lachin JM. Frequency of evidence-based screening for diabetic retinopathy. The New England Journal of Medicine. 2017;377(2):195.
+19. Pop-Busui R, Boulton AJ, Feldman EL, et al. Diabetic neuropathy: a position statement by the American Diabetes Association. Diabetes Care. 2017;40:136-154.
+20. Aroda VR, Edelstein SL, Goldberg RB, et al. Long-term metformin use and vitamin B12 deficiency in the Diabetes Prevention Program Outcomes Study. The Journal of Clinical Endocrinology and Metabolism. 2016;101(4):1754-1761.
+21. Yanfeng L, Burrows NR, Gregg EW, et al. Declining rates of hospitalization for nontraumatic lower-extremity amputation in the diabetic population aged 40 years or older: U.S., 1988- 2008. Diabetes Care. 2012;35(2):273-277.
+22. American Diabetes Association. 10. Microvascular complications and foot care: standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Supplement 1):S105-S118.
+23. Lipsky BA, Berendt AR, Cornia PB, et al. 2012 Infectious Diseases Society of America clinical practice guideline for the diagnosis and treatment of diabetic foot infections. Journal of the American Podiatric Medical Association. 2013;103(1):2-7.
+24. Boulton AJ, Armstrong DG, Albert SF, et al. Comprehensive foot examination and risk assessment. A report of the Task Force of the Foot Care Interest Group of the American Diabetes Association, with endorsement by the American Association of Clinical Endocrinologists. Diabetes Care. 2008;31(8):1679-1685.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+70
+
+PRINCIPLE 10:
+Consider the Needs of Special Populations with Diabetes
+
+Children and adolescents
+Diabetes is one of the most common chronic conditions in school-age children in the United States. About 193,000 youth under 20 years old have diabetes, 0.24 percent of all in this age group.1 The incidence of both type 1 and type 2 diabetes in youth is increasing.2 Type 1 diabetes accounts for nearly all diabetes in children under age 10. After age 10, type 1 is the most common form in U.S. youth overall, but type 2 is more common in new cases among minority groups, with the highest rates in American Indian youth. Distinction between type 1 and type 2 diabetes can be difficult, with growing rates of overweight and obesity in children with type 1 diabetes and with approximately 10 percent of adolescents with type 2 diabetes presenting with diabetic ketoacidosis.3
+Correct diagnosis is important for determining appropriate treatment. Children with onset of permanent diabetes prior to the age of 6 months should receive genetic testing, since nearly all have a monogenic form of diabetes, and many can be treated with sulfonylureas.4 Recognition of maturity-onset diabetes of the young (MODY) in older children or young adults with atypical forms of diabetes also has important implications for treatment and for diabetes diagnosis in family members.5
+The unique challenges and requirements for diabetes management in this age group must be addressed. Care of this group includes both patient and family and requires integration of diabetes management with the complicated physical and emotional growth needs of children and adolescents, as well as consideration of teens' emerging autonomy and independence. Ideally, diabetes care for children and teens should be provided by a team that can deal with these special medical, educational, nutritional, and behavioral issues. The team usually consists of a physician, diabetes educator, dietitian, social worker or psychologist, and school nurse, along with the patient and family. Planning for transition of care from parents to self and from pediatric to adult care professionals is essential during the vulnerable time as teens transition into adulthood.
+Youth with diabetes need self-management support. This support involves close communication and cooperation between the diabetes care team, school nurses, and other school personnel for optimal management, safety, and academic opportunities. The team, in partnership with the young person with diabetes and parents or other caregivers, needs to develop a personal diabetes management plan and daily schedule. The plan helps the child or teen follow a healthy meal plan, get regular physical activity (ideally, 60 minutes each day),4,6 check blood glucose levels, take insulin or oral medication as prescribed, and manage hyperglycemia and hypoglycemia. In children with type 1 diabetes, the most common problem encountered during physical activity is hypoglycemia. If possible, children and teens should check blood glucose levels before beginning
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+71
+
+a game or a sport and learn to prevent hypoglycemia. Family support for following the meal plan and setting up regular meal times is a key to success, especially if the child or teen is taking insulin.
+Diabetes is stressful for both children and their families. Parents should be alert for signs of depression or eating disorders or insulin omission to lose weight and should seek appropriate treatment. Depression is a common comorbidity, affecting youth with both type 1 and type 2 diabetes, and should be assessed at each visit. Mental health specialists with expertise in diabetes can support the health care team, assess young people with diabetes for depression and other psychosocial problems, and provide ongoing contact and support.
+Camps and local peer groups for children and teens with diabetes can provide positive role models and group activities. Peer encouragement often helps children perform diabetes-related tasks that they had been afraid to do previously and encourages independence in diabetes management.
+Talking with other children who have diabetes helps young people feel less isolated and less alone in having to deal with the demands of diabetes. Online social media resources have been successful in building diabetes communities for children and adolescents, although they primarily target children and youth with type 1 diabetes.
+Glycemic control is particularly challenging for adolescents. In selecting glycemic goals for youth with diabetes, health care teams should balance the long-term health outcome benefits of achieving a lower A1C against the risks of hypoglycemia and the burdens of intensive regimens in children and adolescents. Because the benefit of glycemic control may persist for decades with reduced rates of microvascular complications, it is important to provide access to and education about evolving technologies that support the management of type 1 diabetes. This includes advances in insulin pump and continuous subcutaneous glucose monitoring technologies.
+The Treatment Options for type 2 Diabetes in Adolescents and Youth (TODAY) study was a multicenter trial that examined the durability of glycemic control in 699 U.S. youth randomized to metformin, metformin plus rosiglitazone, or metformin plus an intensive lifestyle intervention for up to 6 years. The TODAY trial provided sobering evidence that type 2 diabetes in adolescents may be a more aggressive disease than that in adults. Poor beta cell function and rapid loss in glycemic control were seen in many participants, despite baseline duration of diabetes of less than one year.7 The degree of A1C-lowering after initial metformin use was a strong predictor of the durability of sustained glycemic control.8
+Youth with diabetes in the United States carry a substantial burden of diabetes complications and cardiovascular disease (CVD) risk factors, especially youth who are overweight or obese and those with type 2 diabetes. Substantial rates of diabetic kidney disease, retinopathy, and peripheral neuropathy support early monitoring of youth with diabetes for development of complications. Fourteen percent of youth with type 1 diabetes and 92 percent of youth with type 2 diabetes have more than two CVD risk factors.9,10 Overweight and obesity in children are
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+72
+
+strongly correlated with insulin resistance and associated hypertension and dyslipidemia, conditions that require intensive efforts to improve dietary intake and activity and to normalize body weight as a first-line approach. Pharmacologic treatment of hypertension should be initiated if blood pressure consistently exceeds the 95th percentile for age, sex, and height. Statin therapy is the preferred agent for treatment of dyslipidemia in children, but it is not approved for use in children less than 8 years old.
+Women of childbearing age
+Major congenital malformations remain the leading cause of mortality and serious morbidity in infants of mothers with pre-existing type 1 and type 2 diabetes. The risk of malformations appears to increase continuously with increasing maternal glycemia during the first 6 to 8 weeks of gestation. Of note, this period of organogenesis may have passed by the time the woman is aware she is pregnant, highlighting the importance of preconception care and planned pregnancies.
+In the TODAY trial of adolescents with type 2 diabetes, 10 percent of female participants got pregnant during the 6-year trial, despite active preconception counseling and access to contraception as part of the protocol. About 30 percent of these pregnancies were complicated by prematurity or fetal malformations, highlighting the serious consequences of pregnancy in the setting of uncontrolled diabetes11 and the fact that all post-pubertal girls should be considered to have childbearing potential.
+Intensive glycemic control and preconception planning have been shown to reduce the occurrence of these fetal losses and malformations. Therefore, all women with diabetes who have childbearing potential should receive
+• counseling about the importance of planning pregnancies • preconception care to achieve glucose control, and discontinuation of medications
+contraindicated in pregnancy, such as statins and angiotensin converting enzyme (ACE) inhibitors
+• care from a skilled multidisciplinary team including diabetes educators and registered
+dietitians/registered dietitian nutritionists experienced in the management of diabetes before and during pregnancy
+• support to maintain stable blood glucose values close to normal before and during pregnancy,
+as well as management of any existing long-term diabetic complications
+Women of childbearing age with a history of gestational diabetes mellitus (GDM), prediabetes, or obesity should be screened for type 2 diabetes prior to conception or very early in pregnancy.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+73
+
+Because of the risk of GDM to the mother and neonate, screening, diagnosis, and effective treatment are necessary. GDM increases infant macrosomia and adverse perinatal outcomes, including caesarean section, spontaneous preterm delivery, shoulder dystocia or birth injury, neonatal hypoglycemia, and need for intensive neonatal care.12 Women with a history of GDM are at lifelong increased risk for diabetes and need proactive long-term primary care management.13 The child of a GDM pregnancy is at increased risk for obesity and possible type 2 diabetes. See Principle 1 for more information about screening pregnant women for GDM and for subsequent diabetes screening for women with history of GDM.
+Older adults
+Because incidence of type 2 diabetes increases with age and because adults with both type 1 and type 2 diabetes have increasing life expectancies, older adults have a high prevalence of diabetes. More than 25 percent of people over the age of 65 (12 million) had diabetes in 2015.1 Older people with diabetes have higher rates of premature death, functional disability, and coexisting illnesses such as hypertension, coronary heart disease, and stroke than those without diabetes. Older adults with diabetes also are at greater risk than other older adults for multiple chronic conditions and for several common geriatric syndromes, such as polypharmacy, depression, cognitive impairment, urinary incontinence, injurious falls, and persistent pain. Older adults have higher rates of hypoglycemia than younger adults, even with the same therapies and treatment goals. Assessment of risk factors for hypoglycemia and events of hypoglycemia is an important part of the clinical care of older adults on insulin or sulfonylureas.14
+Older adults with diabetes are extremely heterogeneous with regard to duration of diabetes, functional status, number and extent of comorbid conditions, and cognitive function. Management goals must be individualized (see Principle 7). Consensus recommendations provide a framework incorporating consideration of health and life expectancy of older adults with diabetes in selecting treatment goals.15 Those who are healthy (few coexisting chronic illnesses, intact cognitive and functional status) might be treated to similar goals as younger adults. Those with intermediate health status might have less intensive goals, such as an A1C goal of less than 8 percent. Those with multiple major comorbidities, frailty, and/or significant cognitive impairment might be treated to goals that would reduce symptoms of hyperglycemia or prevent acute complications. Avoidance of hypoglycemia is particularly important for older adults.14 Decisions regarding treatment goals and strategies should be individualized and carried out in the context of shared decision-making with the patient and/or caregivers. Older adults with diabetes may be at increased risk of falls and other harm with overly aggressive blood pressure treatment.
+Older adults require special care in prescribing and monitoring therapy. Education and support, including nutrition therapy, can help older adults manage diabetes and coexisting chronic disease. Older adults are more likely to have comorbid conditions that may be worsened by, or contraindicate, use of certain glucose-lowering drugs. Advanced chronic kidney disease may
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+74
+
+preclude use of metformin, sulfonylureas, SGLT-2 inhibitors, and DPP-4 inhibitors, and is associated with increased risk of hypoglycemia from insulin. Thiazolidinediones (TZDs) cause fluid retention and may precipitate or worsen congestive heart failure. TZDs and potentially SGLT-2 inhibitors are associated with increased risk of osteoporotic fractures.16 Medications should be chosen carefully in view of the patient's comorbidities and started at the lowest dose and titrated up gradually until targets are reached, with discontinuation or dose reduction if side effects develop. Sulfonylureas should be used with caution in older adults, and the long-acting agents glyburide and chlorpropamide should not be used because of the hypoglycemic activity of their metabolites. Metformin may be considered first-line therapy in the elderly, but its use is precluded if estimated glomerular filtration rate (eGFR) is below 30 mL/min, and it must be used with caution and at reduced dose if eGFR is below 45 mL/min.
+Older adults with diabetes should maintain a current medication list for review by their clinicians. Polypharmacy increases the risk of drug side effects and drug interactions. Medication reconciliation, ongoing assessment of the indications for each medication, and assessment of medication adherence and barriers are needed at each visit. In addition, medications should be reviewed as a possible contributory factor if a person presents with depression, falls, cognitive impairment, or urinary incontinence.14
+High-risk racial and ethnic groups
+Certain racial and ethnic minorities have a higher prevalence of diabetes and greater burden of diabetes complications compared with Caucasians, highlighting the need to screen people who are at high risk of diabetes due to race or ethnicity (see Principle 1). More than half of Asian Americans and nearly half of Hispanic Americans with diabetes are undiagnosed.17 Despite medical advances and increasing access to medical care, disparities in health and health care persist.18-20
+To provide optimal diabetes care, the health care team needs to understand how people view and treat diabetes within their respective cultures. A practical approach to avoid stereotyping involves treating each patient encounter as unique and asking questions that elicit the individual's perspective on diagnosis and management, such as "What is hardest for you about having diabetes?" or "Why do you think this happened (e.g. diagnosis of diabetes, persistent hyperglycemia, hypoglycemia, signs of diabetes complications)?" This patient-centered approach enables collaboration and negotiation between the patient and health care team to develop and implement an effective diabetes management plan that addresses individual needs, beliefs, and customs. It is important to provide people with appropriate and culturally sensitive diabetes education materials.
+Members of some minority populations may be carriers of variant hemoglobins, which can alter some A1C test results. NGSP has information on which assays may have interference from variant hemoglobins. Discrepancies between measured A1C and glucose patterns should prompt
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+75
+
+consideration that the A1C assay may not be reliable for that individual. Even in the absence of variant hemoglobins, some studies suggest that African Americans have slightly higher A1C levels for the same mean glycemia than Caucasians.21,22 However, the possibility of a relatively small discordance in the relationship of A1C to blood glucose levels in some population subgroups does not mitigate the strong link between A1C and complications in all racial and ethnic groups and the imperative to address disparities in diabetes care, including attainment of A1C goals. Refer to Principle 7 for further discussion of the potential effects of race and variant hemoglobins on A1C.
+Resources
+Care of children and adolescents
+• Medical management recommendations for youth with or at risk for diabetes are summarized
+in several publications.4,21-24
+• National Diabetes Education Program (NDEP): Helping the Student with Diabetes Succeed:
+A Guide for School Personnel
+• American Academy of Pediatrics: Management of Newly Diagnosed Type 2 Diabetes Mellitus
+(T2DM) in Children and Adolescents
+• Academy of Nutrition and Dietetics: Kids Eat Right campaign • National Heart, Lung, and Blood Institute: We Can! (Ways to Enhance Children's Activity &
+Nutrition)
+• White House Task Force on Childhood Obesity Archives: Let's Move • T1D Exchange: Glu: an active and diverse type 1 diabetes online community • JDRF: TypeOneNation social network • Children with Diabetes, Inc.: CWD Chat Rooms
+Women of childbearing age
+• The American Congress of Obstetricians and Gynecologists:
+• ACOG Practice Bulletin No. 190. Obstetrics and Gynecology. 2018;131(2):406-408. • Practice Bulletin #60: Pregestational diabetes mellitus. Obstetrics and Gynecology.
+2005;105(3):675-685. (Reaffirmed 2016)
+• American Diabetes Association:
+• Standards of Medical Care in Diabetes--2018: Management of Diabetes in Pregnancy • Managing Preexisting Diabetes for Pregnancy
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+76
+
+Care of older adults
+• American Geriatrics Society/American Diabetes Association: Diabetes in Older Adults:
+A Consensus Report
+• American Diabetes Association:
+• Standards of Medical Care in Diabetes--2018: Older Adults • Management of diabetes in long-term care and skilled nursing facilities: a position
+statement of the American Diabetes Association
+• See Principle 3 for information about health literacy issues in older adults.
+Resources for high-risk racial and ethnic groups
+• National Diabetes Education Program: NDEP Health Information by Ethnicity • Agency for Healthcare Research and Quality: Honing Cultural and Linguistic Competence • Indian Health Service: Special Diabetes Program for Indians (SDPI) • National Institute of Diabetes and Digestive and Kidney Diseases: Sickle Cell Trait and Other
+Hemoglobinopathies and Diabetes (For Providers)
+• Office of Minority Health: Resource Center • NGSP: Information about appropriate assay methods to use for hemoglobin variants • See Principle 3 for information about health literacy issues in high-risk racial and ethnic groups.
+References
+1. Centers for Disease Control and Prevention. National Diabetes Statistics Report: Estimates of Diabetes and Its Burden in the United States, 2014. Atlanta, GA: U.S. Department of Health and Human Services; 2014.
+2. Mayer-Davis EJ, Lawrence JM, Dabelea D, et al. for the SEARCH for Diabetes in Youth Study. Incidence trends of type 1 and type 2 diabetes among youths, 2002-2012. The New England Journal of Medicine. 2017; 376(15):1419-1429.
+3. Nadeau KJ, Anderson BJ, Berg EG, et al. Youth-onset type 2 diabetes consensus report: current status, challenges, and priorities. Diabetes Care. 2016;39(9):1635-1642.
+4. American Diabetes Association. Standards of medical care in diabetes--2018. Diabetes Care. 2018;41(Suppl 1):S126--S136.
+5. Pihoker C, Gilliam LK, Ellard S, et al. Prevalence, characteristics and clinical diagnosis of maturity onset diabetes of the young due to mutations in HNF1A, HNF4A, and glucokinase: results for the SEARCH for Diabetes in Youth. The Journal of Clinical Endocrinology and Metabolism. 2013;98(10):4055-4062.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+77
+
+6. U.S. Department of Health and Human Services. Physical activity guidelines for Americans website. https://health.gov/paguidelines/. Published 2008. Accessed June 29, 2017.
+7. TODAY Study Group, Zeitler P, Hirst K, Pyle L, et al. A clinical trial to maintain glycemic control in youth with type 2 diabetes. The New England Journal of Medicine. 2012;366(24):2247-2256.
+8. Zeitler P, Hirst K, Copeland KC, et al.; TODAY Study Group. HbA1c after a short period of monotherapy with metformin identifies durable glycemic control among adolescents with type 2 diabetes. Diabetes Care. 2015;38(12):2285-2292.
+9. Rodriguez BL, Fujimoto WY, Mayer-Davis EJ, et al. Prevalence of cardiovascular disease risk factors in U.S. children and adolescents with diabetes: the SEARCH for Diabetes in Youth study. Diabetes Care. 2006;29(8):1891-1896.
+10. Dabelea D, Stafford, JM, Mayer-Davis EJ, et al. Association of type 1 diabetes vs type 2 diabetes diagnosed during childhood and adolescence with complications during teenage years and young adulthood. JAMA. 2017;317(8):825-835.
+11. Klingensmith GJ, Pyle L, Nadeau KJ, et al.; TODAY Study Group. Pregnancy outcomes in youth with type 2 diabetes: the TODAY study experience. Diabetes Care. 2016;39(1):122-129.
+12. Metzger BE, Lowe LP, Dyer AR, et al. Hyperglycemia and adverse pregnancy outcomes. The New England Journal of Medicine. 2008;358(19):1991-2002.
+13. Gabbe SG, Landon MB, Warren-Boulton E, Fradkin J. Promoting health after gestational diabetes: a National Diabetes Education Program call to action. Obstetrics and Gynecology. 2012;119(1):171-176.
+14. U.S. Department of Health and Human Services, Office of Disease Prevention and Health Promotion. National action plan for adverse drug event prevention: diabetes agents. https://health.gov/hcq/pdfs/ADE-Action-Plan-Diabetes-Agents.pdf. 2014. Accessed May 17, 2018.
+15. Kirkman MS, Briscoe VJ, Clark N, et al. Diabetes in older adults. Diabetes Care. 2012;35(12):2650-2664.
+16. Paschou SA, Dede AD, Anagnostis PG, et al. Type 2 diabetes and osteoporosis: a guide to optimal management. The Journal of Clinical Endocrinology and Metabolism. 2017;102(10):3621-3634.
+17. Menke A, Casagrande S, Geiss L, Cowie CC. Prevalence of and trends in diabetes among adults in the United States, 1988-2012. JAMA. 2015;314(10):1021-1029.
+18. Chow E, Foster H, Gonzalez V, McIver L. The disparate impact of diabetes on racial/ethnic minority populations. Clinical Diabetes. 2012;30(3):130-133.
+
+GUIDING PRINCIPLES FOR THE CARE OF PEOPLE WITH OR AT RISK FOR DIABETES | PRINCIPLE 10
+
+78
+
+19. Golden SH, Brown A, Cauley JA, et al. Health disparities in endocrine disorders: biological, clinical, and nonclinical factors--an Endocrine Society scientific statement. The Journal of Clinical Endocrinology and Metabolism. 2012;97(9):E1579-1639.
+20. U.S. Department of Health and Human Services, Agency for Healthcare Research and Quality. 2016 national quality and disparities report. https://nhqrnet.ahrq.gov/inhqrdr/reports/qdr. Accessed May 17, 2018.
+21. Herman WH. Are there clinical implications of racial differences in HbA1c? Yes, to not consider can do great harm! Diabetes Care. 2016;39(8):1458-1461.
+22. Bergenstal RM, Gal RL, Connor CG, et al. Racial differences in the relationship of glucose con centrations and hemoglobin A1c levels. Annals of Internal Medicine. 2017;167(2):95-102.
+23. Copeland KC, Silverstein J, Moore KR, et al. Management of newly diagnosed type 2 diabetes mellitus (T2DM) in children and adolescents. Pediatrics. 2013;131(2):364-382.
+24. Riley M, Bluhm B. High blood pressure in children and adolescents. American Family Physician. 2012;85(7):693-700.
+
+National Diabetes Education Program 1-800-860-8747; TTY: 1-866-569-1162 www.niddk.nih.gov August 2018
+The U.S. Department of Health and Human Services' National Diabetes Education Program (NDEP) is jointly sponsored by the National Institutes o f
+Health (NIH) and the Centers for Disease Control and Prevention (CDC) with the support of more than 200 partner organizations.
+This information is not copyrighted.  The NIDDK encourages people to share this content freely.
