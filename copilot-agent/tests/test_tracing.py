@@ -7,7 +7,9 @@ exporter, so what is asserted on is exactly what would have been sent.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -218,3 +220,245 @@ def test_tracing_off_by_default_leaves_the_span_seam_intact(client: TestClient, 
     accepted = post_bundle(client, fixture_payload)
     status_code, _, events = read_events(client, accepted["bundle_id"], ticket_for(accepted))
     assert status_code == 200 and events[-1][0] == "complete"
+
+
+# --------------------------------------------------------------------------- #
+# Export-stage masking (``mask_otel_spans``)
+#
+# The legacy ``mask=`` hook only sees payloads the Langfuse SDK itself sets.
+# Week 2 adds LangGraph, whose spans come from third-party OpenTelemetry
+# instrumentation and never pass through it. ``mask_otel_spans`` runs in the
+# exporter, so it covers every span this client exports, whatever created it.
+# --------------------------------------------------------------------------- #
+
+
+def _otel_span_data(attributes: dict[str, Any], *, name: str = "call_model", scope: str = "openinference.instrumentation.langchain") -> Any:
+    from langfuse.types import OtelSpanData, OtelSpanIdentifier
+
+    identifier = OtelSpanIdentifier(trace_id="0" * 32, span_id="1" * 16)
+    data = OtelSpanData(
+        trace_id=identifier.trace_id,
+        span_id=identifier.span_id,
+        parent_span_id=None,
+        name=name,
+        instrumentation_scope_name=scope,
+        instrumentation_scope_version=None,
+        attributes=dict(attributes),
+        resource_attributes={"service.name": "copilot-agent"},
+    )
+    return identifier, data
+
+
+def _masked_otel_attributes(attributes: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+    """Run the export-stage mask over one span's attributes and return what would be exported."""
+    from langfuse.types import MaskOtelSpansParams, MaskOtelSpansResult
+
+    identifier, data = _otel_span_data(attributes, **kwargs)
+    result = observability.mask_otel_spans(params=MaskOtelSpansParams(spans={identifier: data}))
+    assert isinstance(result, MaskOtelSpansResult)
+    patch = result.span_patches.get(identifier)
+    exported = dict(attributes)
+    if patch is not None:
+        for key in patch.delete_attributes:
+            exported.pop(key, None)
+        exported.update(patch.set_attributes)
+    return exported
+
+
+def test_configure_tracing_installs_the_export_stage_mask(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client masks at export, blocks foreign instrumentation, and exports through exactly one exporter."""
+    exporter = InMemorySpanExporter()
+    public_key = f"pk-lf-test-{uuid4().hex}"
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    assert observability.configure_tracing(
+        enabled=True,
+        public_key=public_key,
+        secret_key="sk-lf-test",
+        base_url="http://127.0.0.1:9",
+        span_exporter=exporter,
+    )
+    try:
+        resources = observability._langfuse._resources  # noqa: SLF001 - asserting on what was handed to the SDK
+        assert resources.mask_otel_spans is observability.mask_otel_spans
+        assert resources.mask is None  # the legacy hook is gone: it never saw third-party spans
+
+        # ADR-001 section 10.3: never add a second exporter - any other exporter receives an unmasked
+        # copy. This client registers one processor, and its exporter is the masking one wrapping ours.
+        processors = resources.tracer_provider._active_span_processor._span_processors  # noqa: SLF001
+        ours = [p for p in processors if getattr(p, "public_key", None) == public_key]
+        assert len(ours) == 1, [type(p).__name__ for p in ours]
+        masking_exporter = ours[0].span_exporter
+        assert type(masking_exporter).__name__ == "LangfuseTransformingSpanExporter"
+        assert masking_exporter._exporter is exporter  # noqa: SLF001 - the one and only sink
+
+        # ADR-001 section 10.3: the OTel-native SDK captures any other in-process instrumentation.
+        # None is installed here; anything found is refused before export rather than trusted to the mask.
+        assert observability.foreign_instrumentation_scopes() == []
+        assert resources.should_export_span is observability.should_export_span
+    finally:
+        observability.shutdown_tracing()
+
+
+def test_unvouched_instrumentation_is_refused_before_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    def span(scope: str) -> Any:
+        return SimpleNamespace(instrumentation_scope=SimpleNamespace(name=scope), attributes={"gen_ai.system": "anthropic"})
+
+    assert observability.should_export_span(span("langfuse-sdk"))
+    assert observability.should_export_span(span("openinference.instrumentation.langchain"))
+    monkeypatch.setattr(observability, "_blocked_scopes", frozenset({"opentelemetry.instrumentation.requests"}))
+    assert not observability.should_export_span(span("opentelemetry.instrumentation.requests"))
+    assert observability.should_export_span(span("langfuse-sdk"))
+
+
+def test_export_mask_allow_lists_langfuse_structure_and_masks_third_party_attributes() -> None:
+    """A LangGraph/OpenInference span carries graph state under its own attribute keys: none of it survives."""
+    puuid = "3b9d2c1a-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+    exported = _masked_otel_attributes(
+        {
+            # third-party instrumentation keys - the legacy ``mask=`` never sees these
+            "input.value": '{"document_text": "Hemoglobin A1c 8.9 % - Whitfield, Evelyn R."}',
+            "output.value": "Continue metformin. Repeat HbA1c in three months.",
+            "gen_ai.prompt.0.content": "PATIENT: Whitfield, Evelyn R.  DOB: 1981-03-14",
+            "langgraph.state.patient_uuid": puuid,
+            "metadata": '{"thread_id": "abc", "mrn": "7"}',
+            "lab.result.value": 8.9,
+            # Langfuse structure: types, codes and counts, safe to keep
+            "langfuse.observation.type": "generation",
+            "langfuse.observation.level": "DEFAULT",
+            "langfuse.observation.usage_details": '{"input": 10, "output": 5}',
+            "langfuse.observation.cost_details": '{"total": 0.0}',
+            "langfuse.environment": "development",
+            # Langfuse metadata keeps the week-1 allow-list semantics
+            "langfuse.observation.metadata.outcome": "ok",
+            "langfuse.observation.metadata.duration_ms": 41,
+            "langfuse.observation.metadata.plan_text": "Continue metformin.",
+            "langfuse.observation.metadata.patient_uuid": puuid,
+        }
+    )
+    for key in ("input.value", "output.value", "gen_ai.prompt.0.content", "langgraph.state.patient_uuid", "metadata", "lab.result.value"):
+        assert exported[key] == MASKED, key
+    assert exported["langfuse.observation.metadata.plan_text"] == MASKED
+    assert exported["langfuse.observation.metadata.patient_uuid"] == MASKED
+    assert exported["langfuse.observation.type"] == "generation"
+    assert exported["langfuse.observation.level"] == "DEFAULT"
+    assert exported["langfuse.observation.usage_details"] == '{"input": 10, "output": 5}'
+    assert exported["langfuse.observation.metadata.outcome"] == "ok"
+    assert exported["langfuse.observation.metadata.duration_ms"] == 41
+    assert exported["langfuse.environment"] == "development"
+
+
+def test_export_mask_replaces_model_io_and_honours_the_capture_escape_hatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    io = {"langfuse.observation.input": '{"prompt": "Continue metformin"}', "langfuse.observation.output": '"HbA1c 8.9 %"'}
+    exported = _masked_otel_attributes(io)
+    assert exported["langfuse.observation.input"] == json.dumps(MASKED)
+    assert exported["langfuse.observation.output"] == json.dumps(MASKED)
+
+    monkeypatch.setattr(observability, "_capture_io", True)  # synthetic-data evaluation runs only
+    assert _masked_otel_attributes(io) == io
+
+
+def test_capture_io_cannot_be_enabled_in_a_production_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The escape hatch is loud and refused outside development: an accidental production flag must not open it."""
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    for environment, expected in (("development", True), ("production", False), ("prod", False), ("staging-production", False)):
+        observability.configure_tracing(
+            enabled=True,
+            public_key=f"pk-lf-test-{uuid4().hex}",
+            secret_key="sk-lf-test",
+            base_url="http://127.0.0.1:9",
+            environment=environment,
+            capture_io=True,
+            span_exporter=InMemorySpanExporter(),
+        )
+        try:
+            assert observability.io_capture_enabled() is expected, environment
+        finally:
+            observability.shutdown_tracing()
+
+
+# --------------------------------------------------------------------------- #
+# The naming rule: ``mask_otel_spans`` cannot alter span names, span ids or
+# resource attributes (ADR-001 section 10.3), so those must be opaque by rule.
+# --------------------------------------------------------------------------- #
+
+
+def test_span_names_tool_names_and_thread_ids_must_be_opaque_identifiers() -> None:
+    for opaque in ("briefing", "extract", "turn_step", "tool", "find_results", "call_model", "3b9d2c1a-5e6f-4a7b-8c9d-0e1f2a3b4c5d", "node.route"):
+        assert observability.is_opaque_identifier(opaque), opaque
+    for phi in (
+        "note for Whitfield, Evelyn R.",
+        "HbA1c 8.9 %",
+        "extract Marcus Adeyemi, MD",
+        "DOB: 1981-03-14",
+        "metformin 500mg BID",
+        "",
+        "x" * 200,
+    ):
+        assert not observability.is_opaque_identifier(phi), phi
+
+
+def test_a_span_name_carrying_phi_is_caught_by_the_naming_rule(traced_client: TestClient, exporter: InMemorySpanExporter) -> None:
+    """The name never reaches the exporter: it is replaced, and the violation is logged without it."""
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    logger = observability.get_logger()  # the copilot logger does not propagate, so capture it directly
+    logger.addHandler(handler)
+    try:
+        with observability.span("note for Whitfield, Evelyn R.", cid=str(uuid4())) as attrs:
+            attrs["outcome"] = "ok"
+    finally:
+        logger.removeHandler(handler)
+
+    names = {s.name for s in _exported(exporter)}
+    assert observability.UNSAFE_NAME in names, names
+    assert not any("Whitfield" in n for n in names), names
+    events = [getattr(r, "event", "") for r in records]
+    assert "tracing.unsafe_span_name" in events, events
+    assert not any("Whitfield" in json.dumps(r.__dict__, default=str) for r in records)
+
+
+# --------------------------------------------------------------------------- #
+# Leak test: a realistic document payload through third-party instrumentation
+# --------------------------------------------------------------------------- #
+
+LAB_PDF = Path(__file__).resolve().parent.parent / "fixtures" / "documents" / "lab_hba1c_clean.pdf"
+
+# Verbatim strings from the synthetic lab PDF and a synthetic note. None may appear in an exported span.
+DOCUMENT_STRINGS = (
+    "Whitfield", "Evelyn", "1981-03-14", "Marcus Adeyemi", "NORTHSIDE CLINICAL LABORATORY",
+    "Hemoglobin A1c", "8.9", "164", "CLIA 45D2109876", "440 Cedar Street",
+)
+
+
+def test_no_document_text_base64_or_patient_identifier_reaches_an_exported_span(traced_client: TestClient, exporter: InMemorySpanExporter) -> None:
+    """A third-party-instrumented span carrying a whole lab document exports nothing readable."""
+    import base64
+
+    pdf_bytes = LAB_PDF.read_bytes()
+    pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
+    document_text = pdf_bytes.decode("latin-1")
+    note = "Plan: continue metformin 500mg BID. Repeat HbA1c in three months. - Whitfield, Evelyn R., DOB 1981-03-14"
+    puuid = "3b9d2c1a-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+
+    provider = observability._langfuse._resources.tracer_provider  # noqa: SLF001
+    tracer = provider.get_tracer("openinference.instrumentation.langchain")
+    with tracer.start_as_current_span("call_model") as graph_span:
+        graph_span.set_attribute("gen_ai.system", "anthropic")  # a gen_ai span, which the SDK exports by default
+        graph_span.set_attribute("input.value", json.dumps({"document_text": document_text, "note_text": note}))
+        graph_span.set_attribute("output.value", json.dumps({"results": [{"test": "Hemoglobin A1c", "value": "8.9", "unit": "%"}]}))
+        graph_span.set_attribute("langgraph.checkpoint.document_b64", pdf_b64)
+        graph_span.set_attribute("langgraph.state.patient_uuid", puuid)
+        graph_span.set_attribute("gen_ai.prompt.0.content", note)
+
+    spans = _exported(exporter)
+    assert any(s.name == "call_model" for s in spans), [s.name for s in spans]
+    for s in spans:
+        blob = json.dumps(dict(s.attributes), default=str)
+        for needle in DOCUMENT_STRINGS:
+            assert needle not in blob, (s.name, needle)
+        assert puuid not in blob, s.name
+        assert pdf_b64[:32] not in blob, s.name
+        assert "JVBERi0" not in blob, s.name  # the base64 prefix of any PDF
