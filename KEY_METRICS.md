@@ -41,6 +41,8 @@ Total eligible briefing requests
 
 Run in CI and on every model or prompt change. A build that fails a gate is not counted in §3 at all.
 
+> **Corrected 2026-09-23 (Week 2).** When written, no CI existed, so "Run in CI" described an intent rather than a fact. A GitLab `eval-gate` job now runs on every push and merge request ([`EVAL_GATE.md`](EVAL_GATE.md)), but it gates the **five boolean rubric categories over the 24-case golden set** — not every gate listed below, and not on a model- or prompt-change trigger, which does not exist. The gates below that the job does not cover are aspirations, not enforcement.
+
 | Gate | Definition | Threshold | Source of threshold | Action when missed |
 |---|---|---|---|---|
 | Checked-commitment recall | Labelled `lab_test` and `medication` commitments the extractor produced (verbatim span, correct kind) ÷ all labelled ones. `other` kinds are extracted but not checked, so not scored; no `critical` label exists in the fixtures | ≥ 0.85 | `tests/test_eval_fixtures.py` (live tier assertion) | Inspect missed commitment phrasings by kind; add labelled cases for them; adjust the extraction prompt only with the case in place |

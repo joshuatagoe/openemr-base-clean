@@ -23,7 +23,7 @@ All three are committed. Nothing is fetched at runtime.
 | **Baseline** | [`copilot-agent/evals/baseline.json`](copilot-agent/evals/baseline.json) |
 
 **Case count: 24, not yet the required 50.** Stated plainly rather than rounded
-up. The 24 cover boundary (13), missing/conflicting (7), regression (2),
+up. The 24 cover boundary (12), missing/conflicting (7), regression (2),
 adversarial (2) and invariant (1). The remaining cases land with the Week 2
 document-ingestion features they exercise; the gate mechanism is complete and
 case-count-independent.
@@ -52,14 +52,16 @@ artifact (retained 30 days) so a run can be inspected without re-running it.
 The runner is self-hosted (Windows, shell executor, LocalSystem) because
 `labs.gauntletai.com` provides no shared runners.
 
-### Optional local git hook
+### No git hook, deliberately
 
-Not required — CI is the gate. Hooks do not survive a clone, so if you want the
-check before push:
+`CR6` says "PR-blocking Git Hook", and the submission row says "Git Hook **or
+equivalent**". We use the equivalent, because a client-side hook cannot do the
+job the phrase describes: hooks block a *push* on one machine, while a merge
+request is server-side. Only CI can block an MR.
 
-```bash
-git config core.hooksPath .githooks
-```
+A hook would therefore be a second, weaker copy of the gate — bypassable with
+`--no-verify`, absent from a fresh clone, and one more thing to keep in step
+with the real one. There is nothing to install.
 
 ## 3. What it runs, and what makes it fail
 
