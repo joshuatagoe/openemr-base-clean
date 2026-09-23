@@ -1,0 +1,25 @@
+# GitLab CI — Week 2 eval gate (PRD CR6)
+#
+# The runner is a self-hosted Windows shell executor running as LocalSystem,
+# so per-user tooling is not on PATH. uv is installed per-user; the line below
+# is the whole cost of that choice.
+#
+# Gate logic deliberately does NOT live in this file. It lives in
+# scripts/eval_gate.sh so that a grader can run it with no CI and no runner:
+#   git clone && uv sync && ./scripts/eval_gate.sh
+# See W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md.
+
+default:
+  tags: [copilot-w2]
+  before_script:
+    - $env:PATH = "C:\Users\joshu\.local\bin;$env:PATH"
+
+stages:
+  - smoke
+
+smoke:
+  stage: smoke
+  script:
+    - Write-Output "runner alive"
+    - uv --version
+    - uv run python --version
