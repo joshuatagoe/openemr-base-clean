@@ -65,13 +65,22 @@ def _run_versions() -> dict[str, str]:
     Without this, a rate change cannot be told apart from a fixture change, a
     prompt change or a different commit.
     """
-    def _git(*args: str) -> str:
+    def _git(*args: str) -> str | None:
+        """Raw stdout, or None when git could not answer.
+
+        Deliberately does NOT substitute a placeholder for empty output: `git
+        status --porcelain` returns empty for a CLEAN tree, and an `or "unknown"`
+        fallback here made every run report dirty, since a non-empty placeholder
+        is truthy. A flag that is always "yes" is worse than no flag - it looks
+        like evidence while carrying none.
+        """
         try:
-            return subprocess.run(
+            done = subprocess.run(
                 ["git", *args], cwd=REPO, capture_output=True, text=True, timeout=10
-            ).stdout.strip() or "unknown"
+            )
+            return done.stdout.strip() if done.returncode == 0 else None
         except Exception:
-            return "unknown"
+            return None
 
     def _digest(*paths: Path) -> str:
         h = hashlib.sha256()
@@ -81,9 +90,13 @@ def _run_versions() -> dict[str, str]:
 
     cases = sorted((REPO / "fixtures" / "cases").glob("*.json"))
     prompts = REPO / "app" / "providers" / "prompt.py"
+
+    status = _git("status", "--porcelain")
+    dirty = "unknown" if status is None else ("yes" if status else "no")
+
     return {
-        "commit": _git("rev-parse", "--short", "HEAD"),
-        "dirty": "yes" if _git("status", "--porcelain") else "no",
+        "commit": _git("rev-parse", "--short", "HEAD") or "unknown",
+        "dirty": dirty,
         "fixture_set": f"{len(cases)} cases / {_digest(*cases)}",
         "prompt_version": _digest(prompts) if prompts.exists() else "unknown",
         "judge": "none (all rubrics deterministic)",
