@@ -6,6 +6,9 @@ from typing import Any
 
 from app.contracts import CommitmentKind
 from app.providers.base import (
+    ContentPart,
+    ParseResult,
+    TextPart,
     ModelCommitment,
     ModelExtractionOutput,
     ModelExtractionResult,
@@ -93,8 +96,22 @@ class FakeProvider:
         return True
 
     async def extract_commitments(self, plan_text: str) -> ModelExtractionResult:
-        self.calls.append(plan_text)
+        result = await self.parse_structured(
+            system="", content=[TextPart(text=plan_text)], schema=ModelExtractionOutput, max_tokens=1
+        )
+        return ModelExtractionResult(output=result.output, usage=result.usage)
+
+    async def parse_structured(
+        self,
+        *,
+        system: str,
+        content: list[ContentPart],
+        schema: type[Any],
+        max_tokens: int,
+        effort: str | None = None,
+    ) -> ParseResult[Any]:
+        self.calls.append("\n".join(p.text for p in content if isinstance(p, TextPart)))
         item = self._script.pop(0) if len(self._script) > 1 else self._script[0]
         if isinstance(item, Exception):
             raise item
-        return ModelExtractionResult(output=item, usage=fake_usage())
+        return ParseResult(output=item, usage=fake_usage())

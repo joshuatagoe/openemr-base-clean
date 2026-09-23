@@ -20,11 +20,16 @@ import anthropic
 from pydantic import ValidationError
 
 from app.providers.base import (
+    ContentPart,
+    DocumentPart,
     MalformedModelOutputError,
     ModelExtractionOutput,
     ModelExtractionResult,
     ModelTurnAnswer,
     ModelUsage,
+    ParseResult,
+    SchemaT,
+    TextPart,
     ProviderAuthenticationError,
     ProviderConfigurationError,
     ProviderError,
@@ -78,19 +83,73 @@ class AnthropicProvider:
     def model(self) -> str:
         return self._settings.model_id_extraction
 
-    def build_request(self, plan_text: str) -> dict[str, Any]:
-        """Keyword arguments for ``messages.parse``. Exposed for request-construction tests."""
-        return {
-            "model": self._settings.model_id_extraction,
-            "max_tokens": self._settings.extraction_max_output_tokens,
-            "system": [{"type": "text", "text": EXTRACTION_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": build_user_content(plan_text)}],
-            "output_format": ModelExtractionOutput,
-            "output_config": {"effort": self._settings.extraction_effort},
-        }
+    @staticmethod
+    def _to_blocks(content: list[ContentPart]) -> list[dict[str, Any]]:
+        """Translate provider-neutral parts into Anthropic content blocks.
 
-    async def extract_commitments(self, plan_text: str) -> ModelExtractionResult:
-        request = self.build_request(plan_text)
+        This is the only place the vendor's content shape exists (dependency
+        inversion, ADR design principles).
+        """
+        blocks: list[dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, TextPart):
+                blocks.append({"type": "text", "text": part.text})
+            elif isinstance(part, DocumentPart):
+                block_type = "image" if part.media_type.startswith("image/") else "document"
+                blocks.append({
+                    "type": block_type,
+                    "source": {"type": "base64", "media_type": part.media_type, "data": part.data_base64},
+                })
+            else:  # pragma: no cover - the union is closed
+                raise ProviderConfigurationError("unsupported content part")
+        return blocks
+
+    def build_parse_request(
+        self,
+        *,
+        system: str,
+        content: list[ContentPart],
+        schema: type[Any],
+        max_tokens: int,
+        effort: str | None = None,
+    ) -> dict[str, Any]:
+        """Keyword arguments for ``messages.parse``. Exposed for request-construction tests."""
+        request: dict[str, Any] = {
+            "model": self._settings.model_id_extraction,
+            "max_tokens": max_tokens,
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "messages": [{"role": "user", "content": self._to_blocks(content)}],
+            "output_format": schema,
+        }
+        if effort is not None:
+            request["output_config"] = {"effort": effort}
+        return request
+
+    def build_request(self, plan_text: str) -> dict[str, Any]:
+        """Week 1 commitment-extraction request. Retained for existing tests."""
+        return self.build_parse_request(
+            system=EXTRACTION_SYSTEM_PROMPT,
+            content=[TextPart(text=build_user_content(plan_text))],
+            schema=ModelExtractionOutput,
+            max_tokens=self._settings.extraction_max_output_tokens,
+            effort=self._settings.extraction_effort,
+        )
+
+    async def parse_structured(
+        self,
+        *,
+        system: str,
+        content: list[ContentPart],
+        schema: type[SchemaT],
+        max_tokens: int,
+        effort: str | None = None,
+    ) -> ParseResult[SchemaT]:
+        request = self.build_parse_request(
+            system=system, content=content, schema=schema, max_tokens=max_tokens, effort=effort
+        )
+        return await self._parse(request, schema)
+
+    async def _parse(self, request: dict[str, Any], schema: type[SchemaT]) -> ParseResult[SchemaT]:
         started = time.perf_counter()
         try:
             async with gate.slot():
@@ -102,11 +161,11 @@ class AnthropicProvider:
         if response.stop_reason != "end_turn":
             raise MalformedModelOutputError(f"model stopped before completing structured output ({response.stop_reason})")
         parsed = response.parsed_output
-        if not isinstance(parsed, ModelExtractionOutput):
-            raise MalformedModelOutputError("model output did not match the extraction schema")
+        if not isinstance(parsed, schema):
+            raise MalformedModelOutputError("model output did not match the requested schema")
 
         usage = getattr(response, "usage", None)
-        return ModelExtractionResult(
+        return ParseResult(
             output=parsed,
             usage=ModelUsage(
                 provider=self.name,
@@ -117,6 +176,11 @@ class AnthropicProvider:
                 latency_ms=latency_ms,
             ),
         )
+
+    async def extract_commitments(self, plan_text: str) -> ModelExtractionResult:
+        """Week 1 convenience wrapper. Deliberately **not** a ``ModelProvider`` member."""
+        result = await self._parse(self.build_request(plan_text), ModelExtractionOutput)
+        return ModelExtractionResult(output=result.output, usage=result.usage)
 
     @staticmethod
     def _raise_mapped(exc: Exception) -> None:

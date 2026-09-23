@@ -407,7 +407,10 @@ async def test_anthropic_request_construction_uses_native_structured_output() ->
     assert kwargs["output_config"] == {"effort": "low"}
     assert kwargs["max_tokens"] == 2048
     assert kwargs["system"][0]["text"] == EXTRACTION_SYSTEM_PROMPT
-    assert kwargs["messages"] == [{"role": "user", "content": build_user_content(PLAN)}]
+    # Content-block form rather than a bare string: the same port now carries scanned
+    # documents, and a DocumentPart has no bare-string equivalent. The guarantee this
+    # line exists for is unchanged - the note appears only in the user turn.
+    assert kwargs["messages"] == [{"role": "user", "content": [{"type": "text", "text": build_user_content(PLAN)}]}]
     serialized = json.dumps({k: v for k, v in kwargs.items() if k != "output_format"}, default=str)
     assert "test-key-not-real" not in serialized
     assert "3b9d2c1e" not in serialized and "form_soap" not in serialized  # no patient / record identifiers

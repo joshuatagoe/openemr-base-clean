@@ -12,9 +12,10 @@ assigned in application code after validation and span verification.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Any, Generic, Literal, Protocol, TypeVar, runtime_checkable
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from app.contracts import CommitmentKind, MedicationAction, StatementKind, StrictModel
 
@@ -177,18 +178,75 @@ class MalformedModelOutputError(ProviderError):
 
 
 # --------------------------------------------------------------------------- #
+# Provider-neutral content
+#
+# The port must accept a scanned lab PDF as readily as a plan sentence, without
+# letting a vendor's content-block shape leak across the boundary. Each provider
+# translates these into its own wire format inside its own module.
+# --------------------------------------------------------------------------- #
+
+
+class TextPart(StrictModel):
+    """A span of plain text handed to the model."""
+
+    kind: Literal["text"] = "text"
+    text: str = Field(min_length=1)
+
+
+class DocumentPart(StrictModel):
+    """A whole document (PDF or image) handed to the model for visual reading."""
+
+    kind: Literal["document"] = "document"
+    media_type: str = Field(description="IANA media type, e.g. application/pdf or image/png.")
+    data_base64: str = Field(min_length=1, description="Base64-encoded bytes. Never logged.")
+
+
+ContentPart = TextPart | DocumentPart
+
+SchemaT = TypeVar("SchemaT", bound=BaseModel)
+
+
+@dataclass(frozen=True, slots=True)
+class ParseResult(Generic[SchemaT]):
+    """A schema-validated model output plus non-clinical call metadata."""
+
+    output: SchemaT
+    usage: ModelUsage
+
+
+# --------------------------------------------------------------------------- #
 # Port
 # --------------------------------------------------------------------------- #
 
 
 @runtime_checkable
 class ModelProvider(Protocol):
-    """Narrow, replaceable boundary: structured extraction and one tool-loop step."""
+    """Narrow, replaceable boundary: structured parsing and one tool-loop step.
+
+    Deliberately **four members**. Adding a document type (lab_pdf, intake_form,
+    referral fax) adds one schema and *zero* members here — otherwise every
+    implementation, including ``StubProvider``, grows a body per document type.
+    See ``W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md`` section "Design principles"
+    (interface segregation, open/closed). ``tests/test_provider_port.py`` fails
+    if this member set grows.
+    """
 
     name: str
 
-    async def extract_commitments(self, plan_text: str) -> ModelExtractionResult:
-        """Return the model's proposed commitments for ``plan_text`` or raise a ``ProviderError``."""
+    async def parse_structured(
+        self,
+        *,
+        system: str,
+        content: list[ContentPart],
+        schema: type[SchemaT],
+        max_tokens: int,
+        effort: str | None = None,
+    ) -> ParseResult[SchemaT]:
+        """Return an instance of ``schema`` built from ``content``, or raise a ``ProviderError``.
+
+        The caller owns the schema and the prompt; the provider owns only the
+        transport and the mapping of vendor failures onto ``ProviderError``.
+        """
         ...
 
     async def turn_step(
@@ -221,7 +279,11 @@ TurnStep.model_rebuild()
 
 
 __all__ = [
+    "ContentPart",
+    "DocumentPart",
     "MalformedModelOutputError",
+    "ParseResult",
+    "TextPart",
     "ModelCommitment",
     "ModelExtractionOutput",
     "ModelExtractionResult",
