@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 996 >>
+stream
+BT /F1 14 Tf 72 720 Td (NORTHSIDE CLINICAL LABORATORY) Tj ET
+BT /F1 8 Tf 72 700 Td (440 Cedar Street, Austin TX 78701  CLIA 45D2109876) Tj ET
+BT /F1 10 Tf 72 664 Td (PATIENT: Whitfield, Evelyn R.        DOB: 1981-03-14) Tj ET
+BT /F1 10 Tf 72 650 Td (MRN: 7          SEX: F) Tj ET
+BT /F1 10 Tf 72 636 Td (ORDERING PROVIDER: Marcus Adeyemi, MD) Tj ET
+BT /F1 10 Tf 72 622 Td (COLLECTED: 2026-09-12 08:15        REPORTED: 2026-09-13 06:40) Tj ET
+BT /F1 10 Tf 72 588 Td (TEST                          RESULT      UNITS     REFERENCE RANGE) Tj ET
+BT /F1 10 Tf 72 574 Td (--------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 558 Td (Hemoglobin A1c                8.#         %         4.0-5.6) Tj ET
+BT /F1 10 Tf 72 542 Td (Glucose, Fasting              1##         mg/dL     70-99) Tj ET
+BT /F1 10 Tf 72 526 Td (Creatinine                    0.9         mg/dL     0.6-1.1) Tj ET
+BT /F1 9 Tf 72 494 Td (Scan quality degraded; two results partially obscured.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001288 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1358
+%%EOF
