@@ -150,3 +150,34 @@ def test_no_configured_provider_degrades_rather_than_erroring() -> None:
         app.dependency_overrides.pop(get_settings, None)
     assert r.status_code == 200
     assert r.json()["degraded_reason"] == "provider_not_configured"
+
+
+# --------------------------------------------------------------------------- #
+# The answer prompt and the safety screen must agree
+#
+# Regression, found live in production on 2026-09-23: the prompt offered
+# "Guidance recommends individualising..." as its example of good attribution,
+# and the directive screen - Week 1's recommendation deny-list - rejects
+# "recommends". The model did as asked and its considerations were withheld.
+# The screen was right to stay strict; the prompt was wrong to contradict it.
+# --------------------------------------------------------------------------- #
+
+import re as _re  # noqa: E402
+
+from app.document_briefing import ANSWER_SYSTEM_PROMPT  # noqa: E402
+from app.verifier import RECOMMENDATION_PATTERN  # noqa: E402
+
+_ATTRIBUTION_LINE = next(line for line in ANSWER_SYSTEM_PROMPT.splitlines() if "by describing what it says" in line)
+
+
+@pytest.mark.parametrize("example", _re.findall(r'"([^"]+)"', _ATTRIBUTION_LINE))
+def test_every_attribution_example_in_the_prompt_passes_the_screen(example: str) -> None:
+    """If the prompt teaches a phrase, the screen must accept it."""
+    assert not RECOMMENDATION_PATTERN.search(example), f"prompt teaches {example!r}, which the screen rejects"
+
+
+@pytest.mark.parametrize("word", ["should", "recommend", "suggest", "advise", "consider", "must"])
+def test_the_prompt_names_every_word_the_screen_rejects(word: str) -> None:
+    """The model cannot avoid a word nobody told it about."""
+    assert _re.search(rf"\b{word}\b", ANSWER_SYSTEM_PROMPT, _re.I), f"prompt never warns against {word!r}"
+    assert RECOMMENDATION_PATTERN.search(word), f"{word!r} is no longer screened; update this list"

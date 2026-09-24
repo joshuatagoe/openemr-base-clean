@@ -807,7 +807,20 @@
             }
             const dropped = Array.isArray(b.dropped) ? b.dropped : [];
             if (dropped.length) {
-                this.output.appendChild(el('p', 'small text-warning mb-2', String(dropped.length) + ' statement(s) withheld — could not be verified against their sources.'));
+                // Say WHY each was withheld. A single generic sentence misstated the
+                // reason: a statement dropped for being phrased as an instruction was
+                // reported as "could not be verified against its sources".
+                const reasons = new Map();
+                dropped.forEach((d) => {
+                    const why = d && typeof d.detail === 'string' && d.detail
+                        ? d.detail
+                        : String((d && d.reason) || 'reason not given');
+                    reasons.set(why, (reasons.get(why) || 0) + 1);
+                });
+                this.output.appendChild(el('p', 'small text-warning mb-1', String(dropped.length) + ' statement(s) withheld before display:'));
+                const why = el('ul', 'small text-warning mb-2');
+                reasons.forEach((n, reason) => why.appendChild(el('li', null, String(n) + ' × ' + reason)));
+                this.output.appendChild(why);
             }
             this.renderProvenance(data.provenance);
         }

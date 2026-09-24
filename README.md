@@ -101,7 +101,7 @@ The document is stored by OpenEMR, not by the Co-Pilot: the module reads the pat
 | `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock. The panel's footer names whichever ran |
 | `COPILOT_BEDROCK_REGION` | `us-west-2` | Region where Cohere Rerank 3.5 access is enabled |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
-| `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Raise to `60` in production: the briefing makes two model calls (~18 s total) |
+| `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Per model call. Set `40` in production: the briefing makes two sequential calls (~18 s total), and 2 × 40 s stays inside the module's 90 s round-trip timeout |
 
 No new variable is needed on the OpenEMR side — the document route reuses `COPILOT_AGENT_URL` and `COPILOT_TICKET_SECRET`.
 
