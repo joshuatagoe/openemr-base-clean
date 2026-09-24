@@ -1,0 +1,53 @@
+#!/bin/sh
+# Week 2 eval gate, run before every commit (PRD CR6).
+#
+# Install (hooks do not survive a clone, so this is a deliberate one-off):
+#
+#     git config core.hooksPath .githooks
+#
+# Why a hook AND a CI job. CI blocks a merge; a hook blocks a commit. The
+# Week 2 grading note asked specifically to see a commit blocked:
+# "If I changed a prompt to where golden sets fail, I could expect that the
+# commit gets blocked until I fix it."  Both run the same script, so they
+# cannot disagree:
+#
+#     copilot-agent/scripts/eval_gate.py
+#
+# Bypass is `git commit --no-verify`, which is a deliberate act and shows in
+# no history -- which is exactly why CI runs the same gate server-side.
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root/copilot-agent" || exit 0
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "pre-commit: uv not on PATH; skipping the eval gate." >&2
+    echo "            CI still runs it, so this only delays the failure." >&2
+    exit 0
+fi
+
+echo "pre-commit: running the eval gate..."
+
+if uv run python scripts/eval_gate.py; then
+    exit 0
+fi
+
+cat >&2 <<'MSG'
+
+  COMMIT BLOCKED - the eval gate failed.
+
+  A rubric category regressed more than 5 points below the committed
+  baseline, or fell below its floor. The gate named the failing cases above.
+
+  Fix the regression, or - if the change is intended and the new numbers are
+  correct - re-measure and say why in the commit message:
+
+      cd copilot-agent
+      uv run python scripts/eval_gate.py --update-baseline
+
+  Moving the baseline is a claim that the new behaviour is better. It shows
+  as a diff for exactly that reason.
+
+MSG
+exit 1
