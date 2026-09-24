@@ -59,6 +59,7 @@ from app.contracts import (
     ReadyResponse,
     StreamEnvelope,
 )
+from app.document_briefing import DocumentBriefingRequest, DocumentBriefingResponse, build_reranker, run_document_briefing
 from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, configure_tracing, log_event, score, shutdown_tracing, span
 from app.metrics import metrics
@@ -663,6 +664,49 @@ async def conversation_turn(
 # --------------------------------------------------------------------------- #
 # Synchronous evaluation path (fixtures, eval harness, load tests)
 # --------------------------------------------------------------------------- #
+
+
+@app.post(
+    "/v1/documents/briefing",
+    response_model=DocumentBriefingResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["documents"],
+    responses={401: {"model": ErrorDetail}, 422: {"description": "Request failed contract validation"}},
+    openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentBriefingRequest"}}}, "required": True}},
+)
+async def document_briefing(
+    response: Response,
+    body: bytes = Depends(require_signed_body),
+    cfg: ServiceSettings = Depends(get_settings),
+    provider_factory: Callable[[], ModelProvider] = Depends(get_provider_factory),
+) -> DocumentBriefingResponse:
+    """Week 2: one stored lab document in, one grounded briefing out.
+
+    Signed exactly like ``/v1/bundles`` - the module is the only caller, and
+    the document never reaches the agent except through a verified signature.
+    A model failure degrades to a 200 with a fixed reason, as the Week 1
+    briefing does.
+    """
+    try:
+        request = DocumentBriefingRequest.model_validate_json(body)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from None
+    response.headers[CORRELATION_HEADER] = str(request.correlation_id)
+    try:
+        provider = provider_factory()
+    except ProviderError:
+        return DocumentBriefingResponse(
+            correlation_id=request.correlation_id,
+            patient_uuid=request.patient_uuid,
+            document_id=request.document_id,
+            status="degraded",
+            degraded_reason="provider_not_configured",
+        )
+    return await run_document_briefing(
+        request,
+        provider=provider,
+        reranker=build_reranker(cfg.reranker, region=cfg.bedrock_region),
+    )
 
 
 @app.post(

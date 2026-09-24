@@ -68,6 +68,12 @@ class ServiceSettings(BaseSettings):
 
     ticket_secret: SecretStr | None = Field(default=None, description="Shared HMAC/JWT key; never logged.")
     ticket_min_secret_length: int = Field(default=32, ge=16)
+    reranker: Literal["fake", "bedrock"] = Field(
+        default="fake",
+        description="Week 2 reranker. fake = deterministic, offline; bedrock = Cohere Rerank 3.5 via Amazon Bedrock "
+        "(needs AWS credentials). The panel shows which one ran.",
+    )
+    bedrock_region: str = Field(default="us-west-2", description="Region where Cohere Rerank 3.5 access is enabled.")
     bundle_ttl_seconds: int = Field(default=900, ge=60, le=3600, description="15 minutes by default.")
     signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
     briefing_timeout_seconds: float = Field(default=10.0, gt=0, le=60, description="Hard timeout before a degraded event.")

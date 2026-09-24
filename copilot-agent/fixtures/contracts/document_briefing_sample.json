@@ -1,0 +1,303 @@
+{
+  "correlation_id": "5343ead8-ac4d-4bec-9d46-9245a302b60d",
+  "patient_uuid": "a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7",
+  "document_id": 101,
+  "status": "ok",
+  "degraded_reason": null,
+  "briefing": {
+    "what_changed": [
+      {
+        "line_id": "changed-0",
+        "tier": "document_stated",
+        "text": "Hemoglobin A1c 8.9 % on 2026-09-12 appears in this document; the supplied records hold no earlier value.",
+        "document_citation": {
+          "source_type": "document",
+          "source_id": "101",
+          "page_or_section": "p. 1",
+          "field_or_chunk_id": "results[0].value",
+          "quote_or_value": "Hemoglobin A1c 8.9 % 4.0-5.6",
+          "page": null,
+          "bbox": null
+        },
+        "record_citation": null,
+        "computed": null,
+        "abnormal_flag": null,
+        "abnormal_flag_source": null,
+        "not_yet_in_chart": true,
+        "native_link": null
+      },
+      {
+        "line_id": "changed-1",
+        "tier": "document_stated",
+        "text": "Glucose, Fasting 164 mg/dL on 2026-09-12 appears in this document; the supplied records hold no earlier value.",
+        "document_citation": {
+          "source_type": "document",
+          "source_id": "101",
+          "page_or_section": "p. 1",
+          "field_or_chunk_id": "results[1].value",
+          "quote_or_value": "Glucose, Fasting 164 mg/dL 70-99",
+          "page": null,
+          "bbox": null
+        },
+        "record_citation": null,
+        "computed": null,
+        "abnormal_flag": null,
+        "abnormal_flag_source": null,
+        "not_yet_in_chart": true,
+        "native_link": null
+      },
+      {
+        "line_id": "changed-2",
+        "tier": "document_stated",
+        "text": "Creatinine 0.9 mg/dL on 2026-09-12 appears in this document; the supplied records hold no earlier value.",
+        "document_citation": {
+          "source_type": "document",
+          "source_id": "101",
+          "page_or_section": "p. 1",
+          "field_or_chunk_id": "results[2].value",
+          "quote_or_value": "Creatinine 0.9 mg/dL 0.6-1.1",
+          "page": null,
+          "bbox": null
+        },
+        "record_citation": null,
+        "computed": null,
+        "abnormal_flag": null,
+        "abnormal_flag_source": null,
+        "not_yet_in_chart": true,
+        "native_link": null
+      }
+    ],
+    "needs_attention": [
+      {
+        "line_id": "attention-0",
+        "tier": "computed",
+        "text": "Hemoglobin A1c 8.9 % is above the reference range printed on the document (4.0-5.6).",
+        "document_citation": {
+          "source_type": "document",
+          "source_id": "101",
+          "page_or_section": "p. 1",
+          "field_or_chunk_id": "results[0].value",
+          "quote_or_value": "Hemoglobin A1c 8.9 % 4.0-5.6",
+          "page": null,
+          "bbox": null
+        },
+        "record_citation": null,
+        "computed": {
+          "test_name": "Hemoglobin A1c",
+          "value": "8.9",
+          "unit": "%",
+          "reference_range": "4.0-5.6",
+          "direction": "above",
+          "rule": "the value was compared with the reference range printed on the source document"
+        },
+        "abnormal_flag": "H",
+        "abnormal_flag_source": "derived",
+        "not_yet_in_chart": true,
+        "native_link": null
+      },
+      {
+        "line_id": "attention-1",
+        "tier": "computed",
+        "text": "Glucose, Fasting 164 mg/dL is above the reference range printed on the document (70-99).",
+        "document_citation": {
+          "source_type": "document",
+          "source_id": "101",
+          "page_or_section": "p. 1",
+          "field_or_chunk_id": "results[1].value",
+          "quote_or_value": "Glucose, Fasting 164 mg/dL 70-99",
+          "page": null,
+          "bbox": null
+        },
+        "record_citation": null,
+        "computed": {
+          "test_name": "Glucose, Fasting",
+          "value": "164",
+          "unit": "mg/dL",
+          "reference_range": "70-99",
+          "direction": "above",
+          "rule": "the value was compared with the reference range printed on the source document"
+        },
+        "abnormal_flag": "H",
+        "abnormal_flag_source": "derived",
+        "not_yet_in_chart": true,
+        "native_link": null
+      }
+    ],
+    "what_to_consider": [
+      {
+        "consideration_id": "c1",
+        "tier": "guideline_supported",
+        "topic": "Diabetes self-management education and support (DSMES)",
+        "claim_kind": "care_process",
+        "text": "The guideline states that DSMES is an ongoing process and that engagement in DSMES has been shown to significantly decrease A1C by an average of 0.6 percent compared to usual care, with the greatest reductions in those with baseline A1C above 9 percent.",
+        "relevance": "This patient's Hemoglobin A1c of 8.9 % and fasting glucose of 164 mg/dL sit well above their reference ranges, placing them near the baseline range where the guidance describes the largest DSMES-associated A1C reductions.",
+        "facts": [
+          {
+            "text": "Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6)",
+            "tier": "document_stated",
+            "record_citation": null,
+            "document_citation": {
+              "source_type": "document",
+              "source_id": "101",
+              "page_or_section": "p. 1",
+              "field_or_chunk_id": "results[0].value",
+              "quote_or_value": "Hemoglobin A1c 8.9 % 4.0-5.6",
+              "page": null,
+              "bbox": null
+            },
+            "not_yet_in_chart": true
+          },
+          {
+            "text": "Glucose, Fasting 164 mg/dL (printed reference range 70-99)",
+            "tier": "document_stated",
+            "record_citation": null,
+            "document_citation": {
+              "source_type": "document",
+              "source_id": "101",
+              "page_or_section": "p. 1",
+              "field_or_chunk_id": "results[1].value",
+              "quote_or_value": "Glucose, Fasting 164 mg/dL 70-99",
+              "page": null,
+              "bbox": null
+            },
+            "not_yet_in_chart": true
+          }
+        ],
+        "citations": [
+          {
+            "source_type": "guideline",
+            "source_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::001",
+            "page_or_section": "Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - Provide Ongoing Self-management Education and Support for People with Diabetes",
+            "field_or_chunk_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::001",
+            "quote_or_value": "Effective self-management education and ongoing self-management support are essential to enable people with diabetes to make informed decisions and to assume responsibility for the day-to-day management of their disease and risk factors for complications.1-3 Definition and purpose of diabetes self-management education and self-management support (DSMES) DSMES is an ongoing process to facilitate a person's knowledge, skill, and ability for managing their own diabetes over the course of a lifetime. The DSMES process incorporates the needs, goals, and life experiences of the person with diabetes and is guided by evidence-based standards. Objectives are to support informed and shared decision-making, self-management behaviors, problem solving, and active collaboration with the health care team to improve clinical outcomes, health status, and quality of life. Self-management support involves health care professionals in activities that help people with diabetes to implement and sustain ongoing behaviors needed to manage their diabetes. These activities include behavioral, educational, psychosocial, and clinical support. Engagement in DSMES has been shown to significantly decrease A1C by an average of 0.6 percent compared to usual care, with the greatest reductions in those with baseline A1C above 9 percent.1",
+            "corpus_version": "v1.92cacddcc41697ad",
+            "publisher": "National Diabetes Education Program (NIH and CDC)",
+            "publication_year": 2018,
+            "population_scope": "General US adults in primary care",
+            "evidence_tier": "A"
+          }
+        ],
+        "uncertainty": "The magnitude cited is an average across programs, not a prediction for an individual."
+      },
+      {
+        "consideration_id": "c2",
+        "tier": "guideline_supported",
+        "topic": "Timing of DSMES needs assessment",
+        "claim_kind": "care_process",
+        "text": "Guidance advises that DSMES needs be assessed at new diagnosis, annually for health maintenance, when new complicating factors influence self-management, and at transitions in care, noting that self-directed behavioral goal setting, problem solving and motivational interviewing improve outcomes.",
+        "relevance": "A follow-up visit prompted by this patient's above-range Hemoglobin A1c of 8.9 % is one of the points at which the guidance frames a re-assessment of self-management needs.",
+        "facts": [
+          {
+            "text": "Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6)",
+            "tier": "document_stated",
+            "record_citation": null,
+            "document_citation": {
+              "source_type": "document",
+              "source_id": "101",
+              "page_or_section": "p. 1",
+              "field_or_chunk_id": "results[0].value",
+              "quote_or_value": "Hemoglobin A1c 8.9 % 4.0-5.6",
+              "page": null,
+              "bbox": null
+            },
+            "not_yet_in_chart": true
+          }
+        ],
+        "citations": [
+          {
+            "source_type": "guideline",
+            "source_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::004",
+            "page_or_section": "Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - How to provide self-management education and support",
+            "field_or_chunk_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::004",
+            "quote_or_value": "People with diabetes should receive DSMES according to national standards.5 No one education program or approach is \"best\"; however, strategies such as self-directed behavioral goal setting and problem solving improve outcomes.5 Motivational interviewing may help address individual barriers and readiness for change.5 Programs that address health literacy and are culturally and age-appropriate improve outcomes.6 Family members can potentially support and reinforce self-management education if they are included in the process. In addition to one-on-one encounters, approaches such as group visits, telehealth, and other technologies have been used effectively to provide education and support to people with diabetes. Providers should assess DSMES needs at the following times: (1) with a new diagnosis of diabetes, (2) annually for health maintenance, (3) when new complicating factors influence self-management, and (4) when transitions in care occur.4",
+            "corpus_version": "v1.92cacddcc41697ad",
+            "publisher": "National Diabetes Education Program (NIH and CDC)",
+            "publication_year": 2018,
+            "population_scope": "General US adults in primary care",
+            "evidence_tier": "A"
+          }
+        ],
+        "uncertainty": null
+      },
+      {
+        "consideration_id": "c3",
+        "tier": "guideline_supported",
+        "topic": "Affordability and food insecurity",
+        "claim_kind": "care_process",
+        "text": "The guideline notes that sensitive assessment of a person's ability to afford visits, laboratory tests, monitoring supplies and medications is essential, and that food insecurity and lack of consistent access to healthy foods may impair diabetes self-management.",
+        "relevance": "Persistently above-range results (Hemoglobin A1c 8.9 %, fasting glucose 164 mg/dL) may reflect resource barriers to self-management rather than only clinical factors in this patient.",
+        "facts": [
+          {
+            "text": "Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6)",
+            "tier": "document_stated",
+            "record_citation": null,
+            "document_citation": {
+              "source_type": "document",
+              "source_id": "101",
+              "page_or_section": "p. 1",
+              "field_or_chunk_id": "results[0].value",
+              "quote_or_value": "Hemoglobin A1c 8.9 % 4.0-5.6",
+              "page": null,
+              "bbox": null
+            },
+            "not_yet_in_chart": true
+          },
+          {
+            "text": "Glucose, Fasting 164 mg/dL (printed reference range 70-99)",
+            "tier": "document_stated",
+            "record_citation": null,
+            "document_citation": {
+              "source_type": "document",
+              "source_id": "101",
+              "page_or_section": "p. 1",
+              "field_or_chunk_id": "results[1].value",
+              "quote_or_value": "Glucose, Fasting 164 mg/dL 70-99",
+              "page": null,
+              "bbox": null
+            },
+            "not_yet_in_chart": true
+          }
+        ],
+        "citations": [
+          {
+            "source_type": "guideline",
+            "source_id": "ndep-guiding-principles-2018::principle-3-provide-comprehensive-patient-centered-diabetes-care::006",
+            "page_or_section": "Principle 3: Provide Comprehensive, Patient-centered Diabetes Care - Consideration of patient self-management resources, including ability to afford care",
+            "field_or_chunk_id": "ndep-guiding-principles-2018::principle-3-provide-comprehensive-patient-centered-diabetes-care::006",
+            "quote_or_value": "Diabetes is an expensive disease, both for society and for individuals. Sensitive assessment of a person's ability to afford office visits, laboratory and other tests, monitoring supplies, and medications is essential to providing patient-centered care. Even people with health insurance may have difficulty with high deductibles, large or multiple co-pays, and coverage gaps. Further, many patients do not have consistent, affordable access to healthy foods such as fresh fruits and vegetables. Food insecurity is common in the United States and may impair diabetes self-management and increase the risk for hypoglycemia.13 The challenge of living with limited resources may also increase chronic physiologic stress. Strategies to assist people with limited resources may include providing screenings in more accessible settings (e.g., retinal photography with remote reading), prescribing generic medications when possible, consideration of type of and delivery system for insulins, and assessing the frequency of home glucose monitoring in terms of maximum impact.",
+            "corpus_version": "v1.92cacddcc41697ad",
+            "publisher": "National Diabetes Education Program (NIH and CDC)",
+            "publication_year": 2018,
+            "population_scope": "General US adults in primary care",
+            "evidence_tier": "A"
+          },
+          {
+            "source_type": "guideline",
+            "source_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::006",
+            "page_or_section": "Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - Community-based and other resources",
+            "field_or_chunk_id": "ndep-guiding-principles-2018::principle-4-provide-ongoing-self-management-education-and-support-for-people-with-diabetes::006",
+            "quote_or_value": "Providing people with diabetes links to resources such as peers and community health workers, community-based health programs, and support groups can be beneficial.1, 3 For people with socioeconomic barriers to diabetes self-management (e.g., food insecurity or difficulty affording medications or supplies), consider referral to community social service organizations. Evidence of the effectiveness of technology-based support is increasing.7 Consider using technology as an adjunct to traditional DSMES for assessment, instruction, monitoring, feedback, and supporting behavior change and coping strategies.",
+            "corpus_version": "v1.92cacddcc41697ad",
+            "publisher": "National Diabetes Education Program (NIH and CDC)",
+            "publication_year": 2018,
+            "population_scope": "General US adults in primary care",
+            "evidence_tier": "A"
+          }
+        ],
+        "uncertainty": "The results give no information about this patient's socioeconomic circumstances."
+      }
+    ],
+    "limitations": [],
+    "dropped": [],
+    "refusal": null,
+    "corpus_version": "v1.92cacddcc41697ad"
+  },
+  "rendered_text": "What changed\n  - [document-stated] Hemoglobin A1c 8.9 % on 2026-09-12 appears in this document; the supplied records hold no earlier value.\n      not yet in the chart\n      document 101, p. 1, results[0].value, as printed: \"Hemoglobin A1c 8.9 % 4.0-5.6\"\n  - [document-stated] Glucose, Fasting 164 mg/dL on 2026-09-12 appears in this document; the supplied records hold no earlier value.\n      not yet in the chart\n      document 101, p. 1, results[1].value, as printed: \"Glucose, Fasting 164 mg/dL 70-99\"\n  - [document-stated] Creatinine 0.9 mg/dL on 2026-09-12 appears in this document; the supplied records hold no earlier value.\n      not yet in the chart\n      document 101, p. 1, results[2].value, as printed: \"Creatinine 0.9 mg/dL 0.6-1.1\"\n\nNeeds attention\n  - [computed] Hemoglobin A1c 8.9 % is above the reference range printed on the document (4.0-5.6).\n      not yet in the chart\n      computed by this system: 8.9 % is above the printed reference range 4.0-5.6\n      rule: the value was compared with the reference range printed on the source document\n      document 101, p. 1, results[0].value, as printed: \"Hemoglobin A1c 8.9 % 4.0-5.6\"\n  - [computed] Glucose, Fasting 164 mg/dL is above the reference range printed on the document (70-99).\n      not yet in the chart\n      computed by this system: 164 mg/dL is above the printed reference range 70-99\n      rule: the value was compared with the reference range printed on the source document\n      document 101, p. 1, results[1].value, as printed: \"Glucose, Fasting 164 mg/dL 70-99\"\n\nWhat to consider\n  - [guideline-supported] The guideline states that DSMES is an ongoing process and that engagement in DSMES has been shown to significantly decrease A1C by an average of 0.6 percent compared to usual care, with the greatest reductions in those with baseline A1C above 9 percent.\n      why this patient: This patient's Hemoglobin A1c of 8.9 % and fasting glucose of 164 mg/dL sit well above their reference ranges, placing them near the baseline range where the guidance describes the largest DSMES-associated A1C reductions.\n      patient fact [document-stated]: Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6) - not yet in the chart\n          document 101, p. 1, results[0].value, as printed: \"Hemoglobin A1c 8.9 % 4.0-5.6\"\n      patient fact [document-stated]: Glucose, Fasting 164 mg/dL (printed reference range 70-99) - not yet in the chart\n          document 101, p. 1, results[1].value, as printed: \"Glucose, Fasting 164 mg/dL 70-99\"\n      guideline: National Diabetes Education Program (NIH and CDC), 2018 - Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - Provide Ongoing Self-management Education and Support for People with Diabetes\n          \"Effective self-management education and ongoing self-management support are essential to enable people with diabetes to make informed decisions and to assume responsibility for the day-to-day management of their disease and risk factors for complications.1-3 Definition and purpose of diabetes self-management education and self-management support (DSMES) DSMES is an ongoing process to facilitate a person's knowledge, skill, and ability for managing their own diabetes over the course of a lifetime. The DSMES process incorporates the needs, goals, and life experiences of the person with diabetes and is guided by evidence-based standards. Objectives are to support informed and shared decision-making, self-management behaviors, problem solving, and active collaboration with the health care team to improve clinical outcomes, health status, and quality of life. Self-management support involves health care professionals in activities that help people with diabetes to implement and sustain ongoing behaviors needed to manage their diabetes. These activities include behavioral, educational, psychosocial, and clinical support. Engagement in DSMES has been shown to significantly decrease A1C by an average of 0.6 percent compared to usual care, with the greatest reductions in those with baseline A1C above 9 percent.1\"\n          population scope: General US adults in primary care | evidence Tier A | corpus v1.92cacddcc41697ad\n      uncertainty: The magnitude cited is an average across programs, not a prediction for an individual.\n  - [guideline-supported] Guidance advises that DSMES needs be assessed at new diagnosis, annually for health maintenance, when new complicating factors influence self-management, and at transitions in care, noting that self-directed behavioral goal setting, problem solving and motivational interviewing improve outcomes.\n      why this patient: A follow-up visit prompted by this patient's above-range Hemoglobin A1c of 8.9 % is one of the points at which the guidance frames a re-assessment of self-management needs.\n      patient fact [document-stated]: Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6) - not yet in the chart\n          document 101, p. 1, results[0].value, as printed: \"Hemoglobin A1c 8.9 % 4.0-5.6\"\n      guideline: National Diabetes Education Program (NIH and CDC), 2018 - Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - How to provide self-management education and support\n          \"People with diabetes should receive DSMES according to national standards.5 No one education program or approach is \"best\"; however, strategies such as self-directed behavioral goal setting and problem solving improve outcomes.5 Motivational interviewing may help address individual barriers and readiness for change.5 Programs that address health literacy and are culturally and age-appropriate improve outcomes.6 Family members can potentially support and reinforce self-management education if they are included in the process. In addition to one-on-one encounters, approaches such as group visits, telehealth, and other technologies have been used effectively to provide education and support to people with diabetes. Providers should assess DSMES needs at the following times: (1) with a new diagnosis of diabetes, (2) annually for health maintenance, (3) when new complicating factors influence self-management, and (4) when transitions in care occur.4\"\n          population scope: General US adults in primary care | evidence Tier A | corpus v1.92cacddcc41697ad\n  - [guideline-supported] The guideline notes that sensitive assessment of a person's ability to afford visits, laboratory tests, monitoring supplies and medications is essential, and that food insecurity and lack of consistent access to healthy foods may impair diabetes self-management.\n      why this patient: Persistently above-range results (Hemoglobin A1c 8.9 %, fasting glucose 164 mg/dL) may reflect resource barriers to self-management rather than only clinical factors in this patient.\n      patient fact [document-stated]: Hemoglobin A1c 8.9 % (printed reference range 4.0-5.6) - not yet in the chart\n          document 101, p. 1, results[0].value, as printed: \"Hemoglobin A1c 8.9 % 4.0-5.6\"\n      patient fact [document-stated]: Glucose, Fasting 164 mg/dL (printed reference range 70-99) - not yet in the chart\n          document 101, p. 1, results[1].value, as printed: \"Glucose, Fasting 164 mg/dL 70-99\"\n      guideline: National Diabetes Education Program (NIH and CDC), 2018 - Principle 3: Provide Comprehensive, Patient-centered Diabetes Care - Consideration of patient self-management resources, including ability to afford care\n          \"Diabetes is an expensive disease, both for society and for individuals. Sensitive assessment of a person's ability to afford office visits, laboratory and other tests, monitoring supplies, and medications is essential to providing patient-centered care. Even people with health insurance may have difficulty with high deductibles, large or multiple co-pays, and coverage gaps. Further, many patients do not have consistent, affordable access to healthy foods such as fresh fruits and vegetables. Food insecurity is common in the United States and may impair diabetes self-management and increase the risk for hypoglycemia.13 The challenge of living with limited resources may also increase chronic physiologic stress. Strategies to assist people with limited resources may include providing screenings in more accessible settings (e.g., retinal photography with remote reading), prescribing generic medications when possible, consideration of type of and delivery system for insulins, and assessing the frequency of home glucose monitoring in terms of maximum impact.\"\n          population scope: General US adults in primary care | evidence Tier A | corpus v1.92cacddcc41697ad\n      guideline: National Diabetes Education Program (NIH and CDC), 2018 - Principle 4: Provide Ongoing Self-management Education and Support for People with Diabetes - Community-based and other resources\n          \"Providing people with diabetes links to resources such as peers and community health workers, community-based health programs, and support groups can be beneficial.1, 3 For people with socioeconomic barriers to diabetes self-management (e.g., food insecurity or difficulty affording medications or supplies), consider referral to community social service organizations. Evidence of the effectiveness of technology-based support is increasing.7 Consider using technology as an adjunct to traditional DSMES for assessment, instruction, monitoring, feedback, and supporting behavior change and coping strategies.\"\n          population scope: General US adults in primary care | evidence Tier A | corpus v1.92cacddcc41697ad\n      uncertainty: The results give no information about this patient's socioeconomic circumstances.",
+  "provenance": {
+    "extraction_model": "claude-opus-5",
+    "answer_model": "claude-opus-5",
+    "reranker": "fake-lexical-coverage-v1 (local, deterministic)",
+    "corpus_version": "v1.92cacddcc41697ad",
+    "evidence_status": "ok"
+  }
+}
