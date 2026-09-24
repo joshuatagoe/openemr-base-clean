@@ -30,16 +30,14 @@ FIXTURES = REPO / "fixtures" / "documents"
 # Each case pairs an id with the synthetic document it reads. Both exercise a
 # behaviour that scripted output cannot: the clean one that no printed flag is
 # invented, the degraded one that an obscured value is refused rather than guessed.
-CASES: list[tuple[str, Path, int]] = [
-    ("lab_clean_hba1c", FIXTURES / "lab_hba1c_clean.pdf", 101),
-    ("lab_degraded_scan", FIXTURES / "lab_hba1c_degraded_scan.pdf", 102),
-    # From the Week 2 starter working set (synthetic; SHA-256s match the pack's
-    # own manifest). S03 is image-only: the model has to READ a degraded scan,
-    # which is the real test of CR's "vision extraction without invention".
-    ("starter_s01_lab_clean", FIXTURES / "starter" / "lab_report_clean.pdf", 201),
-    ("starter_s03_imperfect_scan", FIXTURES / "starter" / "lab_report_imperfect_scan.pdf", 203),
-    ("starter_s04_no_printed_flag", FIXTURES / "starter" / "lab_report_no_printed_flag.pdf", 204),
-]
+def _cases() -> list[tuple[str, Path, int]]:
+    """Every document case in fixtures/doc_cases/ - the case file names its PDF and document id."""
+    from app.doc_eval import load_doc_cases
+
+    return [(c["case_id"], FIXTURES / c["pdf"], c["document_id"]) for c in load_doc_cases()]
+
+
+CASES = _cases()
 
 
 async def record_one(case_id: str, pdf: Path, document_id: int) -> None:
@@ -60,6 +58,7 @@ async def record_one(case_id: str, pdf: Path, document_id: int) -> None:
 async def main_async(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true", help="show existing recordings and exit")
+    parser.add_argument("--missing", action="store_true", help="record only cases with no recording yet")
     args = parser.parse_args(argv)
 
     if args.list:
@@ -69,8 +68,10 @@ async def main_async(argv: list[str] | None = None) -> int:
             print(f"  {i}")
         return 0
 
-    print(f"Recording {len(CASES)} case(s) against the live model. This costs tokens.\n")
-    for case_id, pdf, document_id in CASES:
+    done = set(recorded_case_ids()) if args.missing else set()
+    todo = [c for c in CASES if c[0] not in done]
+    print(f"Recording {len(todo)} case(s) against the live model. This costs tokens.\n")
+    for case_id, pdf, document_id in todo:
         if not pdf.exists():
             print(f"  {case_id}: SKIPPED — {pdf.name} not found", file=sys.stderr)
             continue

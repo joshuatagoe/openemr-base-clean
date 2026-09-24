@@ -1,0 +1,40 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 757 >>
+stream
+BT /F1 14 Tf 72 720 Td (RIVERBEND COMMUNITY LABORATORY) Tj ET
+BT /F1 8 Tf 72 700 Td (SYNTHETIC DEMO ONLY - not a real patient) Tj ET
+BT /F1 10 Tf 72 664 Td (PATIENT: Demo, Patient        DOB: 1970-01-01) Tj ET
+BT /F1 10 Tf 72 636 Td (ORDERING PROVIDER: Demo Clinician, MD) Tj ET
+BT /F1 10 Tf 72 622 Td (COLLECTED: 2026-09-05 13:10) Tj ET
+BT /F1 10 Tf 72 588 Td (TEST                          RESULT      UNITS     REFERENCE RANGE   FLAG) Tj ET
+BT /F1 10 Tf 72 574 Td (------------------------------------------------------------------------------) Tj ET
+BT /F1 10 Tf 72 558 Td (WBC                           7.1         K/uL      4.0-11.0          ) Tj ET
+BT /F1 10 Tf 72 542 Td (Platelets                     118         K/uL      150-400           ) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001049 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1119
+%%EOF

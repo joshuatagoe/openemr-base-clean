@@ -1,0 +1,42 @@
+{
+  "case_id": "gen_platelets_low_no_flag",
+  "content_digest": "75b21dd3af343cea",
+  "model": "claude-opus-5",
+  "output": {
+    "collection_date": "2026-09-05",
+    "ordering_provider": "Demo Clinician, MD",
+    "page_count": 1,
+    "results": [
+      {
+        "page": 1,
+        "printed_flag": null,
+        "quote": "WBC 7.1 K/uL 4.0-11.0",
+        "reference_range": "4.0-11.0",
+        "test_name": "WBC",
+        "unit": "K/uL",
+        "unreadable": false,
+        "value_text": "7.1"
+      },
+      {
+        "page": 1,
+        "printed_flag": null,
+        "quote": "Platelets 118 K/uL 150-400",
+        "reference_range": "150-400",
+        "test_name": "Platelets",
+        "unit": "K/uL",
+        "unreadable": false,
+        "value_text": "118"
+      }
+    ]
+  },
+  "schema": "LabDraft",
+  "system_digest": "402cf0191fd2f81c",
+  "usage": {
+    "cached_input_tokens": 1987,
+    "input_tokens": 1819,
+    "latency_ms": 3112,
+    "model": "claude-opus-5",
+    "output_tokens": 216,
+    "provider": "anthropic"
+  }
+}

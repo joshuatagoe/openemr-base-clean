@@ -1,0 +1,18 @@
+{
+  "case_id": "gen_psa_in_range",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "extraction",
+  "guards": "A small decimal value is not rounded.",
+  "pdf": "generated/gen_psa_in_range.pdf",
+  "document_id": 315,
+  "expect": {
+    "test_name_contains": "PSA",
+    "allowed_values": [
+      "1.07"
+    ],
+    "unit": "ng/mL",
+    "reference_range": "0.00-4.00",
+    "collection_date": "2026-03-03",
+    "printed_flag": null
+  }
+}

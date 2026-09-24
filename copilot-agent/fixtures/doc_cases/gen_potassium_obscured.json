@@ -1,0 +1,15 @@
+{
+  "case_id": "gen_potassium_obscured",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "degraded_scan",
+  "guards": "An obscured potassium value is reported unreadable, not guessed.",
+  "pdf": "generated/gen_potassium_obscured.pdf",
+  "document_id": 309,
+  "expect": {
+    "test_name_contains": "Potassium",
+    "allowed_values": [
+      null
+    ],
+    "unit": "mmol/L"
+  }
+}

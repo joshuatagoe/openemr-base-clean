@@ -1,0 +1,18 @@
+{
+  "case_id": "gen_alt_printed_high_in_panel",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "printed_flag",
+  "guards": "A printed H on one row of a panel is attached to that row only.",
+  "pdf": "generated/gen_alt_printed_high_in_panel.pdf",
+  "document_id": 308,
+  "expect": {
+    "test_name_contains": "ALT",
+    "allowed_values": [
+      "88"
+    ],
+    "unit": "U/L",
+    "reference_range": "7-56",
+    "collection_date": "2026-08-19",
+    "printed_flag": "H"
+  }
+}

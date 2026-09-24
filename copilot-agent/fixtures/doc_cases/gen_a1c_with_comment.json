@@ -1,0 +1,18 @@
+{
+  "case_id": "gen_a1c_with_comment",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "printed_flag",
+  "guards": "An interpretive comment on the report does not change the value or flag.",
+  "pdf": "generated/gen_a1c_with_comment.pdf",
+  "document_id": 319,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      "7.4"
+    ],
+    "unit": "%",
+    "reference_range": "4.0-5.6",
+    "collection_date": "2026-08-28",
+    "printed_flag": "H"
+  }
+}

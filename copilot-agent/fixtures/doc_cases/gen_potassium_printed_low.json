@@ -1,0 +1,18 @@
+{
+  "case_id": "gen_potassium_printed_low",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "printed_flag",
+  "guards": "A printed L is carried through as L.",
+  "pdf": "generated/gen_potassium_printed_low.pdf",
+  "document_id": 303,
+  "expect": {
+    "test_name_contains": "Potassium",
+    "allowed_values": [
+      "3.1"
+    ],
+    "unit": "mmol/L",
+    "reference_range": "3.5-5.1",
+    "collection_date": "2026-09-02",
+    "printed_flag": "L"
+  }
+}

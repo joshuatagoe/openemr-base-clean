@@ -1,0 +1,18 @@
+{
+  "case_id": "gen_cmp_sodium_among_eight",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "extraction",
+  "guards": "The right analyte is picked out of an eight-row panel.",
+  "pdf": "generated/gen_cmp_sodium_among_eight.pdf",
+  "document_id": 307,
+  "expect": {
+    "test_name_contains": "Sodium",
+    "allowed_values": [
+      "137"
+    ],
+    "unit": "mmol/L",
+    "reference_range": "135-145",
+    "collection_date": "2026-08-19",
+    "printed_flag": null
+  }
+}

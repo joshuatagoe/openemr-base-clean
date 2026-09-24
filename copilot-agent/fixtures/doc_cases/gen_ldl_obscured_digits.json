@@ -1,0 +1,15 @@
+{
+  "case_id": "gen_ldl_obscured_digits",
+  "source": "AUTO-GENERATED 2026-09-23 by fixtures/doc_cases/_generate.py - not yet reviewed",
+  "test_class": "degraded_scan",
+  "guards": "Two obscured digits are not filled in from the reference range.",
+  "pdf": "generated/gen_ldl_obscured_digits.pdf",
+  "document_id": 310,
+  "expect": {
+    "test_name_contains": "LDL",
+    "allowed_values": [
+      null
+    ],
+    "unit": "mg/dL"
+  }
+}
