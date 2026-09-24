@@ -78,7 +78,22 @@ server-side. The two invoke one script, so they cannot drift apart.
 
 ## 3. What it runs, and what makes it fail
 
-### What runs
+### What runs — two stages, one command
+
+**Stage 1 — the full test suite** (`pytest`, ~490 tests, ~30 s). Any failure fails
+the gate and the golden set is not scored.
+
+This stage was added on 2026-09-23 after a proof that the golden set alone could
+not see a Week 2 regression. Changing the lab extractor so it reported **its own
+computed comparison as a flag the lab had printed** — the single most
+consequential display error the design exists to prevent — left the gate
+**green**, because the 24 golden cases below are Week 1 cases with no document in
+them. The test suite caught it (2 failures), but nothing ran the test suite. Now
+the gate does, so CI, the pre-commit hook and a grader all get it from the same
+command. Re-verified after the change: the same mutation now exits 1 with
+`GATE FAILED`.
+
+**Stage 2 — the golden set**, scored with the five boolean rubrics below.
 
 The golden set is replayed **entirely offline**. Each case carries scripted
 model output, which is pushed through the real `ground_extraction`,

@@ -117,6 +117,28 @@ class _Capture(logging.Handler):
             self.buf.write(str(record.msg) + "\n")
 
 
+def run_tests() -> int:
+    """Stage 1: the full unit and integration suite.
+
+    Added after a proof that the golden set alone could not see a Week 2
+    regression. Reporting our own computed comparison as a lab-printed flag -
+    the display error the design exists to prevent - left the gate GREEN,
+    because the 24 golden cases are Week 1 cases with no document in them.
+    pytest caught it (2 failures) but nothing ran pytest. Now the gate does,
+    so CI, the pre-commit hook and a grader all get it from one command.
+
+    Excluded: the Bruno collection (needs an external CLI; pre-existing) and
+    the live tier (skips itself without an API key, so the gate stays offline).
+    """
+    print("\n  stage 1/2: unit and integration tests (pytest)")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:warnings", "-o", "addopts=",
+         "--ignore=tests/test_api_collection.py"],
+        cwd=REPO,
+    )
+    return proc.returncode
+
+
 def run() -> tuple[dict[str, object], int]:
     cases = load_cases()
     if not cases:
@@ -201,8 +223,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update-baseline", action="store_true", help="rewrite evals/baseline.json from this run")
     parser.add_argument("--json", type=Path, default=None, help="also write machine-readable results here")
+    parser.add_argument("--skip-tests", action="store_true",
+                        help="score the golden set only; for local iteration. CI and the hook never pass this")
     args = parser.parse_args(argv)
 
+    if not args.skip_tests:
+        if run_tests() != 0:
+            print("\n  GATE FAILED - the test suite failed (stage 1/2). The golden set was not scored.\n")
+            return 1
+        print("  stage 1/2 passed")
+    print("\n  stage 2/2: golden set, five boolean rubrics")
     report, code = run()
     if not report:
         return code
