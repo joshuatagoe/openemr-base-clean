@@ -92,7 +92,7 @@ Everything in this section is Week 2 work, added after commit `e80e740`. Nothing
 2. Open a patient → **Documents** → **Add/Upload** → file a lab PDF. A synthetic one is committed at [`copilot-agent/fixtures/documents/lab_hba1c_clean.pdf`](copilot-agent/fixtures/documents/lab_hba1c_clean.pdf); [`lab_hba1c_degraded_scan.pdf`](copilot-agent/fixtures/documents/lab_hba1c_degraded_scan.pdf) shows an obscured value being reported as unreadable rather than guessed.
 3. Open the patient's **Patient Summary** → Co-Pilot panel → **Brief from latest lab document**.
 
-The document is stored by OpenEMR, not by the Co-Pilot: the module reads the patient's newest PDF from the core `documents` table and posts it, signed, to the agent. Extracted values are shown as **not yet in the chart** — nothing is filed without a clinician (see `W2_ARCHITECTURE.md`).
+The document is stored by OpenEMR, not by the Co-Pilot: the module reads the patient's newest PDF from the core `documents` table and posts it, signed, to the agent. Extracted values are shown as **not yet in the chart**. **Not built yet (planned for Final):** filing a value into the chart after a clinician verifies it against its source, and comparing a new document with earlier chart values — today the briefing reads the document alone, so "no earlier value" means none was supplied, not that the chart has none. See `W2_ARCHITECTURE.md` §1.4–1.5.
 
 **Environment variables added in Week 2** (agent service; all optional)
 

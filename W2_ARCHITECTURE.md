@@ -133,7 +133,13 @@ silently corrected box highlights the wrong text, which is worse than no box. `b
   and `extract_lab_document` had no caller; both stopped being true when the route was wired.)*
 - **No intake-form extraction.** `app/documents.py` defines `LabDocument` and nothing else; "intake"
   appears only in comments describing the seam that will accept it.
-- **No persistence of derived facts**, and therefore no round-trip demonstration yet.
+- **No persistence of derived facts**, and therefore no round-trip demonstration yet. The planned
+  path (ADR-003, §1.5): a per-result *Verify and file* action writes a `procedure_result` row linked to
+  the source document, read back through FHIR for the round-trip.
+- **No comparison with earlier chart values.** `build_briefing` accepts prior chart facts, but the
+  document route sends only the document, so *What changed* reports "the supplied records hold no
+  earlier value" whenever there is no earlier value *in the document*. The module already reads
+  chart lab results for Week 1; passing them here is planned for Final.
 
 ### 1.5 Filing is gated on a human (ADR-003)
 
