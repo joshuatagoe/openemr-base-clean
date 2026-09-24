@@ -216,10 +216,10 @@ clinical data is PHI at rest and is treated as such.
 | Stage | Choice | Note |
 |---|---|---|
 | Sparse | BM25 over chunk text | Deterministic, offline, no infrastructure |
-| Dense | Embeddings over the same chunks; model id pinned in the corpus manifest | Embedding source still open — see §5 |
+| Dense | IDF-weighted hashed character 4-grams, 16,384 buckets, cosine similarity | Local and deterministic — no model, no API, no key. Reported as `hashed-ngram-v1`, never as an embedding model |
 | Candidates | Top 20 from each retriever | |
 | Fusion | Reciprocal Rank Fusion, `k = 60`, → up to 30 unique candidates | RRF needs no score calibration between two incomparable scorers |
-| Rerank | Cohere Rerank 3.5, `cohere.rerank-v3-5:0`, via the Amazon Bedrock `Rerank` API | ADR-002 |
+| Rerank | **Early Submission: the local `FakeReranker`** (lexical coverage, deterministic). Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) via the Amazon Bedrock `Rerank` API is built behind the same protocol and **deferred to Final** | ADR-002. Selected by `COPILOT_RERANKER`; the panel footer names whichever ran. Observed cost of the lexical one: on the demo report it did not surface NDEP Principle 7 on individualised targets |
 | Final k | 5 chunks to the answer model | |
 
 RRF discards score magnitude, so one overwhelmingly relevant chunk does not dominate a consistently
@@ -314,10 +314,16 @@ Exit `0` pass, `1` fail. That is the whole contract. The gate logic lives in
 depends on our environment. CI (`.gitlab-ci.yml`, job `eval-gate`, self-hosted Windows runner) only
 invokes it and keeps `eval-results.json` as a 30-day artifact.
 
-**Offline by construction.** Each of the 24 golden cases carries scripted model output pushed through
-the real `ground_extraction`, `match_evidence` and verification functions — the same code production
-uses. No provider is called, so a "regression" is never sampling noise. There is **no LLM judge**;
-every run records `"judge": "none (all rubrics deterministic)"`.
+**Two stages, one command.** Stage 1 runs the full test suite (496 tests); any failure fails the gate.
+Stage 2 scores the 29-case golden set. The test stage was added on 2026-09-23 after proving that the
+golden set alone could not see a Week 2 regression (see `EVAL_GATE.md`, "What runs").
+
+**Offline by construction.** The 24 Week 1 cases carry scripted model output pushed through the real
+`ground_extraction`, `match_evidence` and verification functions. The 5 Week 2 document cases replay
+**real `claude-opus-5` responses**, recorded once against synthetic lab PDFs and keyed to the prompt,
+model and document bytes — so a changed prompt makes them stale and fails the gate. No provider is
+called during a gate run either way, so a "regression" is never sampling noise. There is **no LLM
+judge**; every run records `"judge": "none (all rubrics deterministic)"`.
 
 **Five boolean rubrics**, never a 1–10 rating, so a failure names a defect:
 
@@ -330,7 +336,9 @@ every run records `"judge": "none (all rubrics deterministic)"`.
 | `no_phi_in_logs` | no PHI string from the case's own bundle appears in anything logged | 1.00 |
 
 A category is `None` for cases it does not apply to and is dropped from that category's denominator.
-`safe_refusal` applies to 9 of 24 cases. Scoring the other 15 as passes would inflate the rate, and
+`safe_refusal` applies to 13 of 29 cases — the note cases where the record is absent, conflicting or
+adversarial, and the document cases where a value is unreadable or no flag was printed. Scoring the
+other 16 as passes would inflate the rate, and
 the inflation would be largest exactly where coverage is thinnest. `no_phi_in_logs` is an exact string
 test whose canaries come from each case's own bundle, so a new case brings its own.
 
@@ -344,11 +352,11 @@ be decided by rounding — not a property a build gate should have.
 
 ### Why four floors sit at 1.00
 
-**The 5% rule alone cannot catch a single-case regression.** One case out of 24 is 4.17 points; at the
+**The 5% rule alone cannot catch a single-case regression.** One case out of 29 is 3.4 points; at the
 required 50 cases it is 2 points. Both clear a 5% tolerance. The percentage rule is a coarse
 instrument aimed at broad drift, and a single-case defect is invisible to it at any realistic set size.
 
-This is not a thought experiment. The demonstration regression — removing the hallucination guard in
+This is not a thought experiment. When the set had 24 cases, the demonstration regression — removing the hallucination guard in
 `ground_extraction`, so a proposed commitment whose `source_span` is not verbatim in the note is no
 longer rejected — moved `factually_consistent` to **0.96**: a 4-point drop that passed *both* the 5%
 rule *and* the 0.95 floor. The gate caught it only because `safe_refusal` has a floor of 1.00, and it
@@ -359,23 +367,26 @@ rather than a percentage: an uncited clinical claim and a leaked identifier are 
 good at. `factually_consistent` keeps headroom because it is the one category a genuine model
 regression moves first.
 
-**Current state**, run in this worktree while writing this document:
+**Current state**, CI pipeline 26897 on a fresh clone of `main`:
 
 ```
-  golden cases: 24
+  stage 1/2 passed  (496 tests)
+  golden cases: 29  (24 Week 1 note cases + 5 Week 2 document cases on recorded model output)
   schema_valid 1.00 · citation_present 1.00 · factually_consistent 1.00
-  safe_refusal 1.00 (n=9) · no_phi_in_logs 1.00        GATE PASSED
+  safe_refusal 1.00 (n=13) · no_phi_in_logs 1.00        GATE PASSED
 ```
 
 ---
 
 ## 5. Risks and tradeoffs
 
-**The golden set is 24 cases, not 50.** `§CR6` asks for 50. The 24 cover boundary (12),
-missing/conflicting (7), regression (2), adversarial (2) and invariant (1). The gate mechanism is
-complete and case-count-independent, and the remaining cases land with the Week 2 features they would
-exercise — but the number is 24 today and rounding it up in a submission document would be the first
-dishonest sentence in it.
+**The golden set is 29 cases, not 50.** `§CR6` asks for 50. The 24 Week 1 note cases cover boundary
+(12), missing/conflicting (7), regression (2), adversarial (2) and invariant (1); the 5 Week 2 document
+cases cover a clean report with a printed flag, an image-only degraded scan, a report with no printed
+flag, and a report with obscured values. Intake forms, wrong-patient upload, repeat upload and
+supervisor handoffs have no cases yet because the features they exercise are not built. The gate
+mechanism is case-count-independent — but the number is 29 today, and rounding it up in a submission
+document would be the first dishonest sentence in it.
 
 **There is no LLM judge, and `factually_consistent` is narrower than its name.** Every rubric is a
 deterministic string and structure check. That is what makes the gate reproducible and free to run,

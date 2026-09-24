@@ -152,3 +152,67 @@ grep '"event": "span.turn"' <agent stderr log> | jq '{outcome, statements, rejec
 - **Ticket rejections are not logged with their reason code**; adding a `log_event("ticket.rejected", code=…)` in `_error` callers and a `ticket_rejected{code}` counter makes patient-binding rejections investigable by reason.
 - **`verification_rejected` counts proposals per briefing or turn** (the score is the count) and `hallucinated_span` marks any withhold; the dashboard's withhold rate is the share of requests with a withhold, not proposals withheld ÷ proposals evaluated — the latter needs the proposal count scored alongside.
 - **Evaluation data is synthetic and self-authored.** Clinician-authored or de-identified real-style notes are required before any gate in §4 is read as clinical accuracy.
+
+---
+
+## 12. Week 2 — the document briefing
+
+Everything above is the Week 1 metric set, still in force for the Week 1 briefing. This section adds the metrics for the Week 2 promise: **a physician can file a lab report and, in the time it takes to open the chart, see what it says, what needs attention, and what guidance applies — with every value traceable to the printed page and nothing invented.**
+
+### 12.1 North star — Grounded Document Briefing Rate
+
+**Definition.** Share of document briefings in which *every* displayed claim passes all five boolean rubrics: the output is schema-valid, every value is cited to the text it was read from, every value matches the document, nothing unreadable is guessed and no unprinted flag is reported as printed, and no document content reaches a log.
+
+**Why this one.** The failure that would end clinical use is not a slow or incomplete briefing — it is a confident wrong one: a value the model invented, or our own arithmetic presented as the lab's flag. This metric is 1 only when neither happened anywhere in the briefing, so it cannot be improved by being right on average.
+
+**Target:** 1.00 on the golden set, enforced as a floor by the CI gate. **Current:** 1.00 on all 5 document cases, on recorded real-model output (§12.4).
+
+### 12.2 Safety metrics — these are floors, not targets
+
+| Metric | Rule | Why a floor |
+|---|---|---|
+| **Invented-value rate** | 0 values reported for a result that is unreadable on the page | A guessed value filed as fact is the defect the whole design exists to prevent |
+| **Printed-flag fabrication rate** | 0 flags reported as *printed* when the lab printed none | Presenting our comparison as the lab's is the most consequential display error |
+| **Uncited-claim rate** | 0 displayed claims without a resolvable citation | Every claim must point back to a source (`§HP-GND`) |
+| **Tier-inadmissible claims shown** | 0 threshold claims resting only on Tier B guidance | Patient-education content is not clinical authority (ADR-006) |
+| **Document content in logs** | 0 | `§HP-HIPAA`; exact-string test per case |
+
+Four of the five rubric categories sit at a floor of 1.00 for a reason worth stating: the PRD's 5-point regression tolerance cannot catch a single-case regression at this set size (one case of 29 is 3.4 points). The floors are what catch it. See `EVAL_GATE.md`.
+
+### 12.3 Operational metrics — measured, not projected
+
+Three live runs of the full pipeline against the synthetic lab report, `claude-opus-5`, 2026-09-23:
+
+| Step | Median | Range | Share |
+|---|---|---|---|
+| Extraction — read the PDF | 4.7 s | 4.0 – 5.3 s | 31 % |
+| Retrieval + rerank (local) | 0.005 s | — | ~0 % |
+| Answer model — propose considerations | **10.7 s** | 10.3 – 11.4 s | **71 %** |
+| **End to end** | **15.0 s** | 14.7 – 16.8 s | |
+
+| Tokens | Input | Output |
+|---|---|---|
+| Extraction call | 1,907 | 334 |
+| Answer call | 2,317 | ~980 |
+
+**Cost per document briefing: $0.039** median (range $0.039–$0.055), both calls on `claude-opus-5` at $5 / $25 per MTok.
+
+**Bottleneck.** The answer model, not document reading — about 1,000 output tokens on Opus. The obvious experiments, each measurable against the same golden set: a lower `effort`, a smaller answer model, or fewer considerations per briefing. None is taken until the golden set says quality holds.
+
+**These are n = 3.** Enough to identify the bottleneck and order of magnitude; not enough for a p95. The per-encounter latency and cost are also recorded as spans and scores in Langfuse (`§CR7`), which is where a real distribution will come from.
+
+### 12.4 Eval-gate metrics
+
+| Metric | Current | Source |
+|---|---|---|
+| Golden cases | 29 — 24 Week 1 note cases, 5 Week 2 document cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
+| Rubric pass rate, all five categories | 1.00 | `scripts/eval_gate.py` |
+| Document cases on **real recorded model output** | 5 of 5 | `fixtures/recordings/` |
+| Test suite (gate stage 1) | 496 passed, 6 skipped | `uv run pytest` |
+| Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule; a changed extraction prompt | `EVAL_GATE.md` |
+
+### 12.5 What is not yet measured
+
+- **The reranker's contribution.** Production uses the local lexical reranker; Cohere Rerank via Bedrock is built but deferred to Final. On the demo report the lexical reranker did not surface NDEP Principle 7 on individualised targets — retrieval precision is the metric that would show whether Cohere fixes that, and it is not yet computed.
+- **Intake forms.** Not built; no metric.
+- **Real-world accuracy.** Every document is synthetic and self-authored. A 1.00 here says the system is internally consistent and does not invent; it does not say it reads real clinic scans well.
