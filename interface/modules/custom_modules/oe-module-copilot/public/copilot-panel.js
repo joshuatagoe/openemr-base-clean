@@ -56,6 +56,59 @@
         verification_unavailable: 'badge-secondary'
     };
 
+    // Hover text for every label the panel shows. The same definitions, as a
+    // table, are in COPILOT_GLOSSARY.md at the repository root - keep them in step.
+    const HELP = {
+        // Week 1 - plan check (one row per commitment from the last plan)
+        commitment_number: 'Commitment number, in the order it appears in the last plan. Other sections refer back to it.',
+        commitment_lab_test: 'Commitment kind: a lab test the last plan said to order or recheck.',
+        commitment_medication: 'Commitment kind: a medication the last plan said to start, stop, change or continue.',
+        commitment_other: 'Commitment kind: anything else in the plan (referral, counselling, follow-up). Listed for completeness; not checked against the record.',
+        state_matching_result_found: 'A result for this test exists in the record after the plan was written. Cited below.',
+        state_order_found_no_result: 'The test was ordered after the plan, but no result has been filed yet.',
+        state_matching_medication_record_found: 'A prescription or medication-list entry for this drug exists. Cited below. It shows the record exists, not that the patient took it.',
+        state_no_matching_record_found: 'Nothing matching was found in the sources this system searched. This does NOT mean it was not done - it may be recorded elsewhere or outside this EHR.',
+        state_ambiguous_match: 'More than one record could match; the system will not guess which one the plan meant.',
+        state_conflicting_records: 'Records disagree (for example, active in one table, stopped in another). Both are shown; the conflict is not resolved for you.',
+        state_verification_unavailable: 'The source could not be checked at all (it failed to load). Different from "no matching record found".',
+        state_not_checked: 'This kind of commitment is not checked against the record; it is listed so nothing in the plan is silently dropped.',
+        explained_by: 'This change in the record since the last visit matches a commitment in the plan.',
+        unexplained: 'This change in the record since the last visit does not match anything in the plan - worth a look.',
+        flag_as_recorded: 'The abnormal flag exactly as stored in the chart. The Co-Pilot did not compute it.',
+        medication_status: 'Whether the medication record is active, and which field of the record says so.',
+        source_table: 'The OpenEMR table this record came from.',
+        allergy_coded: 'Recorded with a standard code.',
+        allergy_uncoded: 'Recorded as free text, shown exactly as entered.',
+        allergy_inactive: 'Marked inactive in the chart.',
+        // Week 1 - follow-up answers
+        kind_fact: 'A statement taken from a record in this chart, with its citation.',
+        kind_no_record_found: 'The system searched and found nothing. Scoped to what it searched - not proof of absence.',
+        kind_clarification: 'The question was ambiguous; the Co-Pilot asks what you meant rather than guessing.',
+        kind_refusal: 'Outside what the Co-Pilot does (for example dosing advice, or another patient). A fixed sentence, never model wording.',
+        // Week 2 - document briefing
+        tier_document_stated: 'Printed in the uploaded document, quoted exactly. Not yet confirmed by a clinician.',
+        tier_chart_fact: 'Already recorded in this patient\u2019s chart.',
+        tier_computed: 'Worked out by this system with a fixed rule (for example, value above the printed reference range). The lab did not print this; the inputs and the rule are shown.',
+        tier_patient_reported: 'Stated by the patient on an intake form. An observation, not a clinical finding.',
+        tier_guideline_supported: 'What a published guideline says, quoted and attributed, with why it bears on this patient. It describes the guidance; it is not a recommendation or an order.',
+        not_yet_in_chart: 'Read from the document but not filed into the chart. Nothing is filed without a clinician checking it against the source.',
+        flag_printed: 'The abnormal flag (H/L) exactly as the lab printed it on the report.',
+        computed_rule: 'Computed here, not printed by the lab. It is never shown as if the lab had flagged it.',
+        guideline_citation: 'Publisher, year and the population the guidance was written for. Tier A: guidance for general US adults in primary care; can support a consideration. Tier B: care-process material only; never the sole support for a threshold or target.',
+        uncertainty: 'What the evidence does not settle for this patient - stated rather than hidden.',
+        route: 'The supervisor\u2019s handoffs in order: which worker ran next, and why. intake-extractor reads the document; evidence-retriever finds guideline passages; answer proposes considerations, which are screened before display.',
+        provenance: 'Everything that produced this briefing: both models, the reranker (fake-lexical = local deterministic ranking, not a learned model) and the exact guideline corpus version.'
+    };
+
+    function explain(node, key) {
+        const text = HELP[key];
+        if (text) {
+            node.title = text;
+            node.style.cursor = 'help';
+        }
+        return node;
+    }
+
     function el(tag, className, text) {
         const node = document.createElement(tag);
         if (className) {
@@ -255,7 +308,7 @@
                 item.appendChild(document.createTextNode(' ' + fmtValue(r)));
                 if (r.abnormal_flag) {
                     item.appendChild(document.createTextNode(' '));
-                    item.appendChild(el('span', 'badge badge-warning', 'flagged ' + String(r.abnormal_flag) + ' (as recorded)'));
+                    item.appendChild(explain(el('span', 'badge badge-warning', 'flagged ' + String(r.abnormal_flag) + ' (as recorded)'), 'flag_as_recorded'));
                 }
                 item.appendChild(el('div', 'small text-muted', String(r.status || 'status unknown') + ' · ' + fmtDate(r.observed_at) + ' · ' + String(r.record_id || r.result_id || '')));
                 list.appendChild(item);
@@ -288,8 +341,8 @@
                     item.dataset.recordId = String(m.record_id || '');
                     item.appendChild(el('strong', null, String(m.drug_name || 'unnamed')));
                     const status = m.active === true ? 'active' : (m.active === false ? 'inactive' : 'status indeterminate');
-                    item.appendChild(el('span', 'badge badge-light border ml-2', status + ' (' + String(m.status_field || '') + ')'));
-                    item.appendChild(el('span', 'badge badge-secondary ml-1', String(m.source_table || '')));
+                    item.appendChild(explain(el('span', 'badge badge-light border ml-2', status + ' (' + String(m.status_field || '') + ')'), 'medication_status'));
+                    item.appendChild(explain(el('span', 'badge badge-secondary ml-1', String(m.source_table || '')), 'source_table'));
                     const detail = [];
                     if (m.dosage_text) { detail.push(String(m.dosage_text)); }
                     detail.push(String(m.timestamp_field || '') + ' ' + fmtDate(m.timestamp));
@@ -312,9 +365,9 @@
                 allergies.entries.forEach((a) => {
                     const item = el('li', 'list-group-item py-2' + (a.active ? '' : ' text-muted'));
                     item.appendChild(el('strong', null, String(a.title || 'unnamed entry')));
-                    item.appendChild(el('span', 'badge badge-light border ml-2', a.coded ? 'coded' : 'as recorded (uncoded)'));
+                    item.appendChild(explain(el('span', 'badge badge-light border ml-2', a.coded ? 'coded' : 'as recorded (uncoded)'), a.coded ? 'allergy_coded' : 'allergy_uncoded'));
                     if (a.duplicate_count > 1) { item.appendChild(el('span', 'badge badge-secondary ml-1', '\u00d7' + String(a.duplicate_count))); }
-                    if (!a.active) { item.appendChild(el('span', 'badge badge-secondary ml-1', 'inactive')); }
+                    if (!a.active) { item.appendChild(explain(el('span', 'badge badge-secondary ml-1', 'inactive'), 'allergy_inactive')); }
                     const detail = [];
                     if (a.reaction) { detail.push('reaction: ' + String(a.reaction)); }
                     if (a.severity) { detail.push('severity: ' + String(a.severity)); }
@@ -353,8 +406,8 @@
                     return;
                 }
                 const tag = a.explained_by
-                    ? el('span', 'badge badge-light border ml-2', 'explained by ' + (this.commitmentLabels[a.explained_by] || String(a.explained_by)))
-                    : el('span', 'badge badge-warning ml-2', 'unexplained by the plan');
+                    ? explain(el('span', 'badge badge-light border ml-2', 'explained by ' + (this.commitmentLabels[a.explained_by] || String(a.explained_by))), 'explained_by')
+                    : explain(el('span', 'badge badge-warning ml-2', 'unexplained by the plan'), 'unexplained');
                 tag.setAttribute('data-role', 'annotation');
                 item.firstChild.after(tag);
             });
@@ -519,7 +572,7 @@
             }
             statements.forEach((s) => {
                 const line = el('div', 'mb-1');
-                line.appendChild(el('span', 'badge ' + (KIND_BADGES[s.kind] || 'badge-secondary') + ' mr-1', String(s.kind || '').replace('_', ' ')));
+                line.appendChild(explain(el('span', 'badge ' + (KIND_BADGES[s.kind] || 'badge-secondary') + ' mr-1', String(s.kind || '').replace('_', ' ')), 'kind_' + String(s.kind)));
                 line.appendChild(document.createTextNode(String(s.text || '')));
                 const cites = Array.isArray(s.citations) ? s.citations : [];
                 if (cites.length) {
@@ -633,11 +686,11 @@
             const item = el('li', 'list-group-item py-2' + (unchecked ? ' text-muted' : ''));
             const header = el('div', 'd-flex justify-content-between align-items-start');
             const left = el('div');
-            left.appendChild(el('span', 'badge badge-dark mr-1', label));
-            left.appendChild(el('span', 'badge badge-light border mr-1', String(c.kind || '').replace('_', '/')));
+            left.appendChild(explain(el('span', 'badge badge-dark mr-1', label), 'commitment_number'));
+            left.appendChild(explain(el('span', 'badge badge-light border mr-1', String(c.kind || '').replace('_', '/')), 'commitment_' + String(c.kind)));
             left.appendChild(el('span', 'font-italic', '“' + String(c.source_span || '') + '”'));
             header.appendChild(left);
-            header.appendChild(el('span', 'badge ' + (unchecked ? 'badge-light border' : (STATE_BADGES[state] || 'badge-secondary')), unchecked ? 'Not checked' : (STATE_LABELS[state] || state)));
+            header.appendChild(explain(el('span', 'badge ' + (unchecked ? 'badge-light border' : (STATE_BADGES[state] || 'badge-secondary')), unchecked ? 'Not checked' : (STATE_LABELS[state] || state)), 'state_' + state));
             item.appendChild(header);
             if (match.summary) {
                 item.appendChild(el('div', 'small mt-1', String(match.summary)));
@@ -706,13 +759,11 @@
     }
 
     function tierBadge(tier) {
-        const badge = el('span', 'badge badge-light border mr-1', String(tier || 'unknown tier'));
-        badge.title = 'assertion tier';
-        return badge;
+        return explain(el('span', 'badge badge-light border mr-1', String(tier || 'unknown tier')), 'tier_' + String(tier));
     }
 
     function notInChartBadge() {
-        return el('span', 'badge badge-info ml-1', 'not yet in the chart');
+        return explain(el('span', 'badge badge-info ml-1', 'not yet in the chart'), 'not_yet_in_chart');
     }
 
     class DocumentBriefingSection {
@@ -850,11 +901,11 @@
             const c = line.computed;
             if (line.tier === 'computed' && c) {
                 // Derived here, not printed by the lab: show the inputs and the rule, never an H/L flag badge.
-                item.appendChild(el('div', 'text-muted font-italic',
-                    'computed by this system: ' + docValue(c.value, c.unit) + ' is ' + String(c.direction) + ' the printed reference range ' + String(c.reference_range)));
+                item.appendChild(explain(el('div', 'text-muted font-italic',
+                    'computed by this system: ' + docValue(c.value, c.unit) + ' is ' + String(c.direction) + ' the printed reference range ' + String(c.reference_range)), 'computed_rule'));
                 item.appendChild(el('div', 'text-muted font-italic', 'rule: ' + String(c.rule || '')));
             } else if (line.abnormal_flag_source === 'extracted' && line.abnormal_flag) {
-                item.appendChild(el('span', 'badge badge-warning', 'flag printed on the report: ' + String(line.abnormal_flag)));
+                item.appendChild(explain(el('span', 'badge badge-warning', 'flag printed on the report: ' + String(line.abnormal_flag)), 'flag_printed'));
             }
             [docCitation(line.document_citation), docCitation(line.record_citation)]
                 .filter((t) => t)
@@ -890,10 +941,10 @@
                 });
                 (Array.isArray(c.citations) ? c.citations : []).forEach((g) => {
                     const cite = el('div', 'mt-1 pl-2 border-left');
-                    cite.appendChild(el('div', null,
+                    cite.appendChild(explain(el('div', null,
                         'Guideline: ' + String(g.publisher || 'unknown publisher') + ', ' + (g.publication_year ? String(g.publication_year) : 'undated')
                         + ' · population: ' + String(g.population_scope || 'not stated')
-                        + ' · evidence Tier ' + String(g.evidence_tier || '?')));
+                        + ' · evidence Tier ' + String(g.evidence_tier || '?')), 'guideline_citation'));
                     if (g.page_or_section) {
                         cite.appendChild(el('div', 'text-muted', String(g.page_or_section)));
                     }
@@ -903,7 +954,7 @@
                     item.appendChild(cite);
                 });
                 if (c.uncertainty) {
-                    item.appendChild(el('div', 'mt-1 font-italic', 'Uncertainty: ' + String(c.uncertainty)));
+                    item.appendChild(explain(el('div', 'mt-1 font-italic', 'Uncertainty: ' + String(c.uncertainty)), 'uncertainty'));
                 }
                 list.appendChild(item);
             });
@@ -913,20 +964,20 @@
         renderProvenance(p, routing) {
             // The supervisor's handoffs, in order (CR4). Fixed codes only.
             if (Array.isArray(routing) && routing.length) {
-                this.output.appendChild(el('p', 'small text-muted mt-2 mb-0',
+                this.output.appendChild(explain(el('p', 'small text-muted mt-2 mb-0',
                     'Route: supervisor → ' + routing.map(function (d) {
                         return String(d.target) + ' (' + String(d.reason_code) + ')';
-                    }).join(' → ')));
+                    }).join(' → ')), 'route'));
             }
             if (!p) {
                 return;
             }
-            this.output.appendChild(el('p', 'small text-muted mt-2 mb-0',
+            this.output.appendChild(explain(el('p', 'small text-muted mt-2 mb-0',
                 'Extraction model: ' + String(p.extraction_model || 'unknown')
                 + ' · Answer model: ' + String(p.answer_model || 'unknown')
                 + ' · Reranker: ' + String(p.reranker || 'unknown')
                 + ' · Corpus: ' + String(p.corpus_version || 'unknown')
-                + (p.evidence_status ? ' · Evidence retrieval: ' + String(p.evidence_status) : '')));
+                + (p.evidence_status ? ' · Evidence retrieval: ' + String(p.evidence_status) : '')), 'provenance'));
         }
     }
 
