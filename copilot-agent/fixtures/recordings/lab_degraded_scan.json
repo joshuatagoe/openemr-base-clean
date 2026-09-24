@@ -1,6 +1,6 @@
 {
   "case_id": "lab_degraded_scan",
-  "content_digest": "3766d42eca71622b",
+  "content_digest": "5235df6c584451b4",
   "model": "claude-opus-5",
   "output": {
     "collection_date": "2026-09-12",
@@ -10,7 +10,7 @@
       {
         "page": 1,
         "printed_flag": null,
-        "quote": "Hemoglobin A1c    8.#    %    4.0-5.6",
+        "quote": "Hemoglobin A1c 8.# % 4.0-5.6",
         "reference_range": "4.0-5.6",
         "test_name": "Hemoglobin A1c",
         "unit": "%",
@@ -20,7 +20,7 @@
       {
         "page": 1,
         "printed_flag": null,
-        "quote": "Glucose, Fasting    1##    mg/dL    70-99",
+        "quote": "Glucose, Fasting 1## mg/dL 70-99",
         "reference_range": "70-99",
         "test_name": "Glucose, Fasting",
         "unit": "mg/dL",
@@ -30,7 +30,7 @@
       {
         "page": 1,
         "printed_flag": null,
-        "quote": "Creatinine    0.9    mg/dL    0.6-1.1",
+        "quote": "Creatinine 0.9 mg/dL 0.6-1.1",
         "reference_range": "0.6-1.1",
         "test_name": "Creatinine",
         "unit": "mg/dL",
@@ -44,9 +44,9 @@
   "usage": {
     "cached_input_tokens": 1987,
     "input_tokens": 1910,
-    "latency_ms": 4933,
+    "latency_ms": 4650,
     "model": "claude-opus-5",
-    "output_tokens": 336,
+    "output_tokens": 334,
     "provider": "anthropic"
   }
 }

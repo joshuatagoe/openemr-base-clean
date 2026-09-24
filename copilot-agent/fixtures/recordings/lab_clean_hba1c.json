@@ -1,6 +1,6 @@
 {
   "case_id": "lab_clean_hba1c",
-  "content_digest": "df12f98353e75404",
+  "content_digest": "2a112afe00d7602c",
   "model": "claude-opus-5",
   "output": {
     "collection_date": "2026-09-12",
@@ -42,9 +42,9 @@
   "schema": "LabDraft",
   "system_digest": "402cf0191fd2f81c",
   "usage": {
-    "cached_input_tokens": 0,
+    "cached_input_tokens": 1987,
     "input_tokens": 1907,
-    "latency_ms": 4846,
+    "latency_ms": 4435,
     "model": "claude-opus-5",
     "output_tokens": 334,
     "provider": "anthropic"

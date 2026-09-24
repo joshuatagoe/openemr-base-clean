@@ -24,7 +24,7 @@
   "usage": {
     "cached_input_tokens": 1987,
     "input_tokens": 1807,
-    "latency_ms": 2940,
+    "latency_ms": 2733,
     "model": "claude-opus-5",
     "output_tokens": 124,
     "provider": "anthropic"
