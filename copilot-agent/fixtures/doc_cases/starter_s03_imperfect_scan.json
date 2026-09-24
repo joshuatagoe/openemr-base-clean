@@ -1,0 +1,16 @@
+{
+  "case_id": "starter_s03_imperfect_scan",
+  "source": "W2-S03, Week 2 starter working set",
+  "test_class": "degraded_scan",
+  "guards": "An image-only degraded scan is either read correctly or reported unreadable - never a third, invented value. OCR accuracy is not the gate; grounding is.",
+  "pdf": "starter/lab_report_imperfect_scan.pdf",
+  "document_id": 203,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      "8.2",
+      null
+    ],
+    "unit": "%"
+  }
+}

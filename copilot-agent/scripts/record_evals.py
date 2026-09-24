@@ -33,6 +33,12 @@ FIXTURES = REPO / "fixtures" / "documents"
 CASES: list[tuple[str, Path, int]] = [
     ("lab_clean_hba1c", FIXTURES / "lab_hba1c_clean.pdf", 101),
     ("lab_degraded_scan", FIXTURES / "lab_hba1c_degraded_scan.pdf", 102),
+    # From the Week 2 starter working set (synthetic; SHA-256s match the pack's
+    # own manifest). S03 is image-only: the model has to READ a degraded scan,
+    # which is the real test of CR's "vision extraction without invention".
+    ("starter_s01_lab_clean", FIXTURES / "starter" / "lab_report_clean.pdf", 201),
+    ("starter_s03_imperfect_scan", FIXTURES / "starter" / "lab_report_imperfect_scan.pdf", 203),
+    ("starter_s04_no_printed_flag", FIXTURES / "starter" / "lab_report_no_printed_flag.pdf", 204),
 ]
 
 

@@ -1,0 +1,17 @@
+{
+  "case_id": "starter_s04_no_printed_flag",
+  "source": "W2-S04, Week 2 starter working set",
+  "test_class": "no_printed_flag",
+  "guards": "When the lab prints no flag, none is reported as printed. Our own comparison may appear, labelled derived.",
+  "pdf": "starter/lab_report_no_printed_flag.pdf",
+  "document_id": 204,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      "8.0"
+    ],
+    "unit": "%",
+    "collection_date": "2026-09-14",
+    "printed_flag": null
+  }
+}

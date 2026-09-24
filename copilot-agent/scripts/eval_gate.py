@@ -88,7 +88,13 @@ def _run_versions() -> dict[str, str]:
             h.update(p.read_bytes())
         return h.hexdigest()[:16]
 
-    cases = sorted((REPO / "fixtures" / "cases").glob("*.json"))
+    # Every input the score depends on: note cases, document cases, and the
+    # recorded model responses they replay. A re-recording must change identity.
+    cases = sorted(
+        [*(REPO / "fixtures" / "cases").glob("*.json"),
+         *(REPO / "fixtures" / "doc_cases").glob("*.json"),
+         *(REPO / "fixtures" / "recordings").glob("*.json")]
+    )
     prompts = REPO / "app" / "providers" / "prompt.py"
 
     status = _git("status", "--porcelain")
@@ -165,6 +171,21 @@ def run() -> tuple[dict[str, object], int]:
         root.removeHandler(capture)
         root.setLevel(previous_level)
 
+    # Week 2 tier: real documents, real recorded model output, replayed offline.
+    # Same five categories, so one baseline and one set of floors cover both.
+    # A stale recording (prompt, model or document changed since it was made)
+    # fails schema_valid, so the gate fails until someone re-records and looks.
+    from app.doc_eval import load_doc_cases, score_doc_case
+    from app.settings import ModelSettings
+
+    doc_model = ModelSettings(_env_file=None).model_id_extraction
+    doc_cases = load_doc_cases()
+    for dc in doc_cases:
+        dr = score_doc_case(dc, model=doc_model)
+        rows.append(dr.scores)
+        if not dr.passed:
+            failed_cases.append((dr.name, dr.failures))
+
     rates = aggregate(rows)
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8")) if BASELINE_PATH.exists() else None
     # Counts, not rates: reconstructing the fraction from integers keeps the
@@ -172,7 +193,8 @@ def run() -> tuple[dict[str, object], int]:
     base_counts: dict[str, dict[str, int]] = (baseline or {}).get("counts", {})
 
     violations: list[str] = []
-    print(f"\n  golden cases: {len(cases)}\n")
+    print(f"\n  golden cases: {len(cases) + len(doc_cases)}  "
+          f"({len(cases)} Week 1 note cases + {len(doc_cases)} Week 2 document cases on recorded model output)\n")
     print(f"  {'category':<22}{'rate':>8}{'base':>8}{'floor':>8}   n")
     print(f"  {'-' * 54}")
     for category in CATEGORIES:
@@ -200,7 +222,8 @@ def run() -> tuple[dict[str, object], int]:
                 print(f"      - {f}")
 
     report = {
-        "cases": len(cases),
+        "cases": len(cases) + len(doc_cases),
+        "cases_by_tier": {"week1_notes": len(cases), "week2_documents": len(doc_cases)},
         "versions": _run_versions(),
         "counts": {c: {"passed": rates[c].passed, "applicable": rates[c].applicable} for c in CATEGORIES},
         "rates": {c: float(rates[c].rate) for c in CATEGORIES},  # display only; counts are authoritative

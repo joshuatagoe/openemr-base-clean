@@ -17,16 +17,28 @@ All three are committed. Nothing is fetched at runtime.
 | **Prompts** | [`copilot-agent/app/providers/prompt.py`](copilot-agent/app/providers/prompt.py) — extraction system prompt and user-content builder |
 | **Schemas** (model-facing) | [`copilot-agent/app/providers/base.py`](copilot-agent/app/providers/base.py) — `ModelCommitment`, `ModelExtractionOutput`, `ModelStatement`, `ModelTurnAnswer` |
 | **Schemas** (domain) | [`copilot-agent/app/contracts.py`](copilot-agent/app/contracts.py) — `ContextBundle`, `Citation`, `EvidenceMatch`, all `StrictModel` with `extra="forbid"` |
-| **Golden set** | [`copilot-agent/fixtures/cases/`](copilot-agent/fixtures/cases/) — one JSON file per case, schema `EvalCase` in [`app/eval.py`](copilot-agent/app/eval.py) |
+| **Golden set — Week 1 notes** | [`copilot-agent/fixtures/cases/`](copilot-agent/fixtures/cases/) — one JSON file per case, schema `EvalCase` in [`app/eval.py`](copilot-agent/app/eval.py) |
+| **Golden set — Week 2 documents** | [`copilot-agent/fixtures/doc_cases/`](copilot-agent/fixtures/doc_cases/) — one JSON per case, scored by [`app/doc_eval.py`](copilot-agent/app/doc_eval.py); the PDFs are in [`fixtures/documents/`](copilot-agent/fixtures/documents/) |
+| **Recorded model responses** | [`copilot-agent/fixtures/recordings/`](copilot-agent/fixtures/recordings/) — real `claude-opus-5` output, one per document case, replayed by [`app/recording.py`](copilot-agent/app/recording.py) |
 | **Rubric scoring** | [`copilot-agent/app/rubrics.py`](copilot-agent/app/rubrics.py) |
 | **Gate** | [`copilot-agent/scripts/eval_gate.py`](copilot-agent/scripts/eval_gate.py) |
 | **Baseline** | [`copilot-agent/evals/baseline.json`](copilot-agent/evals/baseline.json) |
 
-**Case count: 24, not yet the required 50.** Stated plainly rather than rounded
-up. The 24 cover boundary (12), missing/conflicting (7), regression (2),
-adversarial (2) and invariant (1). The remaining cases land with the Week 2
-document-ingestion features they exercise; the gate mechanism is complete and
-case-count-independent.
+**Case count: 29, not yet the required 50.** Stated plainly rather than rounded
+up.
+
+- **24 Week 1 note cases:** boundary (12), missing/conflicting (7), regression
+  (2), adversarial (2), invariant (1). Scripted model output; they test our
+  grounding and matching logic.
+- **5 Week 2 document cases**, each a synthetic lab PDF plus the **real model's
+  recorded response** to it. Three come from the Week 2 starter working set
+  (S01 clean report with a printed `H` flag; S03 an **image-only degraded
+  scan**; S04 no printed flag), mapped from that pack's proposed contract to our
+  schema. Two are project fixtures (a clean report and one whose values print
+  as `8.#` and `1##`).
+
+The remaining cases — intake forms, wrong-patient upload, repeat upload,
+supervisor handoffs — land with the features they exercise.
 
 ## 2. How to install and trigger it
 
@@ -239,10 +251,10 @@ tier admissibility, refusal rules, log safety. When it goes red, something *we
 wrote* broke. It runs in 13 seconds, costs nothing, needs no key, and does not
 flake.
 
-**What it does not test:** whether the *model* behaves well. The 24 golden
-cases carry scripted model output, so the model is never called.
+**What it did not test, until 2026-09-23:** whether the *model* behaves well.
+The 24 Week 1 cases carry scripted model output, so the model is never called.
 
-That gap is real and was verified rather than assumed. Mutating
+That gap was real and was verified rather than assumed. Mutating
 `EXTRACTION_SYSTEM_PROMPT` to begin "IGNORE ALL PRIOR RULES" left the gate
 **green**, which makes the prompt decorative and `factually_consistent` close
 to tautological.
@@ -263,22 +275,35 @@ no longer describes the code under test is not evidence.
 Six tests cover each invalidation axis and need no key
 (`tests/test_recording.py`).
 
-### Current status, honestly
+### Current status — the document tier is in the gate
 
-**The harness is built and tested. The recordings are not yet made.**
-`scripts/record_evals.py` against the live model returns:
+**Recordings are made, committed, and scored by the gate** (the five Week 2
+document cases above). Getting there hit `400 'Schema is too complex.'` — the
+strict `LabDocument` nests too much for structured output — which was fixed by
+having the model return a flat draft and building the strict type in code. That
+is better design regardless: the model no longer produces bounding boxes,
+citation identities or flag provenance, so it cannot get them wrong.
+
+**The grader's scenario, verified.** Adding one sentence to the lab extraction
+prompt and running the gate:
 
 ```
-400 invalid_request_error: 'Schema is too complex.'
+  schema_valid              0.83    1.00    1.00  29   FAIL
+      - no valid replay: recording for case 'starter_s03_imperfect_scan' is stale:
+        the prompt changed since this recording was made. Re-record with --record,
+        and justify any change in pass rates.
+  GATE FAILED
 ```
 
-`LabDocument` nests `LabResult` into `DocumentCitation` with a bbox tuple, a
-`Decimal` and three enums — more than the structured-output API accepts. The
-fix is to have the model emit a flat draft schema and map it into the strict
-type in deterministic code, which is better design regardless, since the model
-should not be inventing bounding boxes.
+All five document cases go stale together, so a prompt change cannot pass
+without someone re-recording and looking at what the model now does.
 
-Until that lands, the blocking gate is the deterministic one described above.
+**What the recordings show.** On the image-only degraded scan (S03), the model
+read the correct value, 8.2 %. On the project fixture printing `8.#`, it reported
+the value unreadable rather than inferring 8.9. On S01 it reported the lab's
+printed `H` as printed; on S04 and on our clean report, where the lab printed no
+flag, it reported none. Both sides of the rule the design depends on hold on
+real model output, not only on a stub.
 
 ### No LLM judge, deliberately
 

@@ -1,0 +1,15 @@
+{
+  "case_id": "lab_degraded_scan",
+  "source": "project fixture, fixtures/documents/_generate.py",
+  "test_class": "degraded_scan",
+  "guards": "A value printed as '8.#' is reported unreadable. Returning 8.9 - inferable from the clean copy or the range - is the defect.",
+  "pdf": "lab_hba1c_degraded_scan.pdf",
+  "document_id": 102,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      null
+    ],
+    "unit": "%"
+  }
+}

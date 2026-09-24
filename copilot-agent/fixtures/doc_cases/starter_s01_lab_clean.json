@@ -1,0 +1,18 @@
+{
+  "case_id": "starter_s01_lab_clean",
+  "source": "W2-S01, Week 2 starter working set",
+  "test_class": "extraction",
+  "guards": "A digitally generated report is read exactly, and a flag the lab PRINTED is reported as printed.",
+  "pdf": "starter/lab_report_clean.pdf",
+  "document_id": 201,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      "8.2"
+    ],
+    "unit": "%",
+    "reference_range": "4.0-5.6",
+    "collection_date": "2026-09-10",
+    "printed_flag": "H"
+  }
+}

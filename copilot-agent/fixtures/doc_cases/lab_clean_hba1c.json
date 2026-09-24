@@ -1,0 +1,18 @@
+{
+  "case_id": "lab_clean_hba1c",
+  "source": "project fixture, fixtures/documents/_generate.py",
+  "test_class": "no_printed_flag",
+  "guards": "8.9 against a printed 4.0-5.6 with no printed flag: the comparison is ours and must never read as the lab's.",
+  "pdf": "lab_hba1c_clean.pdf",
+  "document_id": 101,
+  "expect": {
+    "test_name_contains": "A1c",
+    "allowed_values": [
+      "8.9"
+    ],
+    "unit": "%",
+    "reference_range": "4.0-5.6",
+    "collection_date": "2026-09-12",
+    "printed_flag": null
+  }
+}
