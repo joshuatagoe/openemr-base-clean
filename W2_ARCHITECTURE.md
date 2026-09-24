@@ -32,16 +32,16 @@ a file in this repo, it is marked as planned.
 | Pre-commit hook running the gate | **Built** | `.githooks/pre-commit` |
 | Guideline corpus (NDEP + CDC), tier rule enforced | **Built** | `copilot-agent/app/corpus.py`, `fixtures/corpus/` |
 | Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
-| Per-encounter trace for the document briefing (`§CR7`) | **Built** | `document_briefing` (root, trace id = correlation id) → `lab_extract` (generation) → `retrieval.hybrid` → `rerank` → `answer_considerations` (generation), plus per-encounter scores; `app/document_briefing.py`, leak test in `tests/test_tracing.py` |
-| **Supervisor / `intake-extractor` / `evidence-retriever` graph** | **Planned — the main open core gap** | ADR-001. The pipeline above runs as a **linear sequence**, not a supervised graph. `CR4` requires a supervisor routing to two workers with logged handoffs; that is not built |
+| Per-encounter trace for the document briefing (`§CR7`) | **Built** | `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and worker spans, with `lab_extract`, `retrieval.hybrid`, `rerank` and `answer_considerations` under the worker that made each call, plus per-encounter scores; `app/document_briefing.py`, leak test in `tests/test_tracing.py` |
+| Supervisor / `intake-extractor` / `evidence-retriever` graph | **Built** (2026-09-23) | `copilot-agent/app/workflow.py` — LangGraph state graph; every handoff logged, traced as a `supervisor` span and returned to the panel as `routing`. Document briefing only; the Week 1 note briefing is unchanged (§2) |
 | Intake-form extraction | **Planned** | no schema, no fixture |
 | Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003. Extracted values are displayed as *not yet in the chart* and are never filed |
 
-No new runtime dependency was added for any of this. `copilot-agent/pyproject.toml` still depends
-only on `anthropic`, `fastapi`, `langfuse`, `pydantic`, `pydantic-settings` and `uvicorn`: BM25 and
-the dense index are written directly, the PDF fixtures are raw PDF structure, and `boto3` is imported
-lazily inside the Bedrock adapter only. LangGraph is absent, which is the quickest way to confirm the
-supervisor row above.
+One runtime dependency was added: `langgraph` (MIT, in-process), for the supervisor graph (ADR-001).
+Otherwise `copilot-agent/pyproject.toml` depends only on the Week 1 set (`anthropic`, `fastapi`,
+`langfuse`, `pydantic`, `pydantic-settings`, `uvicorn`): BM25 and the dense index are written
+directly, the PDF fixtures are raw PDF structure, and `boto3` is imported lazily inside the Bedrock
+adapter only.
 
 **Correction, 2026-09-23 evening.** An earlier revision of this section said the corpus had no
 retriever and that upload and retrieval were Planned. Both were true when written and stopped being
@@ -155,27 +155,44 @@ a larger panel needs a different answer, and inventing one now would be prematur
 
 ---
 
-## 2. Worker graph — planned, not built
+## 2. Worker graph — built
 
-**Nothing in this section exists in code yet.** `langgraph` is absent from `uv.lock`. The decision is
-ADR-001; this is what it commits to.
+**Built 2026-09-23** in `copilot-agent/app/workflow.py`, the only module that imports LangGraph. The
+decision is ADR-001. Every node calls an existing, separately tested function; the graph decides
+the order and records why.
 
 ```text
                     ┌─────────────┐
-   bundle / ────────►  supervisor  ◄───────── routing decisions logged with
-   question         └──┬───┬───┬──┘           source, target, reason code, inputs
-                       │   │   │
-        ┌──────────────┘   │   └──────────────┐
+   document ───────►  supervisor  ◄───────── every decision logged: step, target,
+   briefing         └──┬───┬───┬──┘           reason_code, doc_type — a `supervisor`
+                       │   │   │              span in the trace, and `routing` in
+        ┌──────────────┘   │   └──────────────┐   the response (panel footer)
         ▼                  ▼                  ▼
   intake-extractor   evidence-retriever    answer + critic
-  (both doc types,   (sparse+dense →       (deterministic validation:
-   dispatched by      RRF → rerank)         uncited claim or unsafe
-   doc_type)                                suggestion is dropped)
+  (dispatched by     (sparse+dense →       (critic = build_briefing's screen:
+   doc_type)          RRF → rerank)         uncited, directive or unsupported
+                                            claims are dropped)
 ```
+
+**Routing rule** (`workflow.decide`, a pure function tested per branch): no document yet →
+`intake-extractor` (`document_pending_extraction`); no evidence yet → `evidence-retriever`
+(`evidence_required`); then `answer` (`evidence_ready`); then finish (`briefing_complete`). Any
+worker that fails sets the state degraded and the supervisor finishes with `worker_failed` — the
+retriever is never called after a failed extraction, and a failed answer model still returns the
+record lines without guidance.
+
+**What is not built yet.** Only the Week 2 document briefing runs through the graph; the Week 1
+note briefing and follow-up turns keep their own path. There is no checkpointer (a briefing is one
+request, and checkpointed state would be PHI at rest), so no pause-and-resume or human-in-the-loop
+step; retries stay in the provider layer (Week 1 `resilience.py`) rather than LangGraph
+`RetryPolicy`. `intake_form` is accepted by the routing contract but has no extractor yet. Supervisor
+handoffs are tested in stage 1 (`tests/test_workflow.py`, `tests/test_tracing.py`) but have no
+golden case yet.
 
 **LangGraph OSS, with LangSmith off.** LangGraph is an MIT-licensed library that runs in our process;
 LangSmith is LangChain's hosted platform. Adopting the first does not imply the second.
-`LANGSMITH_TRACING` and `LANGSMITH_API_KEY` stay unset and a test asserts it. Tracing continues
+`LANGSMITH_TRACING` and `LANGSMITH_API_KEY` stay unset: the graph refuses to build or run if any
+LangSmith tracing switch is on, and a test asserts it. Tracing continues
 through the self-hosted Langfuse already deployed in Week 1.
 
 **Why a framework at all,** when Week 1 deliberately had none: the honest alternative was a
@@ -314,7 +331,7 @@ Exit `0` pass, `1` fail. That is the whole contract. The gate logic lives in
 depends on our environment. CI (`.gitlab-ci.yml`, job `eval-gate`, self-hosted Windows runner) only
 invokes it and keeps `eval-results.json` as a 30-day artifact.
 
-**Two stages, one command.** Stage 1 runs the full test suite (500 tests); any failure fails the gate.
+**Two stages, one command.** Stage 1 runs the full test suite (513 tests); any failure fails the gate.
 Stage 2 scores the 29-case golden set. The test stage was added on 2026-09-23 after proving that the
 golden set alone could not see a Week 2 regression (see `EVAL_GATE.md`, "What runs").
 
@@ -370,7 +387,7 @@ regression moves first.
 **Current state**, CI pipeline 26897 on a fresh clone of `main`:
 
 ```
-  stage 1/2 passed  (500 tests)
+  stage 1/2 passed  (513 tests)
   golden cases: 29  (24 Week 1 note cases + 5 Week 2 document cases on recorded model output)
   schema_valid 1.00 · citation_present 1.00 · factually_consistent 1.00
   safe_refusal 1.00 (n=13) · no_phi_in_logs 1.00        GATE PASSED
@@ -383,8 +400,9 @@ regression moves first.
 **The golden set is 29 cases, not 50.** `§CR6` asks for 50. The 24 Week 1 note cases cover boundary
 (12), missing/conflicting (7), regression (2), adversarial (2) and invariant (1); the 5 Week 2 document
 cases cover a clean report with a printed flag, an image-only degraded scan, a report with no printed
-flag, and a report with obscured values. Intake forms, wrong-patient upload, repeat upload and
-supervisor handoffs have no cases yet because the features they exercise are not built. The gate
+flag, and a report with obscured values. Intake forms, wrong-patient upload and repeat upload
+have no cases yet because the features they exercise are not built; supervisor handoffs are tested
+in stage 1 but have no golden case. The gate
 mechanism is case-count-independent — but the number is 29 today, and rounding it up in a submission
 document would be the first dishonest sentence in it.
 

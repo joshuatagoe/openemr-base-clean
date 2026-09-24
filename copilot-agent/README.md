@@ -119,7 +119,7 @@ per correlation id — the trace id *is* the `cid`, so a panel's
 (generation, one per provider attempt with `attempt` in metadata);
 `turn` → `turn_step` (generation) → `tool` (one per tool call: `tool`,
 `records`, `truncated`, `error`). Generations carry `usage_details` and
-`cost_details`. Week 2: `document_briefing` (root, trace id = correlation id) → `lab_extract` (generation) → `retrieval.hybrid` → `rerank` → `answer_considerations` (generation), with scores `extraction_verified_fraction`, `extraction_unreadable`, `retrieval_candidates`, `evidence_snippets`, `evidence_status`, `considerations_shown`, `claims_withheld`, `briefing_grounded`, `document_briefing_degraded`. Week 1 scores on the trace: `briefing_verified` (boolean, briefings only — the
+`cost_details`. Week 2: `document_briefing` (root, trace id = correlation id) → `supervisor` spans (`stage`, `reason_code`) and workers `intake-extractor` (→ `lab_extract` generation), `evidence-retriever` (→ `retrieval.hybrid`, `rerank`), `answer` (→ `answer_considerations` generation), with scores `extraction_verified_fraction`, `extraction_unreadable`, `retrieval_candidates`, `evidence_snippets`, `evidence_status`, `considerations_shown`, `claims_withheld`, `briefing_grounded`, `document_briefing_degraded`. Week 1 scores on the trace: `briefing_verified` (boolean, briefings only — the
 KEY_METRICS §3 north-star proxy), `degraded` (boolean), `degraded_reason`
 (categorical: timeout, provider_*, internal_error), `turn_success` (boolean) and
 `turn_outcome` (categorical: answered, refused, empty, degraded), `<generation>_cost_usd`

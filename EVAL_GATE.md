@@ -37,8 +37,9 @@ up.
   schema. Two are project fixtures (a clean report and one whose values print
   as `8.#` and `1##`).
 
-The remaining cases — intake forms, wrong-patient upload, repeat upload,
-supervisor handoffs — land with the features they exercise.
+The remaining cases — intake forms, wrong-patient upload, repeat upload — land
+with the features they exercise. Supervisor handoffs are covered by stage-1
+tests (`tests/test_workflow.py`) and have no golden case yet.
 
 ## 2. How to install and trigger it
 

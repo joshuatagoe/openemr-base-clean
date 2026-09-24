@@ -113,7 +113,9 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 - Block commits locally too (hooks do not come with a clone): `git config core.hooksPath .githooks`
 - The regression it blocked: [merge request !1](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/1)
 
-**Observability.** Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `lab_extract` (generation) → `retrieval.hybrid` → `rerank` → `answer_considerations` (generation). Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
+**Supervisor and workers.** The document briefing runs as a LangGraph graph ([`app/workflow.py`](copilot-agent/app/workflow.py)): a supervisor routes to `intake-extractor`, then `evidence-retriever`, then the answer step, and logs every handoff with its reason; the panel footer shows the route.
+
+**Observability.** Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and the workers, with `lab_extract` (generation) under `intake-extractor`, `retrieval.hybrid` and `rerank` under `evidence-retriever`, and `answer_considerations` (generation) under `answer`. Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
 
 **Week 2 documents**
 
@@ -123,7 +125,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [EVAL_GATE.md](EVAL_GATE.md) | Where prompts, schemas and golden set live; how to run the gate; what makes it fail; what it does and does not test |
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
 
-**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 500 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
+**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 513 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
 
 ---
 
