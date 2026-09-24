@@ -38,10 +38,13 @@ from __future__ import annotations
 
 import base64
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from pydantic import Field
+
+from app.contracts import StrictModel
 from app.documents import (
     AbnormalFlag,
     AbnormalFlagSource,
@@ -223,22 +226,25 @@ async def extract_lab_document(
         parsed = await model.parse_structured(
             system=LAB_EXTRACTION_SYSTEM_PROMPT,
             content=content,
-            schema=LabDocument,
+            schema=LabDraft,
             max_tokens=LAB_MAX_OUTPUT_TOKENS,
         )
         gen["usage"] = parsed.usage
 
     proposed = parsed.output
-    results = apply_derived_flags(stamp_source_identity(list(proposed.results), document_id))
+    # The model returned a flat reading; every strict field below is ours.
+    results = apply_derived_flags(
+        stamp_source_identity(draft_to_results(proposed, document_id), document_id)
+    )
     document = LabDocument(
         document_id=document_id,  # assigned here, never taken from the model
-        collection_date=proposed.collection_date,
+        collection_date=_as_date(proposed.collection_date),
         ordering_provider=proposed.ordering_provider,
         results=results,
         extraction_metadata=summarize(
             results,
             model_id=parsed.usage.model,
-            page_count=proposed.extraction_metadata.page_count,
+            page_count=proposed.page_count,
         ),
     )
 
@@ -285,6 +291,123 @@ _DOCUMENT_ID = re.compile(r"<document_id>(\d+)</document_id>")
 _LEGIBLE_NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
 
 
+# --------------------------------------------------------------------------- #
+# What we ask the MODEL for, as opposed to what we hand onward.
+#
+# LabDocument is too complex a schema for the structured-output API to accept -
+# it returns `400 invalid_request_error: Schema is too complex.` because
+# LabResult nests DocumentCitation, a bbox tuple, a Decimal and three enums.
+#
+# Splitting it is better design than a workaround, which is why it is not
+# framed as one. The model reads printed text; it should not be inventing
+# bounding boxes, verification statuses, citation identities, or the
+# printed-versus-derived provenance of a flag. Those are OUR determinations,
+# made deterministically below, and a model that cannot express them cannot get
+# them wrong.
+#
+# Everything here is a string, an int or a bool. Nothing is parsed by the model.
+# --------------------------------------------------------------------------- #
+
+
+class LabResultDraft(StrictModel):
+    """One printed row, as read. Values stay strings; we parse them."""
+
+    test_name: str = Field(min_length=1)
+    value_text: str | None = Field(
+        default=None,
+        description="The value EXACTLY as printed, including any obscured characters. Never repair it.",
+    )
+    unit: str | None = None
+    reference_range: str | None = Field(default=None, description="As printed, e.g. '4.0-5.6'.")
+    printed_flag: str | None = Field(
+        default=None,
+        description="A flag PRINTED on the report (H, L, HH, LL, A, N). Null if none is printed. "
+        "Never infer one by comparing the value to the range - that is not your job.",
+    )
+    quote: str = Field(min_length=1, description="The verbatim printed text this row was read from.")
+    page: int = Field(default=1, ge=1)
+    unreadable: bool = Field(
+        default=False,
+        description="True when the printed value is obscured or illegible. Then leave value_text as "
+        "printed and do NOT guess the real number.",
+    )
+
+
+class LabDraft(StrictModel):
+    """Flat extraction the model returns. Mapped to LabDocument in code."""
+
+    collection_date: str | None = Field(default=None, description="ISO date, or null if not printed.")
+    ordering_provider: str | None = None
+    page_count: int = Field(default=1, ge=1)
+    results: list[LabResultDraft] = Field(default_factory=list)
+
+
+def _as_date(raw: str | None) -> date | None:
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw.strip()[:10])
+    except ValueError:
+        return None
+
+
+def _as_value(raw: str | None, *, unreadable: bool) -> Decimal | str | None:
+    """A legible number becomes a Decimal; anything else stays text or None.
+
+    An unreadable row never carries a value - the schema forbids it, and that
+    invariant is the whole point of marking it unreadable.
+    """
+    if unreadable or raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except InvalidOperation:
+        return text  # non-numeric results such as "Negative" are legitimate
+
+
+def draft_to_results(draft: LabDraft, document_id: int) -> list[LabResult]:
+    """Map the model's flat reading into strict LabResults.
+
+    Identity, citation shape and flag provenance are assigned here rather than
+    requested from the model.
+    """
+    out: list[LabResult] = []
+    for index, row in enumerate(draft.results):
+        printed = _PRINTED_FLAGS.get((row.printed_flag or "").strip().upper())
+        value = _as_value(row.value_text, unreadable=row.unreadable)
+        out.append(
+            LabResult(
+                test_name=row.test_name.strip(),
+                value=value,
+                unit=row.unit if isinstance(value, Decimal) else (row.unit or None),
+                reference_range=row.reference_range,
+                collection_date=_as_date(draft.collection_date),
+                abnormal_flag=printed,
+                # Only a flag the model reported as PRINTED is "extracted". The
+                # derived case is decided later, by apply_derived_flags.
+                abnormal_flag_source=(
+                    AbnormalFlagSource.EXTRACTED if printed else AbnormalFlagSource.UNAVAILABLE
+                ),
+                verification_status=(
+                    VerificationStatus.UNREADABLE if row.unreadable else VerificationStatus.VERIFIED_EXACT
+                ),
+                citation=DocumentCitation(
+                    source_id=str(document_id),
+                    page_or_section=f"p. {row.page}",
+                    field_or_chunk_id=f"results[{index}].value",
+                    quote_or_value=row.quote,
+                ),
+            )
+        )
+    return out
+
+
+_PRINTED_FLAGS: dict[str, AbnormalFlag] = {f.value: f for f in AbnormalFlag}
+
+
 def _printed_lines(pdf_bytes: bytes) -> list[str]:
     """Text-showing operands of a simple, uncompressed single-page PDF."""
     return [
@@ -293,8 +416,8 @@ def _printed_lines(pdf_bytes: bytes) -> list[str]:
     ]
 
 
-def _stub_lab_document(content: list[ContentPart]) -> LabDocument:
-    """Deterministic ``LabDocument`` read off the supplied fixture document."""
+def _stub_lab_draft(content: list[ContentPart]) -> LabDraft:
+    """Deterministic ``LabDraft`` read off the supplied fixture document."""
     documents = [p for p in content if isinstance(p, DocumentPart)]
     if not documents:
         raise ProviderConfigurationError("lab extraction requires a document part")
@@ -308,7 +431,7 @@ def _stub_lab_document(content: list[ContentPart]) -> LabDocument:
 
     collection_date = None
     ordering_provider = None
-    results: list[LabResult] = []
+    results: list[LabResultDraft] = []
 
     for line in lines:
         if collection_date is None and (m := _COLLECTED.search(line)):
@@ -322,40 +445,31 @@ def _stub_lab_document(content: list[ContentPart]) -> LabDocument:
         printed_value = row.group("value")
         legible = _LEGIBLE_NUMBER.match(printed_value) is not None
         results.append(
-            LabResult(
+            LabResultDraft(
                 test_name=row.group("name").strip(),
-                # An obscured value is named unreadable, never reconstructed from
-                # the range or from the other results.
-                value=Decimal(printed_value) if legible else None,
+                # Carried through exactly as printed, "8.#" included. The stub
+                # never repairs an obscured value, because a real model must not.
+                value_text=printed_value,
                 unit=row.group("unit"),
                 reference_range=row.group("ref"),
-                collection_date=collection_date,
-                # This report prints no flag column; the derivation is the caller's.
-                abnormal_flag=None,
-                abnormal_flag_source=AbnormalFlagSource.UNAVAILABLE,
-                verification_status=(
-                    VerificationStatus.VERIFIED_EXACT if legible else VerificationStatus.UNREADABLE
-                ),
-                citation=DocumentCitation(
-                    source_id=source_id,
-                    page_or_section="p. 1",
-                    field_or_chunk_id=f"results[{len(results)}].value",
-                    quote_or_value=printed_value,  # exactly as printed, "8.#" included
-                ),
+                # This report prints no flag column; deriving one is the caller's job.
+                printed_flag=None,
+                quote=printed_value,
+                page=1,
+                unreadable=not legible,
             )
         )
 
     page_count = max(1, len(_PDF_PAGE_OBJECT.findall(raw)))
-    return LabDocument(
-        document_id=int(source_id),
+    return LabDraft(
         collection_date=collection_date,
         ordering_provider=ordering_provider,
+        page_count=page_count,
         results=results,
-        extraction_metadata=summarize(results, model_id="stub-deterministic", page_count=page_count),
     )
 
 
-StubProvider.register_fixture(LabDocument, _stub_lab_document)
+StubProvider.register_fixture(LabDraft, _stub_lab_draft)
 
 
 __all__ = [
