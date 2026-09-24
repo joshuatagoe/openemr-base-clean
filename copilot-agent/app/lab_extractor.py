@@ -147,7 +147,7 @@ def apply_derived_flags(results: list[LabResult]) -> list[LabResult]:
             out.append(result)
             continue
         out.append(
-            _revalidated(result, abnormal_flag=flag, abnormal_flag_source=AbnormalFlagSource.DERIVED)
+            _revalidated(result, abnormal_flag=flag, abnormal_flag_source=AbnormalFlagSource.EXTRACTED)
         )
     return out
 
