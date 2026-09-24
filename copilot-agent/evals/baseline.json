@@ -1,32 +1,32 @@
 {
-  "cases": 24,
+  "cases": 29,
   "versions": {
-    "commit": "2ad484b",
+    "commit": "6e2e359",
     "dirty": "no",
-    "fixture_set": "24 cases / e6e6ef2877174933",
+    "fixture_set": "34 cases / 8c2d21db987980cb",
     "prompt_version": "a5ded2c28418efbe",
     "judge": "none (all rubrics deterministic)"
   },
   "counts": {
     "schema_valid": {
-      "passed": 24,
-      "applicable": 24
+      "passed": 29,
+      "applicable": 29
     },
     "citation_present": {
-      "passed": 24,
-      "applicable": 24
+      "passed": 29,
+      "applicable": 29
     },
     "factually_consistent": {
-      "passed": 24,
-      "applicable": 24
+      "passed": 29,
+      "applicable": 29
     },
     "safe_refusal": {
-      "passed": 9,
-      "applicable": 9
+      "passed": 13,
+      "applicable": 13
     },
     "no_phi_in_logs": {
-      "passed": 24,
-      "applicable": 24
+      "passed": 29,
+      "applicable": 29
     }
   },
   "rates": {
