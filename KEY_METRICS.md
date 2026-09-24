@@ -177,7 +177,7 @@ Everything above is the Week 1 metric set, still in force for the Week 1 briefin
 | **Tier-inadmissible claims shown** | 0 threshold claims resting only on Tier B guidance | Patient-education content is not clinical authority (ADR-006) |
 | **Document content in logs** | 0 | `§HP-HIPAA`; exact-string test per case |
 
-Four of the five rubric categories sit at a floor of 1.00 for a reason worth stating: the PRD's 5-point regression tolerance cannot catch a single-case regression at this set size (one case of 29 is 3.4 points). The floors are what catch it. See `EVAL_GATE.md`.
+Four of the five rubric categories sit at a floor of 1.00 for a reason worth stating: the PRD's 5-point regression tolerance cannot catch a single-case regression at this set size (one case of 50 is 2 points). The floors are what catch it. See `EVAL_GATE.md`.
 
 ### 12.3 Operational metrics — measured, not projected
 
@@ -205,10 +205,10 @@ Three live runs of the full pipeline against the synthetic lab report, `claude-o
 
 | Metric | Current | Source |
 |---|---|---|
-| Golden cases | 29 — 24 Week 1 note cases, 5 Week 2 document cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
+| Golden cases | 50 — 24 Week 1 note cases, 26 Week 2 document cases (21 auto-generated 2026-09-23, not yet reviewed) | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
 | Rubric pass rate, all five categories | 1.00 | `scripts/eval_gate.py` |
 | Document cases on **real recorded model output** | 5 of 5 | `fixtures/recordings/` |
-| Test suite (gate stage 1) | 513 passed, 6 skipped | `uv run pytest` |
+| Test suite (gate stage 1) | 534 passed, 6 skipped | `uv run pytest` |
 | Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule; a changed extraction prompt | `EVAL_GATE.md` |
 
 ### 12.5 What is not yet measured

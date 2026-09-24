@@ -126,7 +126,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [COPILOT_GLOSSARY.md](COPILOT_GLOSSARY.md) | Every panel label, tier, evidence state and trace name — Week 1 and Week 2 — and what it means (the panel shows the same text on hover) |
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
 
-**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 513 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
+**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 534 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
 
 ---
 

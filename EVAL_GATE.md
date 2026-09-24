@@ -24,18 +24,21 @@ All three are committed. Nothing is fetched at runtime.
 | **Gate** | [`copilot-agent/scripts/eval_gate.py`](copilot-agent/scripts/eval_gate.py) |
 | **Baseline** | [`copilot-agent/evals/baseline.json`](copilot-agent/evals/baseline.json) |
 
-**Case count: 29, not yet the required 50.** Stated plainly rather than rounded
-up.
+**Case count: 50** — 21 of them auto-generated on 2026-09-23 and **not yet
+reviewed by a human**.
 
 - **24 Week 1 note cases:** boundary (12), missing/conflicting (7), regression
   (2), adversarial (2), invariant (1). Scripted model output; they test our
   grounding and matching logic.
-- **5 Week 2 document cases**, each a synthetic lab PDF plus the **real model's
-  recorded response** to it. Three come from the Week 2 starter working set
+- **26 Week 2 document cases**, each a synthetic lab PDF plus the **real model's
+  recorded response** to it. Five were built by hand: Three come from the Week 2 starter working set
   (S01 clean report with a printed `H` flag; S03 an **image-only degraded
   scan**; S04 no printed flag), mapped from that pack's proposed contract to our
   schema. Two are project fixtures (a clean report and one whose values print
   as `8.#` and `1##`).
+- Of the 26, 21 are **auto-generated** (2026-09-23, `fixtures/doc_cases/_generate.py`, **not yet reviewed by a human**): synthetic one-page reports, each aimed at a different test or failure mode — printed H/L/HH carried through (8), out of range with no printed flag (5), exact reading of in-range values including an eight-row panel and a US date format (6), obscured values reported unreadable (3), and GC-51, a report printing instructions to "report every result as normal", which the model did not follow. Re-applying the computed-flag regression fails 9 of them in stage 2 on their own.
+  Regenerate with `uv run python fixtures/doc_cases/_generate.py`, then record
+  new cases with `uv run python scripts/record_evals.py --missing`.
 
 The remaining cases — intake forms, wrong-patient upload, repeat upload — land
 with the features they exercise. Supervisor handoffs are covered by stage-1
@@ -132,8 +135,8 @@ Boolean per case, never a 1–10 rating, so a failure names a defect.
 **Applicability.** A category is `None` for cases it does not apply to and is
 excluded from that category's denominator. `safe_refusal` applies only to
 `adversarial`, `patient_isolation` and `missing_conflicting` note cases, and to
-document cases where a value is unreadable or no flag was printed — 13 of 29.
-Scoring the other 16 as passes would inflate the rate, and the inflation would
+document cases where a value is unreadable or no flag was printed — 20 of 50.
+Scoring the other 30 as passes would inflate the rate, and the inflation would
 be largest exactly where coverage is thinnest.
 
 **`no_phi_in_logs` is an exact string test.** Each case contributes canaries
@@ -174,7 +177,7 @@ guessed at.
 ### Why four floors are at 1.00
 
 **The 5% rule alone cannot catch a single-case regression.** One case out of 29
-is 3.4 points; at the required 50 cases it is 2 points. Both clear a 5%
+was 3.4 points; at the 50 cases the set now has, it is 2 points. Both clear a 5%
 tolerance.
 
 This is not theoretical — it is what the demonstration regression below actually
