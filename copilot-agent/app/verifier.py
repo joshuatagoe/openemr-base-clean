@@ -189,4 +189,21 @@ def verify_turn(answer: ModelTurnAnswer, evidence: TurnEvidence) -> tuple[list[V
     return kept, len(codes), codes
 
 
-__all__ = ["TurnEvidence", "canonical_refusal", "verify_statement", "verify_turn"]
+# Shared with app.briefing. Exposed deliberately rather than copied: these encode
+# the safety rules the Week 1 tests gate, and a second copy of a deny-list drifts
+# from the gated one in a way no test would catch.
+ADVICE_TOPIC_PATTERN = _ADVICE_TOPIC
+NUMBER_PATTERN = _NUMBER
+RECOMMENDATION_PATTERN = _RECOMMENDATION
+normalize_number = _normalize_number
+
+__all__ = [
+    "ADVICE_TOPIC_PATTERN",
+    "NUMBER_PATTERN",
+    "RECOMMENDATION_PATTERN",
+    "TurnEvidence",
+    "canonical_refusal",
+    "normalize_number",
+    "verify_statement",
+    "verify_turn",
+]
