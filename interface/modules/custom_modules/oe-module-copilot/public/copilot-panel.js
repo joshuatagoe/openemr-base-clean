@@ -788,7 +788,7 @@
                 const reason = String(data.degraded_reason || 'unknown');
                 this.output.appendChild(el('p', 'text-muted small mb-0',
                     (DOC_DEGRADED_MESSAGES[reason] || 'The document briefing is unavailable.') + ' (reason: ' + reason + ')'));
-                this.renderProvenance(data.provenance);
+                this.renderProvenance(data.provenance, data.routing);
                 return;
             }
             const b = data.briefing;
@@ -823,7 +823,7 @@
                 reasons.forEach((n, reason) => why.appendChild(el('li', null, String(n) + ' × ' + reason)));
                 this.output.appendChild(why);
             }
-            this.renderProvenance(data.provenance);
+            this.renderProvenance(data.provenance, data.routing);
         }
 
         renderLines(heading, lines) {
@@ -910,7 +910,14 @@
             this.output.appendChild(list);
         }
 
-        renderProvenance(p) {
+        renderProvenance(p, routing) {
+            // The supervisor's handoffs, in order (CR4). Fixed codes only.
+            if (Array.isArray(routing) && routing.length) {
+                this.output.appendChild(el('p', 'small text-muted mt-2 mb-0',
+                    'Route: supervisor → ' + routing.map(function (d) {
+                        return String(d.target) + ' (' + String(d.reason_code) + ')';
+                    }).join(' → ')));
+            }
             if (!p) {
                 return;
             }

@@ -505,11 +505,30 @@ def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
     spans = _exported(exporter)
     by_name = {s.name: s for s in spans}
     # Tool sequence: every step of the pipeline is an observation in the trace.
-    assert {"document_briefing", "lab_extract", "retrieval.hybrid", "rerank", "answer_considerations"} <= set(by_name)
+    assert {"document_briefing", "supervisor", "intake-extractor", "evidence-retriever", "answer"} <= set(by_name)
+    assert {"lab_extract", "retrieval.hybrid", "rerank", "answer_considerations"} <= set(by_name)
     assert {format(s.context.trace_id, "032x") for s in spans} == {trace_id_for(payload["correlation_id"])}
     root = by_name["document_briefing"]
-    for step in ("lab_extract", "retrieval.hybrid", "rerank", "answer_considerations"):
-        assert by_name[step].parent.span_id == root.context.span_id, step
+
+    def parent_of(name: str) -> int:
+        return by_name[name].parent.span_id
+
+    # CR4: the supervisor and both workers sit directly under the encounter...
+    for node in ("intake-extractor", "evidence-retriever", "answer"):
+        assert parent_of(node) == root.context.span_id, node
+    decisions = [s for s in spans if s.name == "supervisor"]
+    assert len(decisions) == 4 and all(s.parent.span_id == root.context.span_id for s in decisions)
+    # ...and each tool call sits under the worker that made it.
+    assert parent_of("lab_extract") == by_name["intake-extractor"].context.span_id
+    assert parent_of("retrieval.hybrid") == by_name["evidence-retriever"].context.span_id
+    assert parent_of("rerank") == by_name["evidence-retriever"].context.span_id
+    assert parent_of("answer_considerations") == by_name["answer"].context.span_id
+    # Each handoff's reason code survives the mask.
+    reasons = [
+        next(v for k, v in s.attributes.items() if k.endswith("metadata.reason_code"))
+        for s in sorted(decisions, key=lambda s: s.start_time)
+    ]
+    assert reasons == ["document_pending_extraction", "evidence_required", "evidence_ready", "briefing_complete"]
 
     # Both model calls are generations with usage and cost.
     for gen in ("lab_extract", "answer_considerations"):

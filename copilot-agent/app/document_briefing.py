@@ -119,6 +119,18 @@ class Provenance(StrictModel):
     evidence_status: RetrievalStatus
 
 
+class RoutingDecision(StrictModel):
+    """One supervisor handoff (CR4: handoffs are logged). Codes only - no content."""
+
+    step: int = Field(ge=1)
+    source: Literal["supervisor"]
+    target: Literal["intake-extractor", "evidence-retriever", "answer", "finish"]
+    reason_code: Literal[
+        "document_pending_extraction", "evidence_required", "evidence_ready", "briefing_complete", "worker_failed"
+    ]
+    doc_type: Literal["lab_pdf", "intake_form"]
+
+
 class DocumentBriefingResponse(StrictModel):
     """Everything the panel renders.
 
@@ -133,6 +145,9 @@ class DocumentBriefingResponse(StrictModel):
     status: BriefingStatus = BriefingStatus.OK
     degraded_reason: str | None = Field(
         default=None, description="Fixed string. Never a raw exception, never patient-specific."
+    )
+    routing: tuple[RoutingDecision, ...] = Field(
+        default=(), description="The supervisor's handoffs, in order - the path this briefing took."
     )
     briefing: Briefing | None = None
     rendered_text: str = ""
@@ -343,9 +358,11 @@ async def run_document_briefing(
 ) -> DocumentBriefingResponse:
     """One document briefing = one trace (CR7: every encounter logged).
 
-    The outermost span for a correlation id opens the Langfuse trace, and every
-    step inside - lab_extract, retrieval, rerank, answer_considerations - nests
-    under it, so the tool sequence and per-step latency read as one encounter.
+    The outermost span for a correlation id opens the Langfuse trace. Inside it
+    the supervisor's decisions and each worker - intake-extractor, evidence-
+    retriever, answer - are spans, with lab_extract, retrieval, rerank and
+    answer_considerations beneath them, so the tool sequence and per-step
+    latency read as one encounter.
     The trace id is the correlation id the module already logs, so a panel
     request, its audit row and its trace can be joined.
     """
@@ -364,103 +381,10 @@ async def _run_document_briefing(
     provider: ModelProvider,
     reranker: FakeReranker | BedrockReranker,
 ) -> DocumentBriefingResponse:
-    """Extract -> retrieve -> rerank -> propose -> screen. Never raises for a model failure."""
-    base = {
-        "correlation_id": request.correlation_id,
-        "patient_uuid": request.patient_uuid,
-        "document_id": request.document_id,
-    }
-    try:
-        pdf_bytes = base64.b64decode(request.document_base64, validate=True)
-    except (binascii.Error, ValueError):
-        return DocumentBriefingResponse(**base, status=BriefingStatus.DEGRADED, degraded_reason="document_not_decodable")
+    """Supervisor + two workers (``app/workflow.py``). Never raises for a model failure."""
+    from app.workflow import run_supervised_briefing  # the graph imports this module's contract
 
-    try:
-        document = await extract_lab_document(
-            document_id=request.document_id,
-            pdf_bytes=pdf_bytes,
-            media_type=request.media_type,
-            provider=provider,
-        )
-    except ProviderError:
-        return DocumentBriefingResponse(**base, status=BriefingStatus.DEGRADED, degraded_reason="extraction_unavailable")
-    except ValueError:
-        return DocumentBriefingResponse(**base, status=BriefingStatus.DEGRADED, degraded_reason="document_not_readable")
-
-    retriever = get_retriever()
-    query = build_query(document)
-    retrieved = retriever.retrieve(RetrievalQuery(text=query, corpus_version=retriever.corpus_version))
-    evidence = reranker.rerank(query, retrieved.candidates, top_k=QUERY_TOP_K)
-
-    status, reason, answer_model = BriefingStatus.OK, None, "none"
-    candidates: list[ConsiderationCandidate] = []
-    if evidence.snippets:
-        try:
-            # Traced as a generation so its latency, tokens and cost are visible.
-            # It is 71% of end-to-end latency; an untraced bottleneck is the one
-            # you cannot tune. input/output are never set - they hold patient values.
-            with generation("answer_considerations") as gen:
-                parsed = await provider.parse_structured(
-                    system=ANSWER_SYSTEM_PROMPT,
-                    content=_answer_content(document, evidence),
-                    schema=ConsiderationDraftSet,
-                    max_tokens=ANSWER_MAX_OUTPUT_TOKENS,
-                    effort="low",
-                )
-                gen["usage"] = parsed.usage
-            answer_model = parsed.usage.model
-            candidates = drafts_to_candidates(parsed.output, document)
-        except ProviderError:
-            # The record-derived headings still render; only the guidance is missing.
-            status, reason = BriefingStatus.DEGRADED, "answer_model_unavailable"
-
-    briefing = build_briefing(
-        document=document,
-        evidence=evidence,
-        considerations=candidates,
-        question=request.question,
-    )
-
-    # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates
-    # and fixed labels only - never a value, a quote or an identifier.
-    meta = document.extraction_metadata
-    score("extraction_results", len(document.results))
-    score("extraction_verified_fraction", meta.verified_fraction)
-    score("extraction_unreadable", meta.unreadable_count)
-    score("retrieval_candidates", len(retrieved.candidates))
-    score("evidence_snippets", len(evidence.snippets))
-    score("evidence_status", evidence.status.value, data_type="CATEGORICAL")
-    score("considerations_shown", len(briefing.what_to_consider))
-    score("claims_withheld", len(briefing.dropped))
-    # The encounter's eval outcome: every displayed claim survived screening.
-    score("briefing_grounded", not briefing.dropped, data_type="BOOLEAN")
-
-    log_event(
-        "document_briefing.completed",
-        cid=request.correlation_id,
-        document_id=request.document_id,
-        results=len(document.results),
-        snippets=len(evidence.snippets),
-        considerations_proposed=len(candidates),
-        considerations_shown=len(briefing.what_to_consider),
-        dropped=len(briefing.dropped),
-        evidence_status=evidence.status.value,
-    )
-
-    return DocumentBriefingResponse(
-        **base,
-        status=status,
-        degraded_reason=reason,
-        briefing=briefing,
-        rendered_text=render_briefing(briefing),
-        provenance=Provenance(
-            extraction_model=document.extraction_metadata.model_id,
-            answer_model=answer_model,
-            reranker=reranker.model_id,
-            corpus_version=retriever.corpus_version,
-            evidence_status=evidence.status,
-        ),
-    )
+    return await run_supervised_briefing(request, provider=provider, reranker=reranker)
 
 
 __all__ = [
@@ -473,6 +397,7 @@ __all__ = [
     "DocumentBriefingRequest",
     "DocumentBriefingResponse",
     "Provenance",
+    "RoutingDecision",
     "build_query",
     "build_reranker",
     "drafts_to_candidates",
