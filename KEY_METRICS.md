@@ -208,7 +208,7 @@ Three live runs of the full pipeline against the synthetic lab report, `claude-o
 | Golden cases | 29 — 24 Week 1 note cases, 5 Week 2 document cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
 | Rubric pass rate, all five categories | 1.00 | `scripts/eval_gate.py` |
 | Document cases on **real recorded model output** | 5 of 5 | `fixtures/recordings/` |
-| Test suite (gate stage 1) | 496 passed, 6 skipped | `uv run pytest` |
+| Test suite (gate stage 1) | 497 passed, 6 skipped | `uv run pytest` |
 | Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule; a changed extraction prompt | `EVAL_GATE.md` |
 
 ### 12.5 What is not yet measured

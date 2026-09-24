@@ -505,10 +505,10 @@ def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
     spans = _exported(exporter)
     by_name = {s.name: s for s in spans}
     # Tool sequence: every step of the pipeline is an observation in the trace.
-    assert {"document_briefing", "lab_extract", "answer_considerations"} <= set(by_name)
+    assert {"document_briefing", "lab_extract", "retrieval.hybrid", "rerank", "answer_considerations"} <= set(by_name)
     assert {format(s.context.trace_id, "032x") for s in spans} == {trace_id_for(payload["correlation_id"])}
     root = by_name["document_briefing"]
-    for step in ("lab_extract", "answer_considerations"):
+    for step in ("lab_extract", "retrieval.hybrid", "rerank", "answer_considerations"):
         assert by_name[step].parent.span_id == root.context.span_id, step
 
     # Both model calls are generations with usage and cost.

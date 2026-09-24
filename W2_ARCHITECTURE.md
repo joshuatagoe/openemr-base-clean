@@ -32,6 +32,7 @@ a file in this repo, it is marked as planned.
 | Pre-commit hook running the gate | **Built** | `.githooks/pre-commit` |
 | Guideline corpus (NDEP + CDC), tier rule enforced | **Built** | `copilot-agent/app/corpus.py`, `fixtures/corpus/` |
 | Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
+| Per-encounter trace for the document briefing (`§CR7`) | **Built** | `document_briefing` (root, trace id = correlation id) → `lab_extract` (generation) → `retrieval.hybrid` → `rerank` → `answer_considerations` (generation), plus per-encounter scores; `app/document_briefing.py`, leak test in `tests/test_tracing.py` |
 | **Supervisor / `intake-extractor` / `evidence-retriever` graph** | **Planned — the main open core gap** | ADR-001. The pipeline above runs as a **linear sequence**, not a supervised graph. `CR4` requires a supervisor routing to two workers with logged handoffs; that is not built |
 | Intake-form extraction | **Planned** | no schema, no fixture |
 | Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003. Extracted values are displayed as *not yet in the chart* and are never filed |
@@ -55,8 +56,8 @@ true when the document briefing was wired in the same evening; the rows above re
 ```text
   front desk uploads a file, patient chart open
         │
-        │  [PLANNED] core OpenEMR document path: Document::createDocument /
-        │            DocumentService, foreign_id = bound patient, SHA-256 stored
+        │  [BUILT] OpenEMR's own Documents screen stores the file against the
+        │          chart patient; the module reads the newest one (SqlDocumentReader)
         ▼
   documents table row  ──►  document_id (a stored reference, never a file path)
         │
@@ -126,11 +127,10 @@ silently corrected box highlights the wrong text, which is worse than no box. `b
 
 ### 1.4 What is not built
 
-- **No upload endpoint and no OpenEMR storage wiring.** `interface/modules/custom_modules/oe-module-copilot/src/`
-  contains no document or upload class. `extract_lab_document` has no caller outside
-  `tests/test_lab_extraction_acceptance.py` — it is a library function, not yet a route. The repository
-  already contains a complete document subsystem the module has never touched, so F02 is an
-  integration job, not a storage-building one.
+- **No Co-Pilot upload endpoint — by design.** Upload uses OpenEMR's own Documents screen; the module
+  reads the newest stored document (`SqlDocumentReader`) and posts it, signed, to
+  `/v1/documents/briefing`. *(Corrected 2026-09-23: an earlier revision said no storage wiring existed
+  and `extract_lab_document` had no caller; both stopped being true when the route was wired.)*
 - **No intake-form extraction.** `app/documents.py` defines `LabDocument` and nothing else; "intake"
   appears only in comments describing the seam that will accept it.
 - **No persistence of derived facts**, and therefore no round-trip demonstration yet.
@@ -209,7 +209,7 @@ clinical data is PHI at rest and is treated as such.
 
 ---
 
-## 3. Retrieval and RAG design — planned, not built
+## 3. Retrieval and RAG design — built (Bedrock rerank deferred to Final)
 
 ### 3.1 Pipeline
 
@@ -314,7 +314,7 @@ Exit `0` pass, `1` fail. That is the whole contract. The gate logic lives in
 depends on our environment. CI (`.gitlab-ci.yml`, job `eval-gate`, self-hosted Windows runner) only
 invokes it and keeps `eval-results.json` as a 30-day artifact.
 
-**Two stages, one command.** Stage 1 runs the full test suite (496 tests); any failure fails the gate.
+**Two stages, one command.** Stage 1 runs the full test suite (497 tests); any failure fails the gate.
 Stage 2 scores the 29-case golden set. The test stage was added on 2026-09-23 after proving that the
 golden set alone could not see a Week 2 regression (see `EVAL_GATE.md`, "What runs").
 
@@ -370,7 +370,7 @@ regression moves first.
 **Current state**, CI pipeline 26897 on a fresh clone of `main`:
 
 ```
-  stage 1/2 passed  (496 tests)
+  stage 1/2 passed  (497 tests)
   golden cases: 29  (24 Week 1 note cases + 5 Week 2 document cases on recorded model output)
   schema_valid 1.00 · citation_present 1.00 · factually_consistent 1.00
   safe_refusal 1.00 (n=13) · no_phi_in_logs 1.00        GATE PASSED
