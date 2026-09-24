@@ -676,6 +676,239 @@
         }
     }
 
+    // ------------------------------------------------------------------ //
+    // Week 2: brief from the patient's latest lab document on file.
+    // Independent of the Week 1 flow above: its own node after the card body
+    // (so a Week 1 error that clears the body cannot remove it), its own
+    // request to POST /api/copilot/document-briefing (same session, same
+    // APICSRFTOKEN), plain text only via textContent.
+    // ------------------------------------------------------------------ //
+    const DOC_DEGRADED_MESSAGES = {
+        no_document_on_file: 'No lab document (PDF, PNG or JPEG) is on file in this patient’s Documents.',
+        document_unavailable: 'The latest document on file could not be read.',
+        agent_unavailable: 'The Co-Pilot agent could not be reached.'
+    };
+
+    function docValue(value, unit) {
+        return String(value) + (unit ? ' ' + String(unit) : '');
+    }
+
+    function docCitation(c) {
+        if (!c) {
+            return null;
+        }
+        if (c.source_type === 'document') {
+            return 'Source: document ' + String(c.source_id || '') + (c.page_or_section ? ', ' + String(c.page_or_section) : '')
+                + (c.quote_or_value ? ', as printed: “' + String(c.quote_or_value) + '”' : '');
+        }
+        return 'Source: chart ' + String(c.record_type || '') + ' ' + String(c.record_id || c.source_id || '') + (c.timestamp ? ' (' + fmtDate(c.timestamp) + ')' : '');
+    }
+
+    function tierBadge(tier) {
+        const badge = el('span', 'badge badge-light border mr-1', String(tier || 'unknown tier'));
+        badge.title = 'assertion tier';
+        return badge;
+    }
+
+    function notInChartBadge() {
+        return el('span', 'badge badge-info ml-1', 'not yet in the chart');
+    }
+
+    class DocumentBriefingSection {
+        constructor(container) {
+            this.pid = container.dataset.pid;
+            this.csrf = container.dataset.csrf;
+            this.url = String(container.dataset.ticketUrl || '').replace(/\/briefing-ticket$/, '/document-briefing');
+            this.busy = false;
+            this.root = el('div', 'card-body border-top');
+            this.root.dataset.role = 'document-briefing';
+            this.button = el('button', 'btn btn-outline-primary btn-sm', 'Brief from latest lab document');
+            this.button.setAttribute('type', 'button');
+            this.button.addEventListener('click', (e) => {
+                if (e && e.preventDefault) {
+                    e.preventDefault();
+                }
+                this.run();
+            });
+            this.output = el('div', 'mt-2');
+            this.root.appendChild(this.button);
+            this.root.appendChild(this.output);
+            container.appendChild(this.root);
+        }
+
+        clear() {
+            while (this.output.firstChild) {
+                this.output.removeChild(this.output.firstChild);
+            }
+        }
+
+        async run() {
+            if (this.busy) {
+                return;
+            }
+            this.busy = true;
+            this.button.disabled = true;
+            this.clear();
+            this.output.appendChild(el('p', 'text-muted small mb-0', 'Reading the latest lab document… this can take up to a minute.'));
+            let data = null;
+            let failure = null;
+            try {
+                const resp = await fetch(this.url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: { 'APICSRFTOKEN': this.csrf, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ pid: Number(this.pid) })
+                });
+                try {
+                    data = await resp.json();
+                } catch {
+                    data = null;
+                }
+                if (resp.status !== 200 || !data) {
+                    const detail = data && data.detail ? data.detail : {};
+                    failure = String(detail.message || 'The document briefing could not be requested.') + ' (' + String(detail.code || 'http_' + resp.status) + ')';
+                }
+            } catch {
+                failure = 'The document briefing could not be requested.';
+            }
+            this.clear();
+            if (failure !== null) {
+                this.output.appendChild(el('p', 'text-danger small mb-0', failure));
+            } else {
+                this.render(data);
+            }
+            this.busy = false;
+            this.button.disabled = false;
+        }
+
+        render(data) {
+            if (data.status !== 'ok' || !data.briefing) {
+                const reason = String(data.degraded_reason || 'unknown');
+                this.output.appendChild(el('p', 'text-muted small mb-0',
+                    (DOC_DEGRADED_MESSAGES[reason] || 'The document briefing is unavailable.') + ' (reason: ' + reason + ')'));
+                this.renderProvenance(data.provenance);
+                return;
+            }
+            const b = data.briefing;
+            if (b.refusal) {
+                this.output.appendChild(el('p', 'small font-italic mb-2', String(b.refusal)));
+            }
+            this.renderLines('What changed', b.what_changed);
+            this.renderLines('Needs attention', b.needs_attention);
+            this.renderConsiderations('What to consider', b.what_to_consider);
+
+            const limitations = Array.isArray(b.limitations) ? b.limitations : [];
+            if (limitations.length) {
+                this.output.appendChild(el('h6', 'mt-3 mb-1', 'Limitations'));
+                const ul = el('ul', 'small mb-2');
+                limitations.forEach((l) => ul.appendChild(el('li', null, String(l))));
+                this.output.appendChild(ul);
+            }
+            const dropped = Array.isArray(b.dropped) ? b.dropped : [];
+            if (dropped.length) {
+                this.output.appendChild(el('p', 'small text-warning mb-2', String(dropped.length) + ' statement(s) withheld — could not be verified against their sources.'));
+            }
+            this.renderProvenance(data.provenance);
+        }
+
+        renderLines(heading, lines) {
+            this.output.appendChild(el('h6', 'mt-3 mb-1', heading));
+            const list = el('ul', 'list-group mb-2');
+            const rows = Array.isArray(lines) ? lines : [];
+            if (!rows.length) {
+                list.appendChild(el('li', 'list-group-item small text-muted', 'Nothing to report from the supplied records.'));
+            }
+            rows.forEach((line) => list.appendChild(this.lineItem(line)));
+            this.output.appendChild(list);
+        }
+
+        lineItem(line) {
+            const item = el('li', 'list-group-item py-2 small');
+            item.dataset.tier = String(line.tier || '');
+            const head = el('div');
+            head.appendChild(tierBadge(line.tier));
+            head.appendChild(el('span', null, String(line.text || '')));
+            if (line.not_yet_in_chart) {
+                head.appendChild(notInChartBadge());
+            }
+            item.appendChild(head);
+            const c = line.computed;
+            if (line.tier === 'computed' && c) {
+                // Derived here, not printed by the lab: show the inputs and the rule, never an H/L flag badge.
+                item.appendChild(el('div', 'text-muted font-italic',
+                    'computed by this system: ' + docValue(c.value, c.unit) + ' is ' + String(c.direction) + ' the printed reference range ' + String(c.reference_range)));
+                item.appendChild(el('div', 'text-muted font-italic', 'rule: ' + String(c.rule || '')));
+            } else if (line.abnormal_flag_source === 'extracted' && line.abnormal_flag) {
+                item.appendChild(el('span', 'badge badge-warning', 'flag printed on the report: ' + String(line.abnormal_flag)));
+            }
+            [docCitation(line.document_citation), docCitation(line.record_citation)]
+                .filter((t) => t)
+                .forEach((t) => item.appendChild(el('div', 'text-muted', t)));
+            return item;
+        }
+
+        renderConsiderations(heading, considerations) {
+            this.output.appendChild(el('h6', 'mt-3 mb-1', heading));
+            const list = el('ul', 'list-group mb-2');
+            const rows = Array.isArray(considerations) ? considerations : [];
+            if (!rows.length) {
+                list.appendChild(el('li', 'list-group-item small text-muted', 'Nothing to report from the supplied records.'));
+            }
+            rows.forEach((c) => {
+                const item = el('li', 'list-group-item py-2 small');
+                item.dataset.tier = String(c.tier || 'guideline_supported');
+                const head = el('div');
+                head.appendChild(tierBadge(c.tier || 'guideline_supported'));
+                head.appendChild(el('strong', null, String(c.topic || '')));
+                item.appendChild(head);
+                item.appendChild(el('div', 'mt-1', String(c.text || '')));
+                item.appendChild(el('div', 'mt-1', 'Why this patient: ' + String(c.relevance || '')));
+                (Array.isArray(c.facts) ? c.facts : []).forEach((f) => {
+                    const fact = el('div', 'text-muted mt-1');
+                    fact.appendChild(el('span', null, 'Patient fact: '));
+                    fact.appendChild(tierBadge(f.tier));
+                    fact.appendChild(el('span', null, String(f.text || '')));
+                    if (f.not_yet_in_chart) {
+                        fact.appendChild(notInChartBadge());
+                    }
+                    item.appendChild(fact);
+                });
+                (Array.isArray(c.citations) ? c.citations : []).forEach((g) => {
+                    const cite = el('div', 'mt-1 pl-2 border-left');
+                    cite.appendChild(el('div', null,
+                        'Guideline: ' + String(g.publisher || 'unknown publisher') + ', ' + (g.publication_year ? String(g.publication_year) : 'undated')
+                        + ' · population: ' + String(g.population_scope || 'not stated')
+                        + ' · evidence Tier ' + String(g.evidence_tier || '?')));
+                    if (g.page_or_section) {
+                        cite.appendChild(el('div', 'text-muted', String(g.page_or_section)));
+                    }
+                    if (g.quote_or_value) {
+                        cite.appendChild(el('div', 'text-muted font-italic', '“' + String(g.quote_or_value) + '”'));
+                    }
+                    item.appendChild(cite);
+                });
+                if (c.uncertainty) {
+                    item.appendChild(el('div', 'mt-1 font-italic', 'Uncertainty: ' + String(c.uncertainty)));
+                }
+                list.appendChild(item);
+            });
+            this.output.appendChild(list);
+        }
+
+        renderProvenance(p) {
+            if (!p) {
+                return;
+            }
+            this.output.appendChild(el('p', 'small text-muted mt-2 mb-0',
+                'Extraction model: ' + String(p.extraction_model || 'unknown')
+                + ' · Answer model: ' + String(p.answer_model || 'unknown')
+                + ' · Reranker: ' + String(p.reranker || 'unknown')
+                + ' · Corpus: ' + String(p.corpus_version || 'unknown')
+                + (p.evidence_status ? ' · Evidence retrieval: ' + String(p.evidence_status) : '')));
+        }
+    }
+
     function boot() {
         const container = document.getElementById('oe-copilot-panel');
         if (!container || container.dataset.booted === '1') {
@@ -685,6 +918,7 @@
         const panel = new CopilotPanel(container);
         window.oeCopilotPanel = panel;
         panel.start();
+        window.oeCopilotDocumentBriefing = new DocumentBriefingSection(container);
     }
 
     if (document.readyState === 'loading') {

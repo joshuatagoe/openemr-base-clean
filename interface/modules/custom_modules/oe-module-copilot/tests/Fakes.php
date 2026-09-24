@@ -252,4 +252,25 @@ final class FakeAgentClient implements AgentClientInterface
         assert(is_string($puuid));
         return new BundleAccepted($this->bundleId, $correlationId, $puuid, '2026-09-17T15:15:00Z');
     }
+
+    /** @var list<array{request:array<string,mixed>, cid:string}> */
+    public array $documentPosts = [];
+
+    public function postDocumentBriefing(array $request, string $correlationId): array
+    {
+        $this->documentPosts[] = ['request' => $request, 'cid' => $correlationId];
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
+        return [
+            'correlation_id' => $correlationId,
+            'patient_uuid' => $request['patient_uuid'] ?? null,
+            'document_id' => $request['document_id'] ?? null,
+            'status' => 'ok',
+            'degraded_reason' => null,
+            'briefing' => ['what_changed' => [], 'needs_attention' => [], 'what_to_consider' => [], 'limitations' => [], 'dropped' => [], 'refusal' => null],
+            'rendered_text' => '',
+            'provenance' => null,
+        ];
+    }
 }
