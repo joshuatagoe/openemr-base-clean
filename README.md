@@ -80,6 +80,49 @@ API collection: [`copilot-agent/api-collection/`](copilot-agent/api-collection/R
 
 ---
 
+## Week 2 — multimodal evidence agent
+
+Everything in this section is Week 2 work, added after commit `e80e740`. Nothing above it changed behaviour; the Week 1 panel and briefing still work exactly as described.
+
+**What it adds.** A lab report filed through OpenEMR's own Documents screen can now be briefed: the agent reads the document, extracts structured results with citations back to the printed text, retrieves guideline evidence, and returns a grounded briefing — *What changed*, *Needs attention*, *What to consider* — where every claim carries its tier and its source.
+
+**Run the Week 2 flow** (deployed or local — no separate branch, service or build)
+
+1. The Co-Pilot must already be on — steps 1–3 of *Turn on the Co-Pilot* above.
+2. Open a patient → **Documents** → **Add/Upload** → file a lab PDF. A synthetic one is committed at [`copilot-agent/fixtures/documents/lab_hba1c_clean.pdf`](copilot-agent/fixtures/documents/lab_hba1c_clean.pdf); [`lab_hba1c_degraded_scan.pdf`](copilot-agent/fixtures/documents/lab_hba1c_degraded_scan.pdf) shows an obscured value being reported as unreadable rather than guessed.
+3. Open the patient's **Patient Summary** → Co-Pilot panel → **Brief from latest lab document**.
+
+The document is stored by OpenEMR, not by the Co-Pilot: the module reads the patient's newest PDF from the core `documents` table and posts it, signed, to the agent. Extracted values are shown as **not yet in the chart** — nothing is filed without a clinician (see `W2_ARCHITECTURE.md`).
+
+**Environment variables added in Week 2** (agent service; all optional)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock. The panel's footer names whichever ran |
+| `COPILOT_BEDROCK_REGION` | `us-west-2` | Region where Cohere Rerank 3.5 access is enabled |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
+| `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Raise to `60` in production: the briefing makes two model calls (~18 s total) |
+
+No new variable is needed on the OpenEMR side — the document route reuses `COPILOT_AGENT_URL` and `COPILOT_TICKET_SECRET`.
+
+**The eval gate** — [EVAL_GATE.md](EVAL_GATE.md)
+
+- Run it from a fresh clone, no key needed: `cd copilot-agent && uv sync && uv run python scripts/eval_gate.py`
+- CI job `eval-gate` in [`.gitlab-ci.yml`](.gitlab-ci.yml) runs on every push and merge request
+- Block commits locally too (hooks do not come with a clone): `git config core.hooksPath .githooks`
+- The regression it blocked: [merge request !1](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/1)
+
+**Week 2 documents**
+
+| Document | Purpose |
+|---|---|
+| [W2_ARCHITECTURE.md](W2_ARCHITECTURE.md) | Ingestion flow, worker graph, RAG design, eval gate, risks and tradeoffs — each component marked Built or Planned |
+| [EVAL_GATE.md](EVAL_GATE.md) | Where prompts, schemas and golden set live; how to run the gate; what makes it fail; what it does and does not test |
+
+**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 476 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1; `tests/test_api_collection.py` needs the Bruno CLI. Module: 67 / 67 PHPUnit, up from 57.
+
+---
+
 # OpenEMR
 
 [OpenEMR](https://open-emr.org) is a Free and Open Source electronic health records and medical practice management application. It features fully integrated electronic health records, practice management, scheduling, electronic billing, internationalization, free support, a vibrant community, and a whole lot more. It runs on Windows, Linux, Mac OS X, and many other platforms.

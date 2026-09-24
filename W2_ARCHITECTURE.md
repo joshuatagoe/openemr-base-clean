@@ -21,23 +21,30 @@ a file in this repo, it is marked as planned.
 | Document schemas, citation with bbox | **Built** | `copilot-agent/app/documents.py` |
 | Eval gate: 5 boolean rubrics, exact arithmetic, floors | **Built** | `copilot-agent/scripts/eval_gate.py`, `app/rubrics.py` |
 | CI job that runs the gate | **Built** | `.gitlab-ci.yml` (one job, `eval-gate`) |
-| Upload → OpenEMR `documents` table | **Planned** | no code; module `src/` has no document class |
-| Intake-form extraction | **Planned** | no schema, no fixture |
-| Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003 |
-| Supervisor / `intake-extractor` / `evidence-retriever` graph | **Planned** | ADR-001 |
-| Sparse + dense retrieval, RRF, reranking | **Planned** | ADR-002, `W2-AMB-012` |
+| Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) |
+| Signed module → agent document route | **Built** | `POST /api/copilot/document-briefing` (module) → `POST /v1/documents/briefing` (agent, `app/document_briefing.py`) |
+| Sparse + dense retrieval, RRF (k = 60) | **Built** | `copilot-agent/app/retrieval.py` — BM25 and a hashed-n-gram dense index, both local and deterministic |
+| Reranking | **Built** | `copilot-agent/app/reranker.py` — `FakeReranker` (default) and a Bedrock Cohere Rerank 3.5 adapter selected by `COPILOT_RERANKER` |
+| Answer model: considerations from the top evidence only | **Built** | `app/document_briefing.py` — flat draft schema; citations built in code, never by the model |
+| Grounded briefing: three headings, tiers, admissibility screening | **Built** | `copilot-agent/app/briefing.py` |
+| Panel: *Brief from latest lab document* | **Built** | `oe-module-copilot/public/copilot-panel.js` |
+| Record/replay harness + committed real-model responses | **Built** | `copilot-agent/app/recording.py`, `fixtures/recordings/` |
+| Pre-commit hook running the gate | **Built** | `.githooks/pre-commit` |
 | Guideline corpus (NDEP + CDC), tier rule enforced | **Built** | `copilot-agent/app/corpus.py`, `fixtures/corpus/` |
 | Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
+| **Supervisor / `intake-extractor` / `evidence-retriever` graph** | **Planned — the main open core gap** | ADR-001. The pipeline above runs as a **linear sequence**, not a supervised graph. `CR4` requires a supervisor routing to two workers with logged handoffs; that is not built |
+| Intake-form extraction | **Planned** | no schema, no fixture |
+| Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003. Extracted values are displayed as *not yet in the chart* and are never filed |
 
-Nothing in `copilot-agent/pyproject.toml` or `uv.lock` yet depends on LangGraph, boto3, a BM25
-library, an embedding model or a PDF parser. The dependency set is still `anthropic`, `fastapi`,
-`langfuse`, `pydantic`, `pydantic-settings`, `uvicorn`. That is the fastest way to confirm which half
-of this document is real.
+No new runtime dependency was added for any of this. `copilot-agent/pyproject.toml` still depends
+only on `anthropic`, `fastapi`, `langfuse`, `pydantic`, `pydantic-settings` and `uvicorn`: BM25 and
+the dense index are written directly, the PDF fixtures are raw PDF structure, and `boto3` is imported
+lazily inside the Bedrock adapter only. LangGraph is absent, which is the quickest way to confirm the
+supervisor row above.
 
-The corpus is built and indexed but **nothing retrieves from it yet** — `app/corpus.py` has no caller
-outside its tests. It is a corpus without a retriever, which is the honest state: the content,
-provenance and tier enforcement are real and tested, and the sparse/dense pipeline in §3 that would
-consume them is not.
+**Correction, 2026-09-23 evening.** An earlier revision of this section said the corpus had no
+retriever and that upload and retrieval were Planned. Both were true when written and stopped being
+true when the document briefing was wired in the same evening; the rows above replace them.
 
 ---
 

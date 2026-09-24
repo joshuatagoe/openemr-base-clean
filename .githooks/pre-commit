@@ -18,6 +18,11 @@
 
 set -e
 
+# uv hardlinks from its cache by default, which fails on some synced or
+# network filesystems (OneDrive: os error 396) the first time a worktree
+# builds its venv. Copy mode works everywhere and costs a few seconds once.
+export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root/copilot-agent" || exit 0
 
