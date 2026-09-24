@@ -26,6 +26,9 @@ final class GuzzleAgentClient implements AgentClientInterface
 {
     public const HEADER_CORRELATION = 'X-Correlation-Id';
 
+    /** The agent reads a whole document and calls a model; far longer than a bundle hand-off. */
+    public const DOCUMENT_BRIEFING_TIMEOUT_SECONDS = 90.0;
+
     private readonly ClientInterface $http;
 
     /** @var callable(): int */
@@ -78,6 +81,63 @@ final class GuzzleAgentClient implements AgentClientInterface
         }
 
         return self::parseAccepted($response, $correlationId, $bundle);
+    }
+
+    public function postDocumentBriefing(array $request, string $correlationId): array
+    {
+        $baseUrl = $this->config->agentBaseUrl();
+        $secret = $this->config->ticketSecret;
+        if (!$this->config->isConfigured() || $baseUrl === null || $secret === null) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_NOT_CONFIGURED);
+        }
+
+        try {
+            $body = json_encode($request, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        } catch (JsonException $e) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_BAD_RESPONSE, null, $e);
+        }
+
+        $headers = BundleSigner::headers($secret, $body, ($this->clock)()) + [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            self::HEADER_CORRELATION => $correlationId,
+        ];
+
+        try {
+            $response = $this->http->request('POST', $baseUrl . '/v1/documents/briefing', [
+                RequestOptions::HEADERS => $headers,
+                RequestOptions::BODY => $body,
+                RequestOptions::HTTP_ERRORS => false,
+                RequestOptions::TIMEOUT => self::DOCUMENT_BRIEFING_TIMEOUT_SECONDS,
+            ]);
+        } catch (ConnectException $e) {
+            $reason = str_contains(strtolower($e->getMessage()), 'timed out')
+                ? AgentUnavailableException::REASON_TIMEOUT
+                : AgentUnavailableException::REASON_UNREACHABLE;
+            throw new AgentUnavailableException($reason, null, $e);
+        } catch (Throwable $e) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_UNREACHABLE, null, $e);
+        }
+
+        $status = $response->getStatusCode();
+        if ($status !== 200) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_REJECTED, $status);
+        }
+        try {
+            $decoded = json_decode((string) $response->getBody(), true, 64, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_BAD_RESPONSE, $status, $e);
+        }
+        // The agent must echo the identifiers it was given; anything else is a wrong or confused peer.
+        if (
+            !is_array($decoded)
+            || Scalar::str($decoded['correlation_id'] ?? null) !== $correlationId
+            || Scalar::str($decoded['patient_uuid'] ?? null) !== Scalar::str($request['patient_uuid'] ?? null)
+        ) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_BAD_RESPONSE, $status);
+        }
+        /** @var array<string,mixed> $decoded */
+        return $decoded;
     }
 
     /**

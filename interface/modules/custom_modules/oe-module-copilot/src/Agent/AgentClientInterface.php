@@ -21,4 +21,15 @@ interface AgentClientInterface
      * @throws AgentUnavailableException
      */
     public function postBundle(array $bundle, string $correlationId): BundleAccepted;
+
+    /**
+     * Week 2: `POST /v1/documents/briefing` (copilot-agent/app/document_briefing.py).
+     * Returns the agent's DocumentBriefingResponse, decoded, after checking it
+     * echoes this request's correlation id and patient uuid.
+     *
+     * @param array<string,mixed> $request  a DocumentBriefingRequest as an array
+     * @return array<string,mixed>
+     * @throws AgentUnavailableException
+     */
+    public function postDocumentBriefing(array $request, string $correlationId): array;
 }

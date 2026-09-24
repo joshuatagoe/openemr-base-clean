@@ -45,7 +45,9 @@ use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
 use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
+use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
+use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Observability\LangfuseTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
@@ -59,6 +61,7 @@ final class Bootstrap
     public const GLOBALS_SECTION = 'Clinical Co-Pilot';
     public const GLOBAL_ADMIN_OVERRIDE = 'copilot_admin_relationship_override';
     public const ROUTE_BRIEFING_TICKET = 'POST /api/copilot/briefing-ticket';
+    public const ROUTE_DOCUMENT_BRIEFING = 'POST /api/copilot/document-briefing';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -114,6 +117,10 @@ final class Bootstrap
             self::ROUTE_BRIEFING_TICKET,
             static fn(HttpRestRequest $request) => self::createBriefingTicketController()->handleRest($request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENT_BRIEFING,
+            static fn(HttpRestRequest $request) => self::createDocumentBriefingController()->handleRest($request)
+        );
         return $event;
     }
 
@@ -150,6 +157,18 @@ final class Bootstrap
             new GuzzleAgentClient($config),
             $config,
             reporter: $reporter,
+        );
+    }
+
+    /** Same authorizer wiring as the ticket route (Week 2 document briefing). */
+    public static function createDocumentBriefingController(): DocumentBriefingController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new DocumentBriefingController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlClinicalReader(),
+            new SqlDocumentReader(),
+            new GuzzleAgentClient(CopilotConfig::fromEnvironment()),
         );
     }
 }
