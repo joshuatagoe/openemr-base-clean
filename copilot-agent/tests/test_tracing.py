@@ -462,3 +462,72 @@ def test_no_document_text_base64_or_patient_identifier_reaches_an_exported_span(
         assert puuid not in blob, s.name
         assert pdf_b64[:32] not in blob, s.name
         assert "JVBERi0" not in blob, s.name  # the base64 prefix of any PDF
+
+
+# --------------------------------------------------------------------------- #
+# Week 2: the document briefing is one trace (CR7)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def traced_document_client(exporter: InMemorySpanExporter, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    from app.providers.stub_provider import StubProvider
+
+    original = observability.configure_tracing
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    public_key = f"pk-lf-test-{uuid4().hex}"
+
+    def configure_with_memory_exporter(**kwargs: Any) -> bool:
+        kwargs.update(enabled=True, public_key=public_key, secret_key="sk-lf-test", base_url="http://127.0.0.1:9", span_exporter=exporter)
+        return original(**kwargs)
+
+    monkeypatch.setattr("app.main.configure_tracing", configure_with_memory_exporter)
+    app.dependency_overrides[get_provider_factory] = lambda: StubProvider
+    app.dependency_overrides[get_settings] = lambda: configured_settings()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_provider_factory, None)
+        app.dependency_overrides.pop(get_settings, None)
+
+
+def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
+    traced_document_client: TestClient, exporter: InMemorySpanExporter
+) -> None:
+    from tests.test_document_briefing import _body, _signed
+
+    body = _body()
+    r = traced_document_client.post("/v1/documents/briefing", content=body, headers=_signed(body))
+    assert r.status_code == 200 and r.json()["status"] == "ok"
+    payload = json.loads(body)
+
+    spans = _exported(exporter)
+    by_name = {s.name: s for s in spans}
+    # Tool sequence: every step of the pipeline is an observation in the trace.
+    assert {"document_briefing", "lab_extract", "answer_considerations"} <= set(by_name)
+    assert {format(s.context.trace_id, "032x") for s in spans} == {trace_id_for(payload["correlation_id"])}
+    root = by_name["document_briefing"]
+    for step in ("lab_extract", "answer_considerations"):
+        assert by_name[step].parent.span_id == root.context.span_id, step
+
+    # Both model calls are generations with usage and cost.
+    for gen in ("lab_extract", "answer_considerations"):
+        assert _attr_json(by_name[gen], "langfuse.observation.type") == "generation", gen
+        assert "total" in _attr_json(by_name[gen], "langfuse.observation.cost_details"), gen
+
+    root_meta = {k.rsplit(".", 1)[-1]: v for k, v in root.attributes.items() if "metadata" in k}
+    assert root_meta.get("outcome") == "ok"
+
+    # PHI control: no extracted value, test name, quote or identifier leaves the process.
+    briefing = r.json()["briefing"]
+    needles = {payload["patient_uuid"], payload["document_base64"][:40], "Hemoglobin A1c", r.json()["rendered_text"][:60]}
+    for line in briefing["what_changed"] + briefing["needs_attention"]:
+        needles.add(line["text"])
+        if line["document_citation"]:
+            needles.add(line["document_citation"]["quote_or_value"])
+    assert "8.9" in needles  # the extracted lab value itself is one of the needles
+    for s in spans:
+        blob = json.dumps(dict(s.attributes), default=str)
+        for needle in needles:
+            assert needle not in blob, (s.name, needle)

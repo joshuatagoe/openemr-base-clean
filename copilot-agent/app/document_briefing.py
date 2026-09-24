@@ -47,7 +47,7 @@ from app.corpus import ClaimKind
 from app.documents import LabDocument, LabResult, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
 from app.lab_extractor import extract_lab_document
-from app.observability import log_event
+from app.observability import generation, log_event, score, span
 from app.providers.base import ContentPart, ModelProvider, ProviderError, TextPart
 from app.providers.stub_provider import StubProvider
 from app.reranker import BedrockReranker, FakeReranker
@@ -331,6 +331,29 @@ async def run_document_briefing(
     provider: ModelProvider,
     reranker: FakeReranker | BedrockReranker,
 ) -> DocumentBriefingResponse:
+    """One document briefing = one trace (CR7: every encounter logged).
+
+    The outermost span for a correlation id opens the Langfuse trace, and every
+    step inside - lab_extract, retrieval, rerank, answer_considerations - nests
+    under it, so the tool sequence and per-step latency read as one encounter.
+    The trace id is the correlation id the module already logs, so a panel
+    request, its audit row and its trace can be joined.
+    """
+    # Attribute keys are from TRACE_ALLOWED_KEYS; anything else exports as <masked>.
+    with span("document_briefing", cid=request.correlation_id) as attrs:
+        response = await _run_document_briefing(request, provider=provider, reranker=reranker)
+        attrs["outcome"] = response.status.value
+        attrs["reason_code"] = response.degraded_reason
+        score("document_briefing_degraded", response.status is not BriefingStatus.OK, data_type="BOOLEAN")
+        return response
+
+
+async def _run_document_briefing(
+    request: DocumentBriefingRequest,
+    *,
+    provider: ModelProvider,
+    reranker: FakeReranker | BedrockReranker,
+) -> DocumentBriefingResponse:
     """Extract -> retrieve -> rerank -> propose -> screen. Never raises for a model failure."""
     base = {
         "correlation_id": request.correlation_id,
@@ -363,13 +386,18 @@ async def run_document_briefing(
     candidates: list[ConsiderationCandidate] = []
     if evidence.snippets:
         try:
-            parsed = await provider.parse_structured(
-                system=ANSWER_SYSTEM_PROMPT,
-                content=_answer_content(document, evidence),
-                schema=ConsiderationDraftSet,
-                max_tokens=ANSWER_MAX_OUTPUT_TOKENS,
-                effort="low",
-            )
+            # Traced as a generation so its latency, tokens and cost are visible.
+            # It is 71% of end-to-end latency; an untraced bottleneck is the one
+            # you cannot tune. input/output are never set - they hold patient values.
+            with generation("answer_considerations") as gen:
+                parsed = await provider.parse_structured(
+                    system=ANSWER_SYSTEM_PROMPT,
+                    content=_answer_content(document, evidence),
+                    schema=ConsiderationDraftSet,
+                    max_tokens=ANSWER_MAX_OUTPUT_TOKENS,
+                    effort="low",
+                )
+                gen["usage"] = parsed.usage
             answer_model = parsed.usage.model
             candidates = drafts_to_candidates(parsed.output, document)
         except ProviderError:
@@ -382,6 +410,20 @@ async def run_document_briefing(
         considerations=candidates,
         question=request.question,
     )
+
+    # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates
+    # and fixed labels only - never a value, a quote or an identifier.
+    meta = document.extraction_metadata
+    score("extraction_results", len(document.results))
+    score("extraction_verified_fraction", meta.verified_fraction)
+    score("extraction_unreadable", meta.unreadable_count)
+    score("retrieval_candidates", len(retrieved.candidates))
+    score("evidence_snippets", len(evidence.snippets))
+    score("evidence_status", evidence.status.value, data_type="CATEGORICAL")
+    score("considerations_shown", len(briefing.what_to_consider))
+    score("claims_withheld", len(briefing.dropped))
+    # The encounter's eval outcome: every displayed claim survived screening.
+    score("briefing_grounded", not briefing.dropped, data_type="BOOLEAN")
 
     log_event(
         "document_briefing.completed",
