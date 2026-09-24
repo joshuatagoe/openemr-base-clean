@@ -101,6 +101,7 @@ The document is stored by OpenEMR, not by the Co-Pilot: the module reads the pat
 | `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock. The panel's footer names whichever ran |
 | `COPILOT_BEDROCK_REGION` | `us-west-2` | Region where Cohere Rerank 3.5 access is enabled |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
+| `COPILOT_MAX_SIGNED_BODY_BYTES` | `15728640` (15 MiB) | Signed request bodies over this are refused with 413 while being read, before the signature is checked. Fits the 10 MiB document cap after base64 |
 | `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Per model call. Set `40` in production: the briefing makes two sequential calls (~18 s total), and 2 × 40 s stays inside the module's 90 s round-trip timeout |
 
 No new variable is needed on the OpenEMR side — the document route reuses `COPILOT_AGENT_URL` and `COPILOT_TICKET_SECRET`.
@@ -122,7 +123,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [EVAL_GATE.md](EVAL_GATE.md) | Where prompts, schemas and golden set live; how to run the gate; what makes it fail; what it does and does not test |
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
 
-**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 497 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 67 / 67 PHPUnit, up from 57.
+**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 500 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
 
 ---
 

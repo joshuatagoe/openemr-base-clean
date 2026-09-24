@@ -16,6 +16,7 @@ use OpenEMR\Modules\Copilot\Agent\GuzzleAgentClient;
 use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
+use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use PHPUnit\Framework\TestCase;
@@ -133,6 +134,24 @@ final class DocumentBriefingTest extends TestCase
         self::assertSame('degraded', $result['body']['status']);
         self::assertSame('agent_unavailable', $result['body']['degraded_reason']);
         self::assertSame(self::DOC_ID, $result['body']['document_id']);
+    }
+
+    public function testOversizedDocumentIsDegradedByNameAndNeverSent(): void
+    {
+        $agent = new FakeAgentClient();
+        $reader = new FakeDocumentReader([], new DocumentTooLargeException(self::DOC_ID));
+        $result = $this->controller($reader, $agent)->handleForSession(self::session(), self::PID);
+
+        self::assertSame(200, $result['status']);
+        self::assertSame('degraded', $result['body']['status']);
+        self::assertSame('document_too_large', $result['body']['degraded_reason']);
+        self::assertSame(self::DOC_ID, $result['body']['document_id']);
+        self::assertSame([], $agent->documentPosts);
+    }
+
+    public function testReaderLimitMatchesTheAgentLimit(): void
+    {
+        self::assertSame(10 * 1024 * 1024, SqlDocumentReader::MAX_DOCUMENT_BYTES);
     }
 
     public function testUnreadableDocumentStoreIsDegradedNotARawException(): void
@@ -277,7 +296,7 @@ final class FakeDocumentReader extends SqlDocumentReader
     /**
      * @param array<int, array{document_id:int, media_type:string, bytes:string}> $byPid
      */
-    public function __construct(private readonly array $byPid, private readonly ?SourceUnavailableException $failure = null)
+    public function __construct(private readonly array $byPid, private readonly ?\RuntimeException $failure = null)
     {
     }
 

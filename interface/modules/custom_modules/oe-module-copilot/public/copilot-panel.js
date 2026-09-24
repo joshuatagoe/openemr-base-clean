@@ -686,6 +686,7 @@
     const DOC_DEGRADED_MESSAGES = {
         no_document_on_file: 'No lab document (PDF, PNG or JPEG) is on file in this patient’s Documents.',
         document_unavailable: 'The latest document on file could not be read.',
+        document_too_large: 'The latest document on file is over 10 MB, the largest the Co-Pilot reads.',
         agent_unavailable: 'The Co-Pilot agent could not be reached.'
     };
 

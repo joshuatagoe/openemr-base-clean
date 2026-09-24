@@ -37,6 +37,7 @@ use OpenEMR\Modules\Copilot\Agent\AgentUnavailableException;
 use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Support\Scalar;
 use Psr\Log\LoggerInterface;
@@ -51,6 +52,7 @@ final class DocumentBriefingController
     public const DEGRADED_NO_DOCUMENT = 'no_document_on_file';
     public const DEGRADED_DOCUMENT_UNAVAILABLE = 'document_unavailable';
     public const DEGRADED_AGENT_UNAVAILABLE = 'agent_unavailable';
+    public const DEGRADED_DOCUMENT_TOO_LARGE = 'document_too_large';
 
     /** Matches DocumentBriefingRequest.question's max_length. */
     public const QUESTION_MAX_LENGTH = 500;
@@ -154,6 +156,10 @@ final class DocumentBriefingController
                 }
                 unset($request);
             }
+        } catch (DocumentTooLargeException $e) {
+            $this->logger->info('copilot document too large', ['cid' => $correlationId, 'document_id' => $e->getDocumentId()]);
+            $outcome = self::DEGRADED_DOCUMENT_TOO_LARGE;
+            $body = self::degraded($correlationId, $patientUuid, $e->getDocumentId(), $outcome);
         } catch (SourceUnavailableException $e) {
             $this->logger->error('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
             $outcome = self::DEGRADED_DOCUMENT_UNAVAILABLE;

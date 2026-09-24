@@ -135,6 +135,63 @@ def test_an_undecodable_document_degrades_rather_than_erroring(stub_client: Test
     assert r.json()["degraded_reason"] == "document_not_decodable"
 
 
+# --------------------------------------------------------------------------- #
+# Size cap: an oversized document is refused, and never buffered whole
+# --------------------------------------------------------------------------- #
+
+
+def _client_with(**settings: object) -> TestClient:
+    app.dependency_overrides[get_provider_factory] = lambda: StubProvider
+    app.dependency_overrides[get_settings] = lambda: configured_settings(**settings)
+    return TestClient(app)
+
+
+def test_a_document_over_the_cap_fails_the_contract() -> None:
+    from app.document_briefing import MAX_DOCUMENT_BYTES
+
+    oversized = base64.b64encode(b"%PDF" + b"0" * MAX_DOCUMENT_BYTES).decode()
+    body = _body(document_base64=oversized)
+    try:
+        with _client_with() as c:
+            r = c.post("/v1/documents/briefing", content=body, headers=_signed(body))
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 422
+
+
+def test_a_declared_body_over_the_limit_is_refused_before_the_signature_is_checked() -> None:
+    body = _body()
+    try:
+        with _client_with(max_signed_body_bytes=1024) as c:
+            # Unsigned on purpose: the size refusal must come first, so a caller
+            # without the secret still cannot make the agent buffer a large body.
+            r = c.post("/v1/documents/briefing", content=body, headers={"Content-Type": "application/json"})
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "body_too_large"
+
+
+@pytest.mark.anyio
+async def test_an_undeclared_oversized_body_is_cut_off_while_streaming() -> None:
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from app.main import _read_capped_body
+
+    sent: list[int] = []
+
+    async def receive() -> dict[str, object]:
+        sent.append(1)
+        return {"type": "http.request", "body": b"x" * 600, "more_body": True}  # endless stream
+
+    request = Request({"type": "http", "method": "POST", "headers": []}, receive)
+    with pytest.raises(HTTPException) as exc:
+        await _read_capped_body(request, 1024)
+    assert exc.value.status_code == 413
+    assert len(sent) == 2  # stopped at the chunk that crossed the limit
+
+
 def test_no_configured_provider_degrades_rather_than_erroring() -> None:
     def _no_provider() -> StubProvider:
         raise ProviderConfigurationError("ANTHROPIC_API_KEY is not configured")

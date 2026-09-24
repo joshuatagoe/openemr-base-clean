@@ -29,6 +29,9 @@ use Throwable;
 
 class SqlDocumentReader
 {
+    /** Matches the agent's MAX_DOCUMENT_BYTES (app/document_briefing.py). */
+    public const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
     /** Stored mimetype -> media type the agent accepts. */
     public const MEDIA_TYPES = [
         'application/pdf' => 'application/pdf',
@@ -47,7 +50,7 @@ class SqlDocumentReader
         $types = array_keys(self::MEDIA_TYPES);
         try {
             $rows = QueryUtils::fetchRecords(
-                "SELECT id, mimetype FROM documents"
+                "SELECT id, mimetype, size FROM documents"
                 . " WHERE foreign_id = ? AND deleted = 0"
                 . " AND date_expires IS NULL"
                 . " AND LOWER(mimetype) IN (" . implode(',', array_fill(0, count($types), '?')) . ")"
@@ -66,6 +69,11 @@ class SqlDocumentReader
         if ($id <= 0 || $mediaType === null) {
             return null;
         }
+        // Checked before reading so an oversized file is never loaded; `size` can be
+        // NULL on older rows, so the byte length is checked again after reading.
+        if (Scalar::int($row['size'] ?? null) > self::MAX_DOCUMENT_BYTES) {
+            throw new DocumentTooLargeException($id);
+        }
         try {
             $bytes = (new Document((string) $id))->get_data();
         } catch (Throwable $e) {
@@ -73,6 +81,9 @@ class SqlDocumentReader
         }
         if (!is_string($bytes) || $bytes === '') {
             throw new SourceUnavailableException('documents');
+        }
+        if (strlen($bytes) > self::MAX_DOCUMENT_BYTES) {
+            throw new DocumentTooLargeException($id);
         }
         return ['document_id' => $id, 'media_type' => $mediaType, 'bytes' => $bytes];
     }

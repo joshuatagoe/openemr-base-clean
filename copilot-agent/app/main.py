@@ -246,10 +246,30 @@ def _require_secret(cfg: ServiceSettings) -> str:
     return secret
 
 
+async def _read_capped_body(request: Request, limit: int) -> bytes:
+    """Read the body in chunks, refusing it with 413 once it passes ``limit``.
+
+    A declared Content-Length over the limit is refused before a byte is read;
+    a missing or understated one is caught while streaming.
+    """
+    too_large = _error(status.HTTP_413_CONTENT_TOO_LARGE, "body_too_large", f"The request body exceeds {limit} bytes.")
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        raise too_large
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            raise too_large
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 async def require_signed_body(request: Request, cfg: ServiceSettings = Depends(get_settings)) -> bytes:
     """Verify the module's HMAC over the raw body before anything is parsed."""
     secret = _require_secret(cfg)
-    body = await request.body()
+    body = await _read_capped_body(request, cfg.max_signed_body_bytes)
     try:
         verify_body_signature(
             secret,

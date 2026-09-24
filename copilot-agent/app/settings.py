@@ -76,6 +76,10 @@ class ServiceSettings(BaseSettings):
     bedrock_region: str = Field(default="us-west-2", description="Region where Cohere Rerank 3.5 access is enabled.")
     bundle_ttl_seconds: int = Field(default=900, ge=60, le=3600, description="15 minutes by default.")
     signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
+    # Signed bodies are read in chunks and refused past this size, before the
+    # signature is checked, so an oversized request is never buffered whole.
+    # 15 MiB fits a 10 MiB document (MAX_DOCUMENT_BYTES) after base64 and JSON.
+    max_signed_body_bytes: int = Field(default=15 * 1024 * 1024, ge=1024)
     briefing_timeout_seconds: float = Field(default=10.0, gt=0, le=60, description="Hard timeout before a degraded event.")
     allowed_origin: str | None = Field(default=None, description="Browser origin of the OpenEMR panel (CORS). None disables CORS.")
     openemr_base_url: str | None = Field(default=None, description="For /ready: GET {url}/apis/default/fhir/metadata must answer. None skips the probe.")

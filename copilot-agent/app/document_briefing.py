@@ -55,6 +55,12 @@ from app.retrieval import HybridRetriever, build_retriever
 
 SUPPORTED_MEDIA_TYPES = ("application/pdf", "image/png", "image/jpeg")
 
+# Largest stored file the agent will read: well above any real lab report or
+# intake form, well below the model's 32 MB request limit. The PHP module checks
+# the same number before encoding, so an oversized file never leaves OpenEMR.
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_DOCUMENT_BASE64_CHARS = 4 * -(-MAX_DOCUMENT_BYTES // 3)
+
 
 # --------------------------------------------------------------------------- #
 # HTTP contract - PHP module -> agent
@@ -77,7 +83,11 @@ class DocumentBriefingRequest(StrictModel):
     patient_uuid: UUID
     document_id: int = Field(ge=1)
     media_type: Literal["application/pdf", "image/png", "image/jpeg"]
-    document_base64: str = Field(min_length=1, description="The stored file's bytes. Never logged.")
+    document_base64: str = Field(
+        min_length=1,
+        max_length=MAX_DOCUMENT_BASE64_CHARS,
+        description="The stored file's bytes, at most MAX_DOCUMENT_BYTES decoded. Never logged.",
+    )
     question: str | None = Field(
         default=None,
         max_length=500,
@@ -455,6 +465,7 @@ async def _run_document_briefing(
 
 __all__ = [
     "ANSWER_SYSTEM_PROMPT",
+    "MAX_DOCUMENT_BYTES",
     "SUPPORTED_MEDIA_TYPES",
     "BriefingStatus",
     "ConsiderationDraft",
