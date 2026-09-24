@@ -23,6 +23,8 @@ Also covered:
 
 from __future__ import annotations
 
+import json
+
 import ast
 from collections.abc import Callable
 from pathlib import Path
@@ -325,10 +327,15 @@ def test_the_adapter_imports_the_sdk_lazily_not_at_module_scope() -> None:
         assert node.col_offset > 0, f"module-scope AWS SDK import on line {node.lineno}"
 
 
-def test_boto3_is_not_a_declared_dependency() -> None:
-    """The gate must install and run without an AWS SDK present."""
-    pyproject = (APP_DIR.parent / "pyproject.toml").read_text(encoding="utf-8")
-    assert "boto3" not in pyproject
+def test_boto3_is_imported_only_when_bedrock_is_called() -> None:
+    """boto3 is declared (2026-09-24, to run Cohere in production) but still loaded lazily:
+    importing the app never imports it, so the offline gate needs no AWS SDK or credentials."""
+    import subprocess
+    import sys
+
+    code = "import sys, app.main, app.reranker; print('boto3' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], cwd=APP_DIR.parent, capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"
 
 
 def test_the_bedrock_model_id_is_pinned_to_cohere_rerank_3_5() -> None:
@@ -419,3 +426,25 @@ def test_the_fake_makes_no_network_call(corpus: Corpus, candidates: tuple[Candid
 
     package = FakeReranker(corpus).rerank(QUERY, candidates)
     assert package.status is RetrievalStatus.OK
+
+
+def test_a_bedrock_failure_logs_its_aws_error_code_but_never_its_message(
+    corpus: Corpus, candidates: tuple[Candidate, ...], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A first live call that fails must say why (permissions? region?) without exporting the message."""
+    from app.reranker import BedrockReranker
+
+    class AccessDenied(Exception):
+        response = {"Error": {"Code": "AccessDeniedException", "Message": "secret detail about arn:aws:iam::123"}}
+
+    monkeypatch.setattr("app.reranker._sleep", lambda _s: None)
+    reranker = BedrockReranker(corpus, client=StubBedrockClient(error=AccessDenied("secret detail about arn:aws:iam::123")), max_attempts=2)
+    with caplog.at_level("INFO"):
+        package = reranker.rerank(QUERY, candidates)
+
+    assert package.status is RetrievalStatus.UNAVAILABLE
+    logged = [r for r in caplog.records if r.getMessage() == "rerank.bedrock_error"]
+    assert len(logged) == 2  # one per attempt
+    blob = " ".join(json.dumps(r.__dict__, default=str) for r in logged)
+    assert "AccessDeniedException" in blob and "AccessDenied" in blob
+    assert "secret detail" not in blob

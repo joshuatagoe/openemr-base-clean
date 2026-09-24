@@ -5,6 +5,7 @@ description = "Clinical Co-Pilot agent service: plan-continuity briefings over s
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=1.6.0",
+    "boto3>=1.43.102",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.115",
     "langfuse>=4.15.4",
     "langgraph>=1.0",

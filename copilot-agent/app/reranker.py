@@ -57,7 +57,7 @@ from app.evidence import (
     GuidelineCitation,
     RetrievalStatus,
 )
-from app.observability import span
+from app.observability import log_event, span
 from app.providers.base import ProviderConfigurationError
 from app.retrieval import tokenize
 
@@ -79,6 +79,15 @@ NO_CANDIDATES_REASON = "no_guideline_candidates_retrieved"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_ATTEMPTS = 2
 RETRY_BASE_SECONDS = 0.05
+
+
+def _aws_error_code(exc: Exception) -> str | None:
+    """botocore's ``ClientError`` carries a fixed code such as ``AccessDeniedException``."""
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code")
+        return str(code) if code else None
+    return None
 
 
 def _sleep(seconds: float) -> None:  # patched out in tests that exercise the retry budget
@@ -256,7 +265,7 @@ class BedrockReranker(_PackagingMixin):
         except ImportError as exc:  # pragma: no cover - exercised via monkeypatched __import__
             raise ProviderConfigurationError(
                 "boto3 is not installed, so the Bedrock reranker cannot be used. "
-                "It is deliberately not a declared dependency: the offline gate runs on FakeReranker."
+                "It is a declared dependency; reinstall with `uv sync`."
             ) from exc
 
         self._client = boto3.client(
@@ -288,7 +297,17 @@ class BedrockReranker(_PackagingMixin):
             try:
                 response = self.client().rerank(**request)
                 return self._package(self._parse(response, candidates))
-            except Exception:  # noqa: BLE001 - every fault ends in one explicit state
+            except Exception as exc:  # noqa: BLE001 - every fault ends in one explicit state
+                # The exception class and AWS error code only (AccessDeniedException,
+                # ValidationException, ...) - enough to tell a permissions or region
+                # problem from an outage. Never the message: it is not ours to vouch for.
+                log_event(
+                    "rerank.bedrock_error",
+                    attempt=attempt,
+                    error_type=type(exc).__name__,
+                    reason_code=_aws_error_code(exc),
+                    region=self.region,
+                )
                 if attempt >= self.max_attempts:
                     return self._unavailable()
                 # Jittered backoff: a synchronised retry storm is how a
