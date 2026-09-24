@@ -16,6 +16,16 @@ default:
   before_script:
     - $env:PATH = "C:\Users\joshu\.local\bin;$env:PATH"
 
+variables:
+  # A fresh clone on every run, never a reused build directory. Found the hard
+  # way (pipeline 26894): after *.pdf was marked binary in .gitattributes, the
+  # runner's reused checkout still held PDFs written CRLF-converted by an older
+  # checkout - git does not rewrite files whose content did not change - so two
+  # eval recordings, keyed to the true bytes, looked stale. A fresh clone is
+  # also exactly what a grader does, which is the claim EVAL_GATE.md makes.
+  GIT_STRATEGY: clone
+  GIT_DEPTH: "10"
+
 stages:
   - gate
 
