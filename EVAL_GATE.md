@@ -52,16 +52,29 @@ artifact (retained 30 days) so a run can be inspected without re-running it.
 The runner is self-hosted (Windows, shell executor, LocalSystem) because
 `labs.gauntletai.com` provides no shared runners.
 
-### No git hook, deliberately
+### Git hook — install command
 
-`CR6` says "PR-blocking Git Hook", and the submission row says "Git Hook **or
-equivalent**". We use the equivalent, because a client-side hook cannot do the
-job the phrase describes: hooks block a *push* on one machine, while a merge
-request is server-side. Only CI can block an MR.
+Hooks do not survive a clone, so this is a deliberate one-off:
 
-A hook would therefore be a second, weaker copy of the gate — bypassable with
-`--no-verify`, absent from a fresh clone, and one more thing to keep in step
-with the real one. There is nothing to install.
+```bash
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit` then runs the same `scripts/eval_gate.py` before every
+commit. **A failing gate blocks the commit**, prints the failing cases, and
+prints how to recover.
+
+Verified, not assumed: injecting a real regression (removing the hallucination
+guard in `ground_extraction`) and attempting a commit produced
+
+```
+  COMMIT BLOCKED - the eval gate failed.
+```
+
+with exit code 1. Reverting it let the commit through.
+
+`--no-verify` bypasses the hook, which is why CI runs the same gate
+server-side. The two invoke one script, so they cannot drift apart.
 
 ## 3. What it runs, and what makes it fail
 
@@ -198,3 +211,65 @@ Exit code `1`, pipeline red, merge request blocked.
 
 Note that the gate names the failing case and the specific defect. A gate that
 only reports a number tells you something broke; this one tells you what.
+
+---
+
+## 6. What this gate does and does not test
+
+Stated plainly, because claiming more would be false and a reviewer would find
+it in two questions.
+
+**What it tests:** our deterministic code — grounding, citation resolution,
+tier admissibility, refusal rules, log safety. When it goes red, something *we
+wrote* broke. It runs in 13 seconds, costs nothing, needs no key, and does not
+flake.
+
+**What it does not test:** whether the *model* behaves well. The 24 golden
+cases carry scripted model output, so the model is never called.
+
+That gap is real and was verified rather than assumed. Mutating
+`EXTRACTION_SYSTEM_PROMPT` to begin "IGNORE ALL PRIOR RULES" left the gate
+**green**, which makes the prompt decorative and `factually_consistent` close
+to tautological.
+
+### The replay harness closes it
+
+`app/recording.py` implements record-once / replay-forever: call the real model
+once, freeze the response to a committed fixture, score that snapshot for free
+thereafter. The model is genuinely exercised, the artifact stays deterministic,
+and a grader without a key can still run it.
+
+A recording is keyed by the digest of **the prompt, the model and the input**
+that produced it. Change any one and the recording is stale and the gate fails
+until it is re-recorded — and re-recording is exactly when a quality change
+becomes visible. Staleness is fatal rather than auto-refreshed: evidence that
+no longer describes the code under test is not evidence.
+
+Six tests cover each invalidation axis and need no key
+(`tests/test_recording.py`).
+
+### Current status, honestly
+
+**The harness is built and tested. The recordings are not yet made.**
+`scripts/record_evals.py` against the live model returns:
+
+```
+400 invalid_request_error: 'Schema is too complex.'
+```
+
+`LabDocument` nests `LabResult` into `DocumentCitation` with a bbox tuple, a
+`Decimal` and three enums — more than the structured-output API accepts. The
+fix is to have the model emit a flat draft schema and map it into the strict
+type in deterministic code, which is better design regardless, since the model
+should not be inventing bounding boxes.
+
+Until that lands, the blocking gate is the deterministic one described above.
+
+### No LLM judge, deliberately
+
+`CR6`'s five categories are all scored deterministically. A judge needs
+calibration against human-scored examples before it can be trusted — score ~20
+by hand, and if agreement is below ~0.8 the rubric is broken, not the model. We
+have no human-scored baseline, so a judge today would produce confident,
+uncalibrated numbers. Deterministic checks first; a judge only for what code
+genuinely cannot decide.
