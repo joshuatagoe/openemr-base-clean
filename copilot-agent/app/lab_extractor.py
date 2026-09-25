@@ -27,7 +27,10 @@ patient-safety defect rather than a bug:
    local variables and the provider call. Every log line here carries counts,
    ids and timings only (CR7).
 
-No PDF parsing library is involved: the provider reads the document natively.
+The provider reads the document natively for extraction. Verification is a
+separate, deterministic step (``app.verification``, ADR-007): each value is
+looked up in the page's own words - the PDF text layer, or OCR of a rendered
+page or an upright photo - and only a match gives a verified status and a box.
 ``StubProvider`` is the default so the pipeline runs offline, with no API key
 and no spend; it is registered below through ``register_fixture`` so neither the
 ``ModelProvider`` port nor ``StubProvider`` itself grows a member per document
@@ -46,15 +49,18 @@ from pydantic import Field
 
 from app.contracts import StrictModel
 from app.documents import (
+    SUPPORTED_MEDIA_TYPES,
     AbnormalFlag,
     AbnormalFlagSource,
     DocumentCitation,
     ExtractionMetadata,
     LabDocument,
     LabResult,
+    PrintedIdentity,
     VerificationStatus,
 )
-from app.observability import generation, log_event
+from app.observability import generation, log_event, span
+from app.page_text import OcrSource, configured_render_dpi, default_ocr_source
 from app.providers.base import (
     ContentPart,
     DocumentPart,
@@ -68,16 +74,12 @@ from app.providers.prompt import (
     build_lab_document_content,
 )
 from app.providers.stub_provider import StubProvider
+from app.verification import verify_document
 
 # A one-page report with a dozen results fits comfortably; the ceiling exists so
 # a malformed document cannot turn into an unbounded generation.
 LAB_MAX_OUTPUT_TOKENS = 4096
 
-# What a vision model can actually read. Sending anything else is a wasted paid
-# call, so it is refused here rather than at the vendor.
-SUPPORTED_MEDIA_TYPES = frozenset(
-    {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"}
-)
 
 
 # --------------------------------------------------------------------------- #
@@ -193,12 +195,18 @@ async def extract_lab_document(
     pdf_bytes: bytes,
     media_type: str,
     provider: ModelProvider | None = None,
+    ocr: OcrSource | None = None,
 ) -> LabDocument:
     """Extract one stored lab report into a validated ``LabDocument``.
 
     ``provider`` defaults to ``StubProvider``: deterministic, offline, no API key
     and no spend. Raises ``ProviderError`` when the model call fails - a provider
     outage must never arrive as an empty extraction.
+
+    ``ocr`` defaults to the configured source (``COPILOT_OCR``: fake unless set
+    to textract). Every result's verification status and box are set by
+    ``app.verification`` from the page; an OCR failure only makes values
+    unverified.
     """
     if media_type not in SUPPORTED_MEDIA_TYPES:
         raise ValueError("unsupported document media type")
@@ -236,15 +244,39 @@ async def extract_lab_document(
     results = apply_derived_flags(
         stamp_source_identity(draft_to_results(proposed, document_id), document_id)
     )
+    # Verification and boxes come from the page, never from the model (ADR-007).
+    with span("verify_document") as attrs:
+        results, stats = await verify_document(
+            results,
+            [row.page for row in proposed.results],
+            document=pdf_bytes,
+            media_type=media_type,
+            ocr=ocr if ocr is not None else default_ocr_source(),
+            dpi=configured_render_dpi(),
+        )
+        # Counts and fixed codes only - never a word, a value or a page image.
+        attrs.update(
+            page_count=stats.page_count,
+            ocr_pages=stats.ocr_pages,
+            ocr_fallback_pages=stats.ocr_fallback_pages,
+            ocr_failed_pages=stats.ocr_failed_pages,
+            verified_exact=stats.verified_exact,
+            verified_fuzzy=stats.verified_fuzzy,
+            unverified=stats.unverified,
+        )
+        if stats.ocr_failure_reasons:
+            attrs["reason_code"] = sorted(set(stats.ocr_failure_reasons))[0]
     document = LabDocument(
         document_id=document_id,  # assigned here, never taken from the model
         collection_date=_as_date(proposed.collection_date),
         ordering_provider=proposed.ordering_provider,
+        printed_identity=_printed_identity(proposed),  # returned to the module only; never logged
         results=results,
         extraction_metadata=summarize(
             results,
             model_id=parsed.usage.model,
-            page_count=proposed.page_count,
+            # The page count we parsed wins over the model's; a photo is one page.
+            page_count=stats.page_count or proposed.page_count,
         ),
     )
 
@@ -338,6 +370,12 @@ class LabDraft(StrictModel):
 
     collection_date: str | None = Field(default=None, description="ISO date, or null if not printed.")
     ordering_provider: str | None = None
+    patient_name: str | None = Field(
+        default=None, description="The patient name exactly as printed on the report, or null if none is printed."
+    )
+    patient_dob: str | None = Field(
+        default=None, description="The patient's printed date of birth as an ISO date (YYYY-MM-DD), or null."
+    )
     page_count: int = Field(default=1, ge=1)
     results: list[LabResultDraft] = Field(default_factory=list)
 
@@ -349,6 +387,15 @@ def _as_date(raw: str | None) -> date | None:
         return date.fromisoformat(raw.strip()[:10])
     except ValueError:
         return None
+
+
+def _printed_identity(draft: LabDraft) -> PrintedIdentity | None:
+    """The printed name and DOB for the module's identity check (ADR-012). None when neither is printed."""
+    name = (draft.patient_name or "").strip() or None
+    dob = _as_date(draft.patient_dob)
+    if name is None and dob is None:
+        return None
+    return PrintedIdentity(name=name, dob=dob)
 
 
 def _as_value(raw: str | None, *, unreadable: bool) -> Decimal | str | None:
@@ -391,8 +438,10 @@ def draft_to_results(draft: LabDraft, document_id: int) -> list[LabResult]:
                 abnormal_flag_source=(
                     AbnormalFlagSource.EXTRACTED if printed else AbnormalFlagSource.UNAVAILABLE
                 ),
+                # Never a model self-report: a legible row starts unverified, and
+                # only app.verification (the page) can raise it (ADR-007).
                 verification_status=(
-                    VerificationStatus.UNREADABLE if row.unreadable else VerificationStatus.VERIFIED_EXACT
+                    VerificationStatus.UNREADABLE if row.unreadable else VerificationStatus.UNVERIFIED
                 ),
                 citation=DocumentCitation(
                     source_id=str(document_id),

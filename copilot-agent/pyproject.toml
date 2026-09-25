@@ -9,8 +9,11 @@ dependencies = [
     "fastapi[standard-no-fastapi-cloud-cli]>=0.115",
     "langfuse>=4.15.4",
     "langgraph>=1.0",
+    "pdfplumber>=0.11.10",
+    "pillow>=12.3.0",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
+    "pypdfium2>=5.13.0",
     "uvicorn[standard]>=0.30",
 ]
 

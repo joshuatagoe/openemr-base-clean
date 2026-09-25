@@ -22,11 +22,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import Field, model_validator
 
 from app.contracts import StrictModel
+
+#: The one media-type allow-list (ADR-007 addition 3). The extractor, the routes
+#: and the OCR source import it; the OpenEMR reader normalises to the same three
+#: (a test compares them). GIF and WEBP are excluded: Textract cannot read them,
+#: so a value extracted from one could never be verified against the page.
+MediaType = Literal["application/pdf", "image/png", "image/jpeg"]
+SUPPORTED_MEDIA_TYPES: frozenset[str] = frozenset(get_args(MediaType))
 
 
 class AbnormalFlag(StrEnum):
@@ -122,6 +129,17 @@ class ExtractionMetadata(StrictModel):
     unverified_count: int = Field(ge=0)
 
 
+class PrintedIdentity(StrictModel):
+    """The patient name and date of birth printed on the report (ADR-012).
+
+    Returned to the OpenEMR module only, which compares it with the chart and
+    holds a mismatch back. PHI: never logged, never traced.
+    """
+
+    name: str | None = Field(default=None, description="As printed; never normalised.")
+    dob: date | None = None
+
+
 class LabDocument(StrictModel):
     """A whole extracted lab report. Zero results is valid - and is not a failure."""
 
@@ -134,3 +152,7 @@ class LabDocument(StrictModel):
     )
     results: list[LabResult] = Field(default_factory=list)
     extraction_metadata: ExtractionMetadata
+    printed_identity: PrintedIdentity | None = Field(
+        default=None,
+        description="Name and DOB printed on the report, for the module's identity check. Never logged.",
+    )
