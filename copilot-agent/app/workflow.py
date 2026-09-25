@@ -34,8 +34,6 @@ this state would be PHI at rest.
 
 from __future__ import annotations
 
-import base64
-import binascii
 import operator
 import os
 from functools import lru_cache
@@ -59,10 +57,10 @@ from app.document_briefing import (
     build_query,
     drafts_to_candidates,
     get_retriever,
+    read_lab_document,
 )
 from app.documents import LabDocument
 from app.evidence import EvidencePackage, RetrievalQuery
-from app.lab_extractor import extract_lab_document
 from app.observability import generation, log_event, score, span
 from app.providers.base import ModelProvider, ProviderError
 from app.reranker import BedrockReranker, FakeReranker
@@ -153,24 +151,15 @@ async def intake_extractor(state: BriefingState, config: RunnableConfig) -> dict
     provider, _ = _deps(config)
     request = state["request"]
     with span(INTAKE_EXTRACTOR, stage=state["doc_type"]) as attrs:
-        try:
-            raw = base64.b64decode(request.document_base64, validate=True)
-        except (binascii.Error, ValueError):
+        document, reason = await read_lab_document(
+            document_id=request.document_id,
+            document_base64=request.document_base64,
+            media_type=request.media_type,
+            provider=provider,
+        )
+        if document is None:
             attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "document_not_decodable"}
-        try:
-            document = await extract_lab_document(
-                document_id=request.document_id,
-                pdf_bytes=raw,
-                media_type=request.media_type,
-                provider=provider,
-            )
-        except ProviderError:
-            attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "extraction_unavailable"}
-        except ValueError:
-            attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "document_not_readable"}
+            return {"status": BriefingStatus.DEGRADED, "reason": reason}
         attrs["outcome"] = "ok"
         attrs["records"] = len(document.results)
         return {"document": document}
