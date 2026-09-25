@@ -17,8 +17,11 @@
  * filed; `unverified` needs `confirm_unverified`; `unreadable` needs a
  * clinician-entered value. The collection date is never guessed and never the
  * upload date (ADR-009 7b): without an extracted one the clinician must enter
- * one they verified, and the filed result says so; a clinician date cannot
- * override an extracted one. A value the
+ * one they verified, and the filed result says so. A clinician date that
+ * differs from the extracted one is a correction (ADR-009 7c): refused with
+ * both dates unless confirmed with a non-empty reason, then filed with the
+ * entered date and noted in the comments; the same date is not a correction.
+ * A value the
  * clinician changed is filed `corrected`, otherwise `final`; the extracted
  * value is kept in `comments`. The abnormal flag is filed only when the lab
  * printed it. A same-patient, same-test, same-date, same-value result already
@@ -59,6 +62,7 @@ final class ValueFiler
 
     public const DATE_SOURCE_EXTRACTED = 'extracted';
     public const DATE_SOURCE_CLINICIAN = 'clinician';
+    public const DATE_SOURCE_CORRECTED = 'corrected';
 
     public const WARNING_SAME_RESULT = 'same_result_already_in_chart';
 
@@ -74,12 +78,14 @@ final class ValueFiler
 
     /**
      * @param ?string $enteredCollectionDate  a clinician-entered, already validated `Y-m-d` date, or null
-     * @return array{outcome:string, procedure_result_id:?int, result_status:?string, warning:?string, verification_status:?string, collection_date_source?:string}
-     *   `outcome` is filed / already_filed or one of the ERROR_* codes
+     * @param ?string $overrideReason  the clinician's reason for correcting an extracted date (trimmed by the caller), or null
+     * @return array{outcome:string, procedure_result_id:?int, result_status:?string, warning:?string, verification_status:?string, collection_date_source?:string, extracted_collection_date?:string, entered_collection_date?:string}
+     *   `outcome` is filed / already_filed or one of the ERROR_* codes; both dates are
+     *   returned on a collection-date conflict and on a filed correction
      */
-    public function file(int $pid, int $userId, int $documentId, int $resultIndex, ?string $filedValue, bool $confirmUnverified, ?string $enteredCollectionDate = null): array
+    public function file(int $pid, int $userId, int $documentId, int $resultIndex, ?string $filedValue, bool $confirmUnverified, ?string $enteredCollectionDate = null, bool $confirmDateOverride = false, ?string $overrideReason = null): array
     {
-        return $this->store->transaction(function () use ($pid, $userId, $documentId, $resultIndex, $filedValue, $confirmUnverified, $enteredCollectionDate): array {
+        return $this->store->transaction(function () use ($pid, $userId, $documentId, $resultIndex, $filedValue, $confirmUnverified, $enteredCollectionDate, $confirmDateOverride, $overrideReason): array {
             $found = $this->lock($pid, $documentId, $resultIndex);
             if (is_string($found)) {
                 return self::result($found);
@@ -117,14 +123,20 @@ final class ValueFiler
                 return self::result(self::ERROR_VALUE_REQUIRED, verification: $verification);
             }
             $extractedDate = $candidate['collection_date'] === '' ? null : $candidate['collection_date'];
-            if ($extractedDate !== null && $enteredCollectionDate !== null && $enteredCollectionDate !== $extractedDate) {
-                return self::result(self::ERROR_COLLECTION_DATE_CONFLICT, verification: $verification);
+            $corrected = $extractedDate !== null && $enteredCollectionDate !== null && $enteredCollectionDate !== $extractedDate;
+            $dates = $corrected ? ['extracted_collection_date' => $extractedDate, 'entered_collection_date' => $enteredCollectionDate] : [];
+            if ($corrected && (!$confirmDateOverride || $overrideReason === null || $overrideReason === '')) {
+                return $dates + self::result(self::ERROR_COLLECTION_DATE_CONFLICT, verification: $verification);
             }
-            $collectionDate = $extractedDate ?? $enteredCollectionDate;
+            $collectionDate = $corrected ? $enteredCollectionDate : ($extractedDate ?? $enteredCollectionDate);
             if ($collectionDate === null) {
                 return self::result(self::ERROR_NO_COLLECTION_DATE, verification: $verification);
             }
-            $dateSource = $extractedDate !== null ? self::DATE_SOURCE_EXTRACTED : self::DATE_SOURCE_CLINICIAN;
+            $dateSource = match (true) {
+                $corrected => self::DATE_SOURCE_CORRECTED,
+                $extractedDate !== null => self::DATE_SOURCE_EXTRACTED,
+                default => self::DATE_SOURCE_CLINICIAN,
+            };
             $collectedAt = $collectionDate . ' 00:00:00';
             $resultStatus = $entered !== null && $entered !== $extracted ? 'corrected' : 'final';
             $code = self::loincCode($document['extraction_json'], $resultIndex);
@@ -148,8 +160,11 @@ final class ValueFiler
                 'result' => $value,
                 'range' => $candidate['reference_range'] ?? '',
                 'abnormal' => self::ABNORMAL_OPTIONS[$flag] ?? '',
-                'comments' => 'Extracted value: ' . ($extracted ?? 'unreadable')
-                    . ($dateSource === self::DATE_SOURCE_CLINICIAN ? '; collection date entered by clinician' : ''),
+                'comments' => 'Extracted value: ' . ($extracted ?? 'unreadable') . match ($dateSource) {
+                    self::DATE_SOURCE_CLINICIAN => '; collection date entered by clinician',
+                    self::DATE_SOURCE_CORRECTED => '; collection date corrected by clinician (document: ' . $extractedDate . ')',
+                    default => '',
+                },
                 // ADR-009 7b: 0, not the document id - a core document link replaces the value, range and
                 // units with the file name in the order-results screen. The source link is our candidate row.
                 'document_id' => 0,
@@ -157,7 +172,7 @@ final class ValueFiler
             ]);
             $this->store->markFiled($candidate['id'], $userId, $value, $resultId);
 
-            return ['collection_date_source' => $dateSource] + self::result(self::OUTCOME_FILED, $resultId, $resultStatus, $warning, $verification);
+            return ['collection_date_source' => $dateSource] + $dates + self::result(self::OUTCOME_FILED, $resultId, $resultStatus, $warning, $verification);
         });
     }
 

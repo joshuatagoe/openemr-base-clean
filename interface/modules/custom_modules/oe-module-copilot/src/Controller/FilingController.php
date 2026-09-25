@@ -5,7 +5,13 @@
  *
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/file
  *        body { "filed_value": string|null, "confirm_unverified": bool,
- *               "collection_date": "YYYY-MM-DD"|null }  (the date only when none was extracted)
+ *               "collection_date": "YYYY-MM-DD"|null,
+ *               "confirm_date_override": bool, "override_reason": string|null }
+ *   `collection_date` is required when none was extracted. One that differs from
+ *   the extracted date is a correction (ADR-009 7c): 409 `collection_date_conflict`
+ *   with `extracted_collection_date` and `entered_collection_date` in `detail`
+ *   unless `confirm_date_override` is true and the trimmed `override_reason`
+ *   (at most 500 characters) is non-empty.
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/reject
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/unfile
  *
@@ -18,7 +24,10 @@
  * `copilot_tables_not_installed`. The rules and the single transaction are in
  * Filing\ValueFiler. One audit row per authorized call (`copilot-value-filed`
  * / `copilot-value-rejected` / `copilot-value-unfiled`) with ids and codes only - never test names or
- * values.
+ * values. The one exception is a filed collection-date correction: that row, in
+ * OpenEMR's own audit log (user and time come with the row), also holds the
+ * extracted date, the corrected date and the clinician's reason (ADR-009 7c).
+ * The application log carries correlation ids and codes only.
  *
  * @package   OpenEMR
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
@@ -57,6 +66,7 @@ final class FilingController
     public const CODE_UNAVAILABLE = 'document_unavailable';
 
     public const FILED_VALUE_MAX_LENGTH = 255;
+    public const OVERRIDE_REASON_MAX_LENGTH = 500;
 
     private const ERRORS = [
         CopilotAuthorizer::CODE_NOT_AUTHENTICATED => [401, 'Authentication is required.'],
@@ -75,7 +85,7 @@ final class FilingController
         ValueFiler::ERROR_CONFIRMATION_REQUIRED => [422, 'This value could not be verified on the page; confirm to file it.'],
         ValueFiler::ERROR_VALUE_REQUIRED => [422, 'This value could not be read; enter the value to file it.'],
         ValueFiler::ERROR_NO_COLLECTION_DATE => [422, 'The document gives no collection date for this value; enter the date you verified.'],
-        ValueFiler::ERROR_COLLECTION_DATE_CONFLICT => [422, 'The document states a different collection date; it cannot be overridden here.'],
+        ValueFiler::ERROR_COLLECTION_DATE_CONFLICT => [409, 'The document states a different collection date; confirm the correction and give a reason to file this date.'],
         self::CODE_INVALID_REQUEST => [400, 'The request body is not valid.'],
         SchemaStatusInterface::CODE_NOT_INSTALLED => [503, 'The Co-Pilot tables are not installed; filing is disabled.'],
         self::CODE_UNAVAILABLE => [503, 'The document store could not be read.'],
@@ -193,13 +203,15 @@ final class FilingController
         $filedValue = null;
         $confirm = false;
         $collectionDate = null;
+        $confirmOverride = false;
+        $overrideReason = null;
         if ($event === self::AUDIT_FILED) {
             $parsed = self::parseBody($body);
             if ($parsed === null) {
                 $audit(false, self::CODE_INVALID_REQUEST);
                 return $this->error(self::CODE_INVALID_REQUEST, $correlationId, $headers);
             }
-            [$filedValue, $confirm, $collectionDate] = $parsed;
+            [$filedValue, $confirm, $collectionDate, $confirmOverride, $overrideReason] = $parsed;
         }
 
         try {
@@ -222,7 +234,7 @@ final class FilingController
 
         try {
             $result = match ($event) {
-                self::AUDIT_FILED => $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm, $collectionDate),
+                self::AUDIT_FILED => $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm, $collectionDate, $confirmOverride, $overrideReason),
                 self::AUDIT_UNFILED => $this->filer->unfile($pid, $documentId, $resultIndex),
                 default => $this->filer->reject($pid, $documentId, $resultIndex),
             };
@@ -239,9 +251,17 @@ final class FilingController
             . ($result['result_status'] !== null ? '; result_status=' . $result['result_status'] : '')
             . ($result['warning'] !== null ? '; warning=' . $result['warning'] : '')
             . (isset($result['collection_date_source']) ? '; collection_date_source=' . $result['collection_date_source'] : '');
+        $dates = array_intersect_key($result, ['extracted_collection_date' => true, 'entered_collection_date' => true]);
+        if ($success && ($result['collection_date_source'] ?? null) === ValueFiler::DATE_SOURCE_CORRECTED) {
+            // ADR-009 7c: the EHR audit row is the record of the correction. The reason goes last,
+            // JSON-quoted on one line, so it cannot be read as another field.
+            $extra .= '; extracted_collection_date=' . ($dates['extracted_collection_date'] ?? '')
+                . '; entered_collection_date=' . ($dates['entered_collection_date'] ?? '')
+                . '; override_reason=' . json_encode((string) $overrideReason, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        }
         $audit($success, $outcome, $extra);
         if (!$success) {
-            return $this->error($outcome, $correlationId, $headers);
+            return $this->error($outcome, $correlationId, $headers, $outcome === ValueFiler::ERROR_COLLECTION_DATE_CONFLICT ? $dates : []);
         }
 
         return [
@@ -269,10 +289,13 @@ final class FilingController
     /**
      * All fields optional; `filed_value` a string of at most 255 characters or
      * null, `confirm_unverified` a boolean, `collection_date` null or a real
-     * `YYYY-MM-DD` date that is not after today (server date).
+     * `YYYY-MM-DD` date that is not after today (server date),
+     * `confirm_date_override` a boolean, `override_reason` null or a string of
+     * at most 500 characters once trimmed; it is returned trimmed, with line
+     * breaks, control characters and runs of whitespace collapsed to one space.
      *
      * @param array<mixed>|null $body
-     * @return array{?string, bool, ?string}|null  null when invalid
+     * @return array{?string, bool, ?string, bool, ?string}|null  null when invalid
      */
     private static function parseBody(?array $body): ?array
     {
@@ -296,7 +319,18 @@ final class FilingController
                 return null;
             }
         }
-        return [$value, $confirm, $date];
+        $confirmOverride = $body['confirm_date_override'] ?? false;
+        $reason = $body['override_reason'] ?? null;
+        if (!is_bool($confirmOverride) || ($reason !== null && !is_string($reason))) {
+            return null;
+        }
+        if (is_string($reason)) {
+            $reason = trim((string) preg_replace('/[\s\p{Cc}]+/u', ' ', $reason));
+            if (mb_strlen($reason) > self::OVERRIDE_REASON_MAX_LENGTH) {
+                return null;
+            }
+        }
+        return [$value, $confirm, $date, $confirmOverride, $reason];
     }
 
     private static function id(string $raw): int
@@ -331,14 +365,15 @@ final class FilingController
 
     /**
      * @param array<string,string> $headers
+     * @param array<string,string> $extra  more fields for `detail` (the two dates of a collection-date conflict)
      * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
      */
-    private function error(string $code, string $correlationId, array $headers): array
+    private function error(string $code, string $correlationId, array $headers, array $extra = []): array
     {
         [$status, $message] = self::ERRORS[$code] ?? [500, 'The request could not be completed.'];
         return [
             'status' => $status,
-            'body' => ['detail' => ['code' => $code, 'message' => $message, 'correlation_id' => $correlationId]],
+            'body' => ['detail' => ['code' => $code, 'message' => $message, 'correlation_id' => $correlationId] + $extra],
             'headers' => $headers,
         ];
     }
