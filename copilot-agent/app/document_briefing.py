@@ -27,26 +27,29 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from datetime import date
 from enum import StrEnum
 from functools import lru_cache
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.briefing import (
     AssertionTier,
     Briefing,
+    ChartFact,
     CitedFact,
     ConsiderationCandidate,
     build_briefing,
     render_briefing,
 )
-from app.contracts import StrictModel
+from app.contracts import Citation, LabResult as ChartLabResult, RecordType, StrictModel
 from app.corpus import ClaimKind
-from app.documents import LabDocument, LabResult, VerificationStatus
+from app.documents import ExtractionMetadata, LabDocument, LabResult, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
 from app.lab_extractor import extract_lab_document
+from app.providers.prompt import LAB_EXTRACTION_PROMPT_VERSION
 from app.observability import generation, log_event, score, span
 from app.providers.base import ContentPart, ModelProvider, ProviderError, TextPart
 from app.providers.stub_provider import StubProvider
@@ -67,6 +70,33 @@ MAX_DOCUMENT_BASE64_CHARS = 4 * -(-MAX_DOCUMENT_BYTES // 3)
 # --------------------------------------------------------------------------- #
 
 
+#: Most stored documents one briefing accepts. A bound on work and body size,
+#: well above one patient's unreviewed lab reports.
+MAX_BRIEFING_DOCUMENTS = 20
+#: Most chart lab results one briefing accepts as prior facts.
+MAX_PRIOR_FACTS = 500
+
+
+class StoredDocument(StrictModel):
+    """One document's stored extraction, as the module saved it from ``/v1/documents/extract``.
+
+    Fails closed on attribution: the extraction and every citation in it must
+    name the listed ``document_id``, or the briefing would cite the wrong file.
+    """
+
+    document_id: int = Field(ge=1)
+    doc_type: Literal["lab_pdf"]
+    extraction: LabDocument
+
+    @model_validator(mode="after")
+    def _attributed_to_this_document(self) -> StoredDocument:
+        if self.extraction.document_id != self.document_id:
+            raise ValueError("the stored extraction belongs to a different document_id")
+        if any(r.citation.source_id != str(self.document_id) for r in self.extraction.results):
+            raise ValueError("a stored citation names a different document")
+        return self
+
+
 class DocumentBriefingRequest(StrictModel):
     """Signed body of ``POST /v1/documents/briefing``.
 
@@ -74,25 +104,115 @@ class DocumentBriefingRequest(StrictModel):
     (``X-Copilot-Signature`` + ``X-Copilot-Timestamp`` over the raw body), so
     the module reuses ``BundleSigner`` and ``GuzzleAgentClient`` unchanged.
 
+    Two ways in, exactly one per request (contract C4):
+
+    - ``documents``: the stored extractions of every extracted document for
+      this patient. Nothing is re-read; the supervisor goes straight to
+      evidence retrieval, and each citation names its own document.
+    - ``document_id`` + ``media_type`` + ``document_base64``: the legacy
+      single-document path, extracted in-request. Kept for one release.
+
+    ``prior_facts`` is the chart's lab history, the same shape as the Week 1
+    bundle's ``lab_results``; it turns a new value into a dated change.
+
     ``patient_uuid`` never ``pid`` - the same rule as the Week 1 bundle.
-    ``document_id`` is OpenEMR's ``documents.id``; it becomes every citation's
-    ``source_id``, so click-to-source can resolve back to the stored file.
     """
 
     correlation_id: UUID
     patient_uuid: UUID
-    document_id: int = Field(ge=1)
-    media_type: Literal["application/pdf", "image/png", "image/jpeg"]
-    document_base64: str = Field(
+    documents: list[StoredDocument] | None = Field(default=None, min_length=1, max_length=MAX_BRIEFING_DOCUMENTS)
+    prior_facts: list[ChartLabResult] = Field(default_factory=list, max_length=MAX_PRIOR_FACTS)
+    document_id: int | None = Field(default=None, ge=1)
+    media_type: Literal["application/pdf", "image/png", "image/jpeg"] | None = None
+    document_base64: str | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_DOCUMENT_BASE64_CHARS,
-        description="The stored file's bytes, at most MAX_DOCUMENT_BYTES decoded. Never logged.",
+        description="Legacy path: the stored file's bytes, at most MAX_DOCUMENT_BYTES decoded. Never logged.",
     )
     question: str | None = Field(
         default=None,
         max_length=500,
         description="Optional physician question. A request for advice or dosing earns the fixed refusal.",
     )
+
+    @model_validator(mode="after")
+    def _exactly_one_path(self) -> DocumentBriefingRequest:
+        legacy = (self.document_id, self.media_type, self.document_base64)
+        if self.documents is not None:
+            if any(v is not None for v in legacy):
+                raise ValueError("send either documents or document_id/media_type/document_base64, not both")
+            ids = [d.document_id for d in self.documents]
+            if len(set(ids)) != len(ids):
+                raise ValueError("a document is listed more than once")
+        elif any(v is None for v in legacy):
+            raise ValueError("send documents, or all of document_id, media_type and document_base64")
+        return self
+
+    @property
+    def document_ids(self) -> tuple[int, ...]:
+        if self.documents is not None:
+            return tuple(d.document_id for d in self.documents)
+        assert self.document_id is not None
+        return (self.document_id,)
+
+
+# --------------------------------------------------------------------------- #
+# HTTP contract - extraction only (contract C4, ADR-012)
+# --------------------------------------------------------------------------- #
+
+#: Document types the module sends, from the OpenEMR category (ADR-012). Only
+#: ``lab_pdf`` is extracted in Wave 1; ``intake_form`` is accepted and answered
+#: with a fixed "not supported yet" code so the module can record it.
+DocType = Literal["lab_pdf", "intake_form"]
+
+DOC_TYPE_NOT_SUPPORTED_YET = "doc_type_not_supported_yet"
+
+
+class DocumentExtractRequest(StrictModel):
+    """Signed body of ``POST /v1/documents/extract``: one stored document, extraction only.
+
+    Signed like every module -> agent call. The module stores the returned
+    extraction on its processing record and sends it back to the briefing
+    route, so a document is read by the model once per (content, prompt version).
+    """
+
+    correlation_id: UUID
+    patient_uuid: UUID
+    document_id: int = Field(ge=1)
+    doc_type: DocType
+    media_type: Literal["application/pdf", "image/png", "image/jpeg"]
+    document_base64: str = Field(
+        min_length=1,
+        max_length=MAX_DOCUMENT_BASE64_CHARS,
+        description="The stored file's bytes, at most MAX_DOCUMENT_BYTES decoded. Never logged.",
+    )
+
+
+class PrintedIdentity(StrictModel):
+    """Name and date of birth as printed on the document (contract C2).
+
+    Returned to the module only, which compares them with the chart (ADR-012).
+    Never logged, never traced, never shown in a briefing.
+    """
+
+    name: str | None = None
+    dob: date | None = None
+
+
+class DocumentExtractResponse(StrictModel):
+    correlation_id: UUID
+    patient_uuid: UUID
+    document_id: int
+    doc_type: DocType
+    status: Literal["ok", "degraded"] = "ok"
+    degraded_reason: str | None = Field(
+        default=None, description="Fixed string. Never a raw exception, never patient-specific."
+    )
+    prompt_version: str = Field(description='The extraction prompt version the result is cached under; "none" when no extractor ran.')
+    extraction_model: str = Field(description='The model that produced the extraction; "none" when there is none.')
+    extraction: LabDocument | None = None
+    printed_identity: PrintedIdentity | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -126,7 +246,13 @@ class RoutingDecision(StrictModel):
     source: Literal["supervisor"]
     target: Literal["intake-extractor", "evidence-retriever", "answer", "finish"]
     reason_code: Literal[
-        "document_pending_extraction", "evidence_required", "evidence_ready", "briefing_complete", "worker_failed"
+        "document_pending_extraction",
+        "evidence_required",
+        "evidence_ready",
+        "briefing_complete",
+        "worker_failed",
+        "budget_exhausted",
+        "iteration_limit",
     ]
     doc_type: Literal["lab_pdf", "intake_form"]
 
@@ -141,7 +267,8 @@ class DocumentBriefingResponse(StrictModel):
 
     correlation_id: UUID
     patient_uuid: UUID
-    document_id: int
+    document_id: int = Field(description="The first document briefed; kept for callers that read one id. See document_ids.")
+    document_ids: tuple[int, ...] = Field(default=(), description="Every document this briefing covers, in request order.")
     status: BriefingStatus = BriefingStatus.OK
     degraded_reason: str | None = Field(
         default=None, description="Fixed string. Never a raw exception, never patient-specific."
@@ -219,6 +346,56 @@ def build_query(document: LabDocument) -> str:
     if any(_A1C.search(n) for n in names):
         parts.extend(_A1C_EXPANSION)
     return " ; ".join(parts) or "diabetes follow-up laboratory results"
+
+
+def combine_documents(documents: list[LabDocument]) -> LabDocument:
+    """Several stored extractions as the one ``LabDocument`` the briefing reads.
+
+    Every result keeps its own citation, so each line still names the document
+    it came from. A document-level collection date is copied onto its results
+    first, because the combined document can carry no single date. Metadata is
+    recomputed from the results, as ``summarize`` does for one document.
+    """
+    if len(documents) == 1:
+        return documents[0]
+    results: list[LabResult] = []
+    for doc in documents:
+        for r in doc.results:
+            if r.collection_date is None and doc.collection_date is not None:
+                r = r.model_copy(update={"collection_date": doc.collection_date})
+            results.append(r)
+    metas = [d.extraction_metadata for d in documents]
+    verified = sum(
+        1 for r in results if r.verification_status in (VerificationStatus.VERIFIED_EXACT, VerificationStatus.VERIFIED_FUZZY)
+    )
+    return LabDocument(
+        document_id=documents[0].document_id,
+        results=results,
+        extraction_metadata=ExtractionMetadata(
+            model_id=",".join(dict.fromkeys(m.model_id for m in metas)),
+            prompt_version=",".join(dict.fromkeys(m.prompt_version for m in metas)),
+            extracted_at=max(m.extracted_at for m in metas),
+            page_count=sum(m.page_count for m in metas),
+            verified_fraction=(verified / len(results)) if results else 0.0,
+            unreadable_count=sum(1 for r in results if r.verification_status is VerificationStatus.UNREADABLE),
+            unverified_count=sum(1 for r in results if r.verification_status is VerificationStatus.UNVERIFIED),
+        ),
+    )
+
+
+def chart_facts(prior: list[ChartLabResult]) -> list[ChartFact]:
+    """The chart's lab history as briefing facts, oldest first so the newest value per test wins."""
+    ordered = sorted(prior, key=lambda r: (r.observed_at, r.result_id))
+    return [
+        ChartFact(
+            test_name=r.test_name,
+            value=str(r.value),
+            unit=r.units,
+            observed_on=r.observed_at.date(),
+            citation=Citation(record_type=RecordType.LAB_RESULT, record_id=r.result_id, timestamp=r.observed_at),
+        )
+        for r in ordered
+    ]
 
 
 def _is_unreadable(result: LabResult) -> bool:
@@ -350,6 +527,105 @@ def build_reranker(kind: str, *, region: str) -> FakeReranker | BedrockReranker:
 # --------------------------------------------------------------------------- #
 
 
+async def read_lab_document(
+    *,
+    document_id: int,
+    document_base64: str,
+    media_type: str,
+    provider: ModelProvider,
+) -> tuple[LabDocument | None, str | None]:
+    """Decode and extract one lab document. Never raises for a bad file or a model failure.
+
+    Returns the document, or ``None`` with a fixed reason code. Shared by the
+    extract route and the briefing graph's intake-extractor, so both report the
+    same code for the same failure.
+    """
+    try:
+        raw = base64.b64decode(document_base64, validate=True)
+    except (binascii.Error, ValueError):
+        return None, "document_not_decodable"
+    try:
+        document = await extract_lab_document(
+            document_id=document_id,
+            pdf_bytes=raw,
+            media_type=media_type,
+            provider=provider,
+        )
+    except ProviderError:
+        return None, "extraction_unavailable"
+    except ValueError:
+        return None, "document_not_readable"
+    return document, None
+
+
+def printed_identity_of(document: LabDocument) -> PrintedIdentity | None:
+    """The identity printed on the document, if the extractor read one (contract C2).
+
+    Read by attribute so this route works before and after ``LabDocument``
+    gains the field. Never logged.
+    """
+    printed = getattr(document, "printed_identity", None)
+    if printed is None:
+        return None
+    return PrintedIdentity(name=getattr(printed, "name", None), dob=getattr(printed, "dob", None))
+
+
+async def run_document_extract(request: DocumentExtractRequest, *, provider: ModelProvider) -> DocumentExtractResponse:
+    """One extraction = one trace. Dispatches on ``doc_type`` (ADR-012)."""
+    base = {
+        "correlation_id": request.correlation_id,
+        "patient_uuid": request.patient_uuid,
+        "document_id": request.document_id,
+        "doc_type": request.doc_type,
+    }
+    with span("document_extract", cid=request.correlation_id, stage=request.doc_type) as attrs:
+        if request.doc_type != "lab_pdf":
+            response = DocumentExtractResponse(
+                **base,
+                status="degraded",
+                degraded_reason=DOC_TYPE_NOT_SUPPORTED_YET,
+                prompt_version="none",
+                extraction_model="none",
+            )
+        else:
+            document, reason = await read_lab_document(
+                document_id=request.document_id,
+                document_base64=request.document_base64,
+                media_type=request.media_type,
+                provider=provider,
+            )
+            if document is None:
+                response = DocumentExtractResponse(
+                    **base,
+                    status="degraded",
+                    degraded_reason=reason,
+                    prompt_version=LAB_EXTRACTION_PROMPT_VERSION,
+                    extraction_model="none",
+                )
+            else:
+                response = DocumentExtractResponse(
+                    **base,
+                    prompt_version=document.extraction_metadata.prompt_version,
+                    extraction_model=document.extraction_metadata.model_id,
+                    extraction=document,
+                    printed_identity=printed_identity_of(document),
+                )
+                attrs["records"] = len(document.results)
+        attrs["outcome"] = response.status
+        attrs["reason_code"] = response.degraded_reason
+        score("document_extract_degraded", response.status != "ok", data_type="BOOLEAN")
+        log_event(
+            "document_extract.completed",
+            cid=request.correlation_id,
+            document_id=request.document_id,
+            doc_type=request.doc_type,
+            status=response.status,
+            reason_code=response.degraded_reason,
+            results=len(response.extraction.results) if response.extraction is not None else 0,
+        )
+        return response
+
+
 async def run_document_briefing(
     request: DocumentBriefingRequest,
     *,
@@ -391,16 +667,29 @@ __all__ = [
     "ANSWER_SYSTEM_PROMPT",
     "MAX_DOCUMENT_BYTES",
     "SUPPORTED_MEDIA_TYPES",
+    "DOC_TYPE_NOT_SUPPORTED_YET",
     "BriefingStatus",
+    "DocType",
+    "DocumentExtractRequest",
+    "DocumentExtractResponse",
+    "PrintedIdentity",
     "ConsiderationDraft",
     "ConsiderationDraftSet",
     "DocumentBriefingRequest",
     "DocumentBriefingResponse",
     "Provenance",
     "RoutingDecision",
+    "MAX_BRIEFING_DOCUMENTS",
+    "MAX_PRIOR_FACTS",
+    "StoredDocument",
     "build_query",
     "build_reranker",
+    "chart_facts",
+    "combine_documents",
     "drafts_to_candidates",
     "get_retriever",
+    "printed_identity_of",
+    "read_lab_document",
+    "run_document_extract",
     "run_document_briefing",
 ]

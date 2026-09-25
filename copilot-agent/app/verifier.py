@@ -19,6 +19,11 @@ semantic faithfulness (a known limit):
   absence is never negation ("no known allergies", "never", "not done", ...)
   unless the phrase is quoted from a cited record; "abnormal/high/low/normal"
   only when a cited result's abnormal flag says so; no cross-patient text.
+* Pending document facts (ADR-011) - values read from uploaded documents that
+  no clinician has verified or filed: cited under their own record type, the
+  statement must say "not yet verified or filed" and may not present the value
+  as chart data; "no record found" may not hide a pending value for the test;
+  a pending value that disagrees with a filed one is shown as a conflict.
 
 Rejected statements are dropped and counted; their text is never returned.
 """
@@ -33,7 +38,7 @@ from typing import Any
 
 from app.contracts import ADVICE_REFUSAL_TEXT, SCOPE_REFUSAL_TEXT, Citation, RecordType, StatementKind, VerifiedStatement
 from app.providers.base import ModelStatement, ModelTurnAnswer
-from app.tools import ToolOutput
+from app.tools import PENDING_LABEL, ToolOutput
 
 # Modal / directive phrasing that would turn a record lookup into advice.
 _RECOMMENDATION = re.compile(
@@ -48,6 +53,15 @@ _INTERPRETATION = re.compile(r"\b(abnormal|high|low|elevated|normal|within (?:no
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 # Topics a refusal declines that make it the advice refusal rather than the scope refusal.
 _ADVICE_TOPIC = re.compile(r"(advice|advis\w*|dos(?:e|es|ing|age)|treat\w*|diagnos\w*|interpret\w*|recommend\w*)", re.I)
+#: Record-id prefix of a pending document fact (contract C5).
+PENDING_PREFIX = "copilot_extracted_value"
+# Wording that presents a value as part of the chart. A pending fact is not, until a clinician files it.
+_CHART_CLAIM = re.compile(
+    r"\b(?:in|on|to) (?:the |this |her |his |their )?(?:patient'?s )?(?:chart|record)\b|\bon file\b|\bcharted\b|\bfiled (?:value|result)\b",
+    re.I,
+)
+# A pending-vs-filed disagreement must be named as one, not left for the reader to spot.
+_CONFLICT_WORD = re.compile(r"\b(conflicts?|conflicting|differs?|disagrees?|does not match)\b", re.I)
 _FLAG_WORDS = {"high": {"high", "yes"}, "elevated": {"high", "yes"}, "low": {"low", "yes"}, "abnormal": {"high", "low", "yes"}, "critical": {"high", "low", "yes"}, "normal": {"no"}, "within normal range": {"no"}, "within normal limits": {"no"}, "within reference range": {"no"}, "out of range": {"high", "low", "yes"}}
 
 
@@ -71,10 +85,25 @@ class TurnEvidence:
             len(o.records) == 1 and o.records[0].get("record_id") == "allergies:none" for o in self.outputs
         )
 
+    def empty_call_with_pending(self) -> bool:
+        """A chart search came back empty while pending document values exist for that test."""
+        return any(not o.records and o.error is None and o.pending_count for o in self.outputs)
+
+    def conflicts(self) -> dict[str, set[str]]:
+        """Pending facts and the filed results they disagree with, both ways, among records returned this turn."""
+        records = self.records()
+        pairs: dict[str, set[str]] = {}
+        for rid, r in records.items():
+            for other in r.get("conflicts_with") or ():
+                if other in records:
+                    pairs.setdefault(rid, set()).add(other)
+                    pairs.setdefault(other, set()).add(rid)
+        return pairs
+
 
 def _record_numbers(record: dict[str, Any]) -> set[str]:
     numbers: set[str] = set()
-    for key in ("value", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span"):
+    for key in ("value", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span", "document_id", "page"):
         v = record.get(key)
         if isinstance(v, (str, int, float)):
             numbers.update(_normalize_number(n) for n in _NUMBER.findall(str(v)))
@@ -100,6 +129,7 @@ def _citation_for(rid: str, record: dict[str, Any]) -> Citation:
         "prescriptions": RecordType.MEDICATION,
         "lists": RecordType.MEDICATION if "drug_name" in record else RecordType.ALLERGY,
         "form_soap": RecordType.PRIOR_NOTE,
+        PENDING_PREFIX: RecordType.PENDING_DOCUMENT_FACT,
     }.get(prefix, RecordType.PRIOR_NOTE)
     raw = record.get("date") or record.get("modified_at") or record.get("started_at") or record.get("begdate")
     try:
@@ -126,6 +156,34 @@ def _domain_violation(text: str, cited: Iterable[dict[str, Any]]) -> str | None:
         flags = {str(r.get("abnormal_flag")).lower() for r in cited if r.get("abnormal_flag") is not None}
         if not (flags & allowed):
             return "interpretation_without_flag"
+    return None
+
+
+def _is_pending(rid: str) -> bool:
+    return rid.startswith(PENDING_PREFIX + ":")
+
+
+def _pending_violation(text: str, cited_ids: list[str], evidence: TurnEvidence) -> str | None:
+    """ADR-011's rules for values read from documents that nobody has verified or filed.
+
+    - A statement citing one must say "not yet verified or filed".
+    - Standing alone, it may not describe the value as part of the chart.
+    - A pending value and a filed value that disagree (same test, same day,
+      both returned this turn) are shown together, cited both ways, and named
+      as a conflict - neither side may be stated as if the other did not exist.
+    """
+    if any(_is_pending(rid) for rid in cited_ids):
+        lowered = text.lower()
+        if PENDING_LABEL not in lowered:
+            return "pending_label_missing"
+        if all(_is_pending(rid) for rid in cited_ids) and _CHART_CLAIM.search(lowered.replace(PENDING_LABEL, "")):
+            return "pending_cited_as_chart"
+    conflicts = evidence.conflicts()
+    cited = set(cited_ids)
+    for rid in cited_ids:
+        other_side = conflicts.get(rid)
+        if other_side and (not other_side & cited or not _CONFLICT_WORD.search(text)):
+            return "conflict_not_shown"
     return None
 
 
@@ -163,12 +221,18 @@ def verify_statement(stmt: ModelStatement, evidence: TurnEvidence) -> tuple[Veri
             return None, "absence_without_empty_search"
         if stmt.citation_record_ids:
             return None, "absence_with_citations"
+        if evidence.empty_call_with_pending() and PENDING_LABEL not in text.lower():
+            # "No result on file" beside an unfiled value read from a document would hide it.
+            return None, "absence_ignores_pending"
         cited = []
     elif stmt.kind is StatementKind.REFUSAL:
         # Fixed message, chosen by what the model declined: advice/interpretation wording -> the advice sentence.
         return VerifiedStatement(text=canonical_refusal(text), kind=stmt.kind, citations=[]), None
     else:
         cited = [records[rid] for rid in stmt.citation_record_ids if rid in records]
+    pending_violation = _pending_violation(text, [rid for rid in stmt.citation_record_ids if rid in records], evidence)
+    if pending_violation:
+        return None, pending_violation
     violation = _domain_violation(text, cited)
     if violation:
         return None, violation
@@ -200,6 +264,7 @@ normalize_number = _normalize_number
 __all__ = [
     "ADVICE_TOPIC_PATTERN",
     "NUMBER_PATTERN",
+    "PENDING_PREFIX",
     "RECOMMENDATION_PATTERN",
     "TurnEvidence",
     "canonical_refusal",
