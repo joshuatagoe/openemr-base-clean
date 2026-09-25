@@ -50,6 +50,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -146,8 +147,8 @@ final class DocumentBriefingController
             $patientUuid = $patient['uuid'];
 
             if ($this->usesStoredExtractions()) {
-                [$body, $outcome] = $this->briefFromStoredExtractions($correlationId, $pid, $patientUuid, $question);
-            } elseif (($document = $this->documents->findLatestDocument($pid)) === null) {
+                [$body, $outcome] = $this->briefFromStoredExtractions($correlationId, $pid, $username, $patientUuid, $question);
+            } elseif (($document = $this->documents->findLatestDocument($pid, $username)) === null) {
                 $outcome = self::DEGRADED_NO_DOCUMENT;
                 $body = self::degraded($correlationId, $patientUuid, null, $outcome);
             } else {
@@ -211,12 +212,13 @@ final class DocumentBriefingController
      * Brief from every extracted document of the patient (contract C4): the stored
      * extractions go to the agent, which does not extract again, plus the chart's
      * lab history as `prior_facts` in the Week 1 bundle shape (entered-in-error
-     * excluded). Held documents are never sent.
+     * excluded). Held documents, and documents the user may not access (core
+     * `can_access()`, ADR-008 §3), are never sent.
      *
      * @return array{array<string,mixed>, string}  body, outcome code
      * @throws SourceUnavailableException  when the processing record cannot be read
      */
-    private function briefFromStoredExtractions(string $correlationId, int $pid, string $patientUuid, ?string $question): array
+    private function briefFromStoredExtractions(string $correlationId, int $pid, string $username, string $patientUuid, ?string $question): array
     {
         assert($this->records !== null && $this->builder !== null);
         try {
@@ -226,6 +228,9 @@ final class DocumentBriefingController
         }
         $documents = [];
         foreach ($stored as $row) {
+            if (!$this->documents->canAccess($row['document_id'], $username)) {
+                continue;
+            }
             $extraction = json_decode($row['extraction_json'], true, 64);
             if (is_array($extraction)) {
                 $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
@@ -266,7 +271,8 @@ final class DocumentBriefingController
     /** REST route adapter: `POST /api/copilot/document-briefing` under the local API bridge. */
     public function handleRest(HttpRestRequest $request): JsonResponse
     {
-        $session = $request->getSession();
+        // Read the session, then release its lock before the agent hand-off (Support\SessionRelease).
+        $session = SessionRelease::readAndRelease($request->getSession());
         $requestedPid = null;
         $question = null;
         // getRequestBodyJSON() is broken in this checkout; read the raw body.
@@ -275,11 +281,7 @@ final class DocumentBriefingController
             $requestedPid = Scalar::positiveIntOrNull($json['pid'] ?? null);
             $question = is_string($json['question'] ?? null) ? $json['question'] : null;
         }
-        $result = $this->handleForSession([
-            'authUserID' => $session->get('authUserID'),
-            'authUser' => $session->get('authUser'),
-            'pid' => $session->get('pid'),
-        ], $requestedPid, $question);
+        $result = $this->handleForSession($session, $requestedPid, $question);
         if (!headers_sent()) {
             header_remove('Cache-Control');
         }

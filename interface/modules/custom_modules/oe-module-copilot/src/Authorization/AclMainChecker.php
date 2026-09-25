@@ -11,10 +11,15 @@ namespace OpenEMR\Modules\Copilot\Authorization;
 
 use OpenEMR\Common\Acl\AclMain;
 
-final class AclMainChecker implements AclCheckerInterface
+final class AclMainChecker implements AclCheckerInterface, AclWriteCheckerInterface
 {
     public function check(string $section, string $value, string $username): bool
     {
         return AclMain::aclCheckCore($section, $value, $username);
+    }
+
+    public function checkWrite(string $section, string $value, string $username): bool
+    {
+        return AclMain::aclCheckCore($section, $value, $username, 'write');
     }
 }

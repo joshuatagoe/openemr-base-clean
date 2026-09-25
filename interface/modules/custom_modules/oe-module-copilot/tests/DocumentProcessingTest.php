@@ -12,6 +12,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Documents\CandidateMapper;
 use OpenEMR\Modules\Copilot\Documents\DocType;
 use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
+use OpenEMR\Modules\Copilot\Documents\ProcessingRepositoryInterface;
 use OpenEMR\Modules\Copilot\Documents\IdentityComparator;
 use PHPUnit\Framework\TestCase;
 
@@ -312,6 +313,22 @@ final class DocumentProcessingTest extends TestCase
         foreach ($repo->values[25] as $v) {
             self::assertSame(self::PID, $v['pid'], 'no candidate from the old chart survives');
         }
+    }
+
+    /** ADR-009 7b: an un-filed value (filed, then withdrawn) blocks the reset exactly like a filed one. */
+    public function testAMovedDocumentWithAnUnfiledValueIsNotReset(): void
+    {
+        $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(27)]], [27 => 'unfiled-bytes']);
+        $repo = new FakeProcessingRepository();
+        $repo->records[27] = ['document_id' => 27, 'pid' => self::OTHER_PID, 'content_sha256' => hash('sha256', 'unfiled-bytes'), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'lab-v3', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{}', 'created_at' => '2026-09-24 09:00:00', 'updated_at' => '2026-09-24 09:00:00'];
+        $repo->values[27] = [['id' => 92, 'document_id' => 27, 'pid' => self::OTHER_PID, 'status' => 'unfiled']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
+
+        self::assertSame([['document_id' => 27, 'outcome' => DocumentProcessor::CODE_MOVED_AFTER_FILING]], $result['processed']);
+        self::assertSame(self::OTHER_PID, $repo->records[27]['pid']);
+        self::assertSame(['filed', 'unfiled'], ProcessingRepositoryInterface::FILED_STATUSES);
     }
 
     /** Once a value from a document was filed, moving the document needs a clinician, not an automatic reset. */

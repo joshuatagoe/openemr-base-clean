@@ -26,6 +26,9 @@ interface ProcessingRepositoryInterface
     public const STATUS_UNSUPPORTED = 'unsupported';
     public const STATUS_HELD_IDENTITY = 'held_identity';
 
+    /** Candidate statuses that mean a value reached the chart (ADR-009 7b: `unfiled` = filed, then withdrawn). */
+    public const FILED_STATUSES = ['filed', 'unfiled'];
+
     /**
      * Records for these documents of this patient, keyed by document id, each
      * with its count of `candidate` values.

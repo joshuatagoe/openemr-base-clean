@@ -13,6 +13,13 @@
  *    hands it to the agent and returns a patient-bound ticket plus the
  *    deterministic sections. The patient binding is the session's selected
  *    patient; a `pid` in the body is only checked for staleness.
+ *  - `GET /api/copilot/document-file/:did` - the source file for the preview
+ *    (ADR-008 §3), same authorizer; see Controller\DocumentFileController.
+ *  - `POST /api/copilot/documents/:did/values/:idx/file`, `.../reject`, `.../unfile` -
+ *    Verify and file / reject one extracted value (ADR-009); see
+ *    Controller\FilingController.
+ *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
+ *    chart result (ADR-009 7b); see Controller\ResultSourceController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
  *      copilot_admin_relationship_override (bool, default off) - allow
  *        admin/super users without a care relationship, audited as such
@@ -46,12 +53,17 @@ use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
+use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
+use OpenEMR\Modules\Copilot\Controller\FilingController;
+use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Data\SqlSchemaStatus;
 use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
 use OpenEMR\Modules\Copilot\Documents\SqlProcessingRepository;
+use OpenEMR\Modules\Copilot\Filing\SqlFilingStore;
+use OpenEMR\Modules\Copilot\Filing\ValueFiler;
 use OpenEMR\Modules\Copilot\Observability\LangfuseTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
@@ -68,6 +80,11 @@ final class Bootstrap
     public const ROUTE_DOCUMENT_BRIEFING = 'POST /api/copilot/document-briefing';
     public const ROUTE_DOCUMENTS_PROCESS = 'POST /api/copilot/documents/process';
     public const ROUTE_DOCUMENTS_LIST = 'GET /api/copilot/documents';
+    public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
+    public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
+    public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
+    public const ROUTE_VALUE_UNFILE = 'POST /api/copilot/documents/:did/values/:idx/unfile';
+    public const ROUTE_RESULT_SOURCE = 'GET /api/copilot/results/:rid/source';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -135,6 +152,26 @@ final class Bootstrap
             self::ROUTE_DOCUMENTS_LIST,
             static fn(HttpRestRequest $request) => self::createDocumentsController()->handleListRest($request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENT_FILE,
+            static fn(string $did, HttpRestRequest $request) => self::createDocumentFileController()->handleRest($did, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_FILE,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleFileRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_REJECT,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleRejectRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_UNFILE,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleUnfileRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_RESULT_SOURCE,
+            static fn(string $rid, HttpRestRequest $request) => self::createResultSourceController()->handleRest($rid, $request)
+        );
         return $event;
     }
 
@@ -173,6 +210,7 @@ final class Bootstrap
             reporter: $reporter,
             pendingFacts: new SqlProcessingRepository(),
             schema: new SqlSchemaStatus(),
+            documentAccess: new SqlDocumentReader(),
         );
     }
 
@@ -187,6 +225,42 @@ final class Bootstrap
             new SqlSchemaStatus(),
             new DocumentProcessor(new SqlDocumentReader(), new SqlProcessingRepository(), new GuzzleAgentClient(CopilotConfig::fromEnvironment()), $logger),
             $logger,
+        );
+    }
+
+    /** The source-file route for the preview (ADR-008), same authorizer wiring. */
+    public static function createDocumentFileController(): DocumentFileController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new DocumentFileController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlDocumentReader(),
+        );
+    }
+
+    /** Verify and file / reject (ADR-009): read authorizer plus lab-write and sign checks. */
+    public static function createFilingController(): FilingController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        $acl = new AclMainChecker();
+        return new FilingController(
+            new CopilotAuthorizer($acl, new SqlRelationshipRepository(), $override),
+            $acl,
+            $acl,
+            new SqlSchemaStatus(),
+            new SqlDocumentReader(),
+            new ValueFiler(new SqlFilingStore()),
+        );
+    }
+
+    /** Filed chart result -> its source document (ADR-009 7b), same authorizer wiring. */
+    public static function createResultSourceController(): ResultSourceController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new ResultSourceController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlFilingStore(),
+            new SqlDocumentReader(),
         );
     }
 
