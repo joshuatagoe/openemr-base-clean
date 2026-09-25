@@ -56,6 +56,7 @@ from app.documents import (
     ExtractionMetadata,
     LabDocument,
     LabResult,
+    PrintedIdentity,
     VerificationStatus,
 )
 from app.observability import generation, log_event, span
@@ -269,6 +270,7 @@ async def extract_lab_document(
         document_id=document_id,  # assigned here, never taken from the model
         collection_date=_as_date(proposed.collection_date),
         ordering_provider=proposed.ordering_provider,
+        printed_identity=_printed_identity(proposed),  # returned to the module only; never logged
         results=results,
         extraction_metadata=summarize(
             results,
@@ -368,6 +370,12 @@ class LabDraft(StrictModel):
 
     collection_date: str | None = Field(default=None, description="ISO date, or null if not printed.")
     ordering_provider: str | None = None
+    patient_name: str | None = Field(
+        default=None, description="The patient name exactly as printed on the report, or null if none is printed."
+    )
+    patient_dob: str | None = Field(
+        default=None, description="The patient's printed date of birth as an ISO date (YYYY-MM-DD), or null."
+    )
     page_count: int = Field(default=1, ge=1)
     results: list[LabResultDraft] = Field(default_factory=list)
 
@@ -379,6 +387,15 @@ def _as_date(raw: str | None) -> date | None:
         return date.fromisoformat(raw.strip()[:10])
     except ValueError:
         return None
+
+
+def _printed_identity(draft: LabDraft) -> PrintedIdentity | None:
+    """The printed name and DOB for the module's identity check (ADR-012). None when neither is printed."""
+    name = (draft.patient_name or "").strip() or None
+    dob = _as_date(draft.patient_dob)
+    if name is None and dob is None:
+        return None
+    return PrintedIdentity(name=name, dob=dob)
 
 
 def _as_value(raw: str | None, *, unreadable: bool) -> Decimal | str | None:

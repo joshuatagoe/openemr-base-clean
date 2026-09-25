@@ -6,6 +6,8 @@
     "collection_date": "2026-09-12",
     "ordering_provider": "Marcus Adeyemi, MD",
     "page_count": 1,
+    "patient_dob": "1981-03-14",
+    "patient_name": "Whitfield, Evelyn R.",
     "results": [
       {
         "page": 1,
@@ -40,13 +42,13 @@
     ]
   },
   "schema": "LabDraft",
-  "system_digest": "402cf0191fd2f81c",
+  "system_digest": "0bebe91aa4b7d40b",
   "usage": {
-    "cached_input_tokens": 1987,
+    "cached_input_tokens": 2249,
     "input_tokens": 1910,
-    "latency_ms": 4650,
+    "latency_ms": 5068,
     "model": "claude-opus-5",
-    "output_tokens": 334,
+    "output_tokens": 368,
     "provider": "anthropic"
   }
 }

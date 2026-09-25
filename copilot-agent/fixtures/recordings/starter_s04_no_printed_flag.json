@@ -6,11 +6,13 @@
     "collection_date": "2026-09-14",
     "ordering_provider": null,
     "page_count": 1,
+    "patient_dob": null,
+    "patient_name": "Evelyn Demo",
     "results": [
       {
         "page": 1,
         "printed_flag": null,
-        "quote": "Result 8.0 %",
+        "quote": "Test Hemoglobin A1c\nResult 8.0 %\nReference range 4.0 - 5.6 %\nPrinted abnormal flag (none printed)",
         "reference_range": "4.0 - 5.6 %",
         "test_name": "Hemoglobin A1c",
         "unit": "%",
@@ -20,13 +22,13 @@
     ]
   },
   "schema": "LabDraft",
-  "system_digest": "402cf0191fd2f81c",
+  "system_digest": "0bebe91aa4b7d40b",
   "usage": {
-    "cached_input_tokens": 1987,
+    "cached_input_tokens": 2249,
     "input_tokens": 1807,
-    "latency_ms": 2733,
+    "latency_ms": 3504,
     "model": "claude-opus-5",
-    "output_tokens": 124,
+    "output_tokens": 196,
     "provider": "anthropic"
   }
 }
