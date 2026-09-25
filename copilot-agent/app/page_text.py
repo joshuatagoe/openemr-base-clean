@@ -23,10 +23,13 @@ from __future__ import annotations
 
 import io
 import logging
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 import pdfplumber
+import pypdfium2 as pdfium
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.observability import log_event
 
@@ -34,8 +37,21 @@ from app.observability import log_event
 # never reach a handler, even when the root logger is at DEBUG.
 logging.getLogger("pdfminer").setLevel(logging.WARNING)
 logging.getLogger("pdfplumber").setLevel(logging.WARNING)
+logging.getLogger("PIL").setLevel(logging.WARNING)  # chunk-level decoder chatter, no use in a trace
 
 WordSource = Literal["text_layer", "ocr"]
+
+#: 8-point text lands at ~22 px, above Textract's 15 px minimum (ADR-007 s6).
+DEFAULT_RENDER_DPI = 200
+
+#: Textract's synchronous limits (limits-document.html): 10 MB, 10000 px a side.
+OCR_MAX_BYTES = 10 * 1024 * 1024
+OCR_MAX_SIDE_PX = 10_000
+
+#: Fixed reason codes. Logged; never a raw exception message.
+OCR_UNAVAILABLE = "ocr_unavailable"
+OCR_TIMEOUT = "ocr_timeout"
+OCR_FAILED = "ocr_failed"
 
 
 @dataclass(frozen=True)
@@ -55,9 +71,21 @@ class PageWords:
 
 
 class OcrSource(Protocol):
-    """Reads one upright page image. TextractOcr in production, FakeOcr in CI."""
+    """Reads one upright page image. TextractOcr in production, FakeOcr in CI.
+
+    Returned boxes are normalised to the image it was given - which is the page
+    frame, because we render (or orient) that image ourselves.
+    """
 
     async def read_page(self, png: bytes, *, page: int) -> tuple[Word, ...]: ...
+
+
+class OcrError(Exception):
+    """OCR could not read a page. ``reason`` is a fixed code, safe to log."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 def normalised_box(
@@ -107,11 +135,139 @@ def text_layer_pages(pdf_bytes: bytes) -> tuple[PageWords, ...]:
         return ()
 
 
+# --------------------------------------------------------------------------- #
+# Images for OCR: rendered PDF pages and upright photos
+# --------------------------------------------------------------------------- #
+
+
+def _encode(image: Image.Image, fmt: str) -> bytes:
+    buf = io.BytesIO()
+    if fmt == "JPEG":
+        if image.mode not in ("L", "RGB"):
+            image = image.convert("RGB")
+        image.save(buf, format="JPEG", quality=90)
+    else:
+        image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def render_page_png(pdf_bytes: bytes, page: int, *, dpi: int = DEFAULT_RENDER_DPI) -> bytes:
+    """One page as a grayscale PNG: the cropbox with /Rotate applied - the viewer's frame."""
+    document = pdfium.PdfDocument(pdf_bytes)
+    try:
+        image = document[page - 1].render(scale=dpi / 72, grayscale=True).to_pil()
+    finally:
+        document.close()
+    return _encode(image, "PNG")
+
+
+def warm_renderer() -> None:
+    """Pay pdfium's first-render cost (~5 s in a fresh process) at startup, not on a request."""
+    document = pdfium.PdfDocument.new()
+    try:
+        document.new_page(72, 72)
+        document[0].render(scale=1, grayscale=True).to_pil()
+    finally:
+        document.close()
+
+
+def orient_image(data: bytes) -> bytes | None:
+    """The photo turned upright from its EXIF orientation, within OCR's size limits.
+
+    A browser shows a photo upright, so boxes must be measured on the upright
+    image or they land in the wrong place in the preview. The bytes come back
+    unchanged when nothing needs changing; None when they are not an image.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            fmt = opened.format or "PNG"
+            orientation = opened.getexif().get(0x0112, 1)
+            image = ImageOps.exif_transpose(opened)
+            image.load()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None
+
+    changed = orientation not in (None, 1)
+    longest = max(image.size)
+    if longest > OCR_MAX_SIDE_PX:
+        scale = OCR_MAX_SIDE_PX / longest
+        image = image.resize((max(1, int(image.width * scale)), max(1, int(image.height * scale))))
+        changed = True
+    if not changed and len(data) <= OCR_MAX_BYTES and fmt in ("PNG", "JPEG"):
+        return data
+    out = _encode(image, "JPEG" if fmt == "JPEG" else "PNG")
+    while len(out) > OCR_MAX_BYTES and min(image.size) > 64:
+        image = image.resize((image.width * 3 // 4, image.height * 3 // 4))
+        out = _encode(image, "JPEG")
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# The fake OCR source: what CI runs
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class OcrCall:
+    page: int
+    byte_count: int
+    size: tuple[int, int]
+
+
+@dataclass
+class FakeOcr:
+    """Deterministic, offline OCR (the FakeReranker pattern).
+
+    Returns the words it was scripted with for each page, re-stamped with the
+    page and ``source="ocr"``. With no script it reads nothing, which leaves
+    every OCR-dependent value unverified - the honest answer when no OCR ran.
+    ``available=False`` drives the same failure path an AWS outage would.
+    ``calls`` records what it was asked to read (page, byte count, pixel size).
+    """
+
+    pages: Mapping[int, Sequence[Word]] = field(default_factory=dict)
+    available: bool = True
+    calls: list[OcrCall] = field(default_factory=list)
+
+    name = "fake-ocr"
+
+    async def read_page(self, png: bytes, *, page: int) -> tuple[Word, ...]:
+        size = (0, 0)
+        if png:
+            try:
+                with Image.open(io.BytesIO(png)) as image:
+                    size = image.size
+            except (UnidentifiedImageError, OSError):
+                pass
+        self.calls.append(OcrCall(page=page, byte_count=len(png), size=size))
+        if not self.available:
+            raise OcrError(OCR_UNAVAILABLE)
+        return tuple(Word(text=w.text, page=page, bbox=w.bbox, source="ocr") for w in self.pages.get(page, ()))
+
+
+def default_ocr_source() -> OcrSource:
+    """The OCR source extraction uses when the caller names none."""
+    return FakeOcr()
+
+
 __all__ = [
+    "DEFAULT_RENDER_DPI",
+    "OCR_FAILED",
+    "OCR_MAX_BYTES",
+    "OCR_MAX_SIDE_PX",
+    "OCR_TIMEOUT",
+    "OCR_UNAVAILABLE",
+    "FakeOcr",
+    "OcrCall",
+    "OcrError",
     "OcrSource",
     "PageWords",
     "Word",
     "WordSource",
     "normalised_box",
+    "default_ocr_source",
+    "orient_image",
+    "render_page_png",
     "text_layer_pages",
+    "warm_renderer",
 ]

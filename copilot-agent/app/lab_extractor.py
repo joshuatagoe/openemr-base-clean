@@ -27,7 +27,10 @@ patient-safety defect rather than a bug:
    local variables and the provider call. Every log line here carries counts,
    ids and timings only (CR7).
 
-No PDF parsing library is involved: the provider reads the document natively.
+The provider reads the document natively for extraction. Verification is a
+separate, deterministic step (``app.verification``, ADR-007): each value is
+looked up in the page's own words - the PDF text layer, or OCR of a rendered
+page or an upright photo - and only a match gives a verified status and a box.
 ``StubProvider`` is the default so the pipeline runs offline, with no API key
 and no spend; it is registered below through ``register_fixture`` so neither the
 ``ModelProvider`` port nor ``StubProvider`` itself grows a member per document
@@ -36,7 +39,6 @@ type.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import re
 from datetime import UTC, date, datetime
@@ -56,8 +58,8 @@ from app.documents import (
     LabResult,
     VerificationStatus,
 )
-from app.observability import generation, log_event
-from app.page_text import PageWords, text_layer_pages
+from app.observability import generation, log_event, span
+from app.page_text import OcrSource, default_ocr_source
 from app.providers.base import (
     ContentPart,
     DocumentPart,
@@ -71,7 +73,7 @@ from app.providers.prompt import (
     build_lab_document_content,
 )
 from app.providers.stub_provider import StubProvider
-from app.verification import verify_result
+from app.verification import verify_document
 
 # A one-page report with a dozen results fits comfortably; the ceiling exists so
 # a malformed document cannot turn into an unbounded generation.
@@ -186,25 +188,24 @@ def summarize(results: list[LabResult], *, model_id: str, page_count: int) -> Ex
 # --------------------------------------------------------------------------- #
 
 
-async def _page_words(document: bytes, media_type: str) -> tuple[PageWords, ...]:
-    """The words the matcher searches. CPU-bound parsing runs off the event loop."""
-    if media_type == "application/pdf":
-        return await asyncio.to_thread(text_layer_pages, document)
-    return ()
-
-
 async def extract_lab_document(
     *,
     document_id: int,
     pdf_bytes: bytes,
     media_type: str,
     provider: ModelProvider | None = None,
+    ocr: OcrSource | None = None,
 ) -> LabDocument:
     """Extract one stored lab report into a validated ``LabDocument``.
 
     ``provider`` defaults to ``StubProvider``: deterministic, offline, no API key
     and no spend. Raises ``ProviderError`` when the model call fails - a provider
     outage must never arrive as an empty extraction.
+
+    ``ocr`` defaults to the configured source (``COPILOT_OCR``: fake unless set
+    to textract). Every result's verification status and box are set by
+    ``app.verification`` from the page; an OCR failure only makes values
+    unverified.
     """
     if media_type not in SUPPORTED_MEDIA_TYPES:
         raise ValueError("unsupported document media type")
@@ -243,11 +244,26 @@ async def extract_lab_document(
         stamp_source_identity(draft_to_results(proposed, document_id), document_id)
     )
     # Verification and boxes come from the page, never from the model (ADR-007).
-    pages = await _page_words(pdf_bytes, media_type)
-    results = [
-        verify_result(result, pages, page_hint=row.page)
-        for result, row in zip(results, proposed.results, strict=True)
-    ]
+    with span("verify_document") as attrs:
+        results, stats = await verify_document(
+            results,
+            [row.page for row in proposed.results],
+            document=pdf_bytes,
+            media_type=media_type,
+            ocr=ocr if ocr is not None else default_ocr_source(),
+        )
+        # Counts and fixed codes only - never a word, a value or a page image.
+        attrs.update(
+            page_count=stats.page_count,
+            ocr_pages=stats.ocr_pages,
+            ocr_fallback_pages=stats.ocr_fallback_pages,
+            ocr_failed_pages=stats.ocr_failed_pages,
+            verified_exact=stats.verified_exact,
+            verified_fuzzy=stats.verified_fuzzy,
+            unverified=stats.unverified,
+        )
+        if stats.ocr_failure_reasons:
+            attrs["reason_code"] = sorted(set(stats.ocr_failure_reasons))[0]
     document = LabDocument(
         document_id=document_id,  # assigned here, never taken from the model
         collection_date=_as_date(proposed.collection_date),
@@ -256,7 +272,8 @@ async def extract_lab_document(
         extraction_metadata=summarize(
             results,
             model_id=parsed.usage.model,
-            page_count=proposed.page_count,
+            # The page count we parsed wins over the model's; a photo is one page.
+            page_count=stats.page_count or proposed.page_count,
         ),
     )
 

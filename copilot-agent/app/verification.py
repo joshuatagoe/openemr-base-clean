@@ -39,14 +39,26 @@ PHI: nothing here logs.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
 from app.documents import LabResult, VerificationStatus
-from app.page_text import PageWords, Word
+from app.observability import log_event
+from app.page_text import (
+    DEFAULT_RENDER_DPI,
+    OCR_FAILED,
+    OcrError,
+    OcrSource,
+    PageWords,
+    Word,
+    orient_image,
+    render_page_png,
+    text_layer_pages,
+)
 
 MAX_SPAN_WORDS = 4
 
@@ -267,11 +279,147 @@ def verify_result(
     return LabResult.model_validate({**result.model_dump(), "verification_status": status, "citation": citation})
 
 
+# --------------------------------------------------------------------------- #
+# The document: which pages are read, and by what (ADR-007 s2)
+# --------------------------------------------------------------------------- #
+
+#: At most this many OCR calls in flight per document: bounded fan-out, well
+#: under Textract's 25 TPS quota, and a many-page scan cannot flood it.
+OCR_CONCURRENCY = 4
+
+
+@dataclass
+class VerificationStats:
+    """Counts only - the span/log payload. Never a word, value or page image."""
+
+    page_count: int = 0
+    ocr_pages: int = 0
+    ocr_fallback_pages: int = 0
+    ocr_failed_pages: int = 0
+    ocr_failure_reasons: list[str] = field(default_factory=list)
+    verified_exact: int = 0
+    verified_fuzzy: int = 0
+    unverified: int = 0
+    unreadable: int = 0
+
+
+def _upright_image(document: bytes, media_type: str, page: int, dpi: int) -> bytes | None:
+    if media_type == "application/pdf":
+        return render_page_png(document, page, dpi=dpi)
+    return orient_image(document)
+
+
+async def _ocr_pages(
+    numbers: Sequence[int],
+    *,
+    document: bytes,
+    media_type: str,
+    ocr: OcrSource,
+    dpi: int,
+    stats: VerificationStats,
+) -> dict[int, tuple[Word, ...]]:
+    """OCR each page; a page that fails contributes no words (its values stay unverified)."""
+    gate = asyncio.Semaphore(OCR_CONCURRENCY)
+
+    async def one(number: int) -> tuple[int, tuple[Word, ...]]:
+        async with gate:
+            try:
+                image = await asyncio.to_thread(_upright_image, document, media_type, number, dpi)
+                if image is None:
+                    raise OcrError(OCR_FAILED)
+                words = await ocr.read_page(image, page=number)
+            except OcrError as exc:
+                reason = exc.reason
+            except Exception as exc:  # noqa: BLE001 - OCR never fails the extraction (ADR-007 s2)
+                reason = OCR_FAILED
+                log_event("verification.ocr_error", page=number, error_type=type(exc).__name__)
+            else:
+                return number, tuple(w for w in words if w.page == number)
+            stats.ocr_failed_pages += 1
+            stats.ocr_failure_reasons.append(reason)
+            log_event("verification.ocr_page_failed", page=number, reason_code=reason)
+            return number, ()
+
+    return dict(await asyncio.gather(*(one(n) for n in numbers)))
+
+
+def _merge(page: PageWords, ocr_words: tuple[Word, ...]) -> PageWords:
+    return PageWords(page=page.page, has_text_layer=page.has_text_layer, has_images=page.has_images,
+                     words=page.words + ocr_words)
+
+
+async def verify_document(
+    results: Sequence[LabResult],
+    page_hints: Sequence[int | None],
+    *,
+    document: bytes,
+    media_type: str,
+    ocr: OcrSource,
+    dpi: int = DEFAULT_RENDER_DPI,
+) -> tuple[list[LabResult], VerificationStats]:
+    """Every result verified against the page words, reading pages by OCR where the policy says.
+
+    1. PDF pages are read from the text layer. Pages with no text layer - and a
+       photo, which has none - are OCR'd up front.
+    2. A value not found on a page that has a text layer AND images (a printed
+       form with a handwritten or stamped value) triggers OCR of that page - the
+       page the model cited, or every such page when it cited none that exists -
+       and the missed values are matched again.
+    3. OCR failure leaves the affected values unverified. Nothing here raises.
+    """
+    stats = VerificationStats()
+    if media_type == "application/pdf":
+        pages = {p.page: p for p in await asyncio.to_thread(text_layer_pages, document)}
+    else:
+        pages = {1: PageWords(page=1, has_text_layer=False, has_images=True, words=())}
+    stats.page_count = len(pages)
+
+    upfront = [n for n, p in pages.items() if not p.has_text_layer]
+    if upfront:
+        stats.ocr_pages += len(upfront)
+        read = await _ocr_pages(upfront, document=document, media_type=media_type, ocr=ocr, dpi=dpi, stats=stats)
+        for number, words in read.items():
+            pages[number] = _merge(pages[number], words)
+    ocr_done = set(upfront)
+
+    out = [verify_result(r, list(pages.values()), page_hint=h) for r, h in zip(results, page_hints, strict=True)]
+
+    missed = [i for i, r in enumerate(out) if r.verification_status is VerificationStatus.UNVERIFIED and r.value is not None]
+    candidates = {n for n, p in pages.items() if p.has_text_layer and p.has_images and n not in ocr_done}
+    fallback: set[int] = set()
+    for i in missed:
+        hint = page_hints[i]
+        fallback |= {hint} & candidates if hint in pages else candidates
+    if fallback:
+        numbers = sorted(fallback)
+        stats.ocr_pages += len(numbers)
+        stats.ocr_fallback_pages += len(numbers)
+        read = await _ocr_pages(numbers, document=document, media_type=media_type, ocr=ocr, dpi=dpi, stats=stats)
+        for number, words in read.items():
+            pages[number] = _merge(pages[number], words)
+        for i in missed:
+            out[i] = verify_result(out[i], list(pages.values()), page_hint=page_hints[i])
+
+    for r in out:
+        if r.verification_status is VerificationStatus.VERIFIED_EXACT:
+            stats.verified_exact += 1
+        elif r.verification_status is VerificationStatus.VERIFIED_FUZZY:
+            stats.verified_fuzzy += 1
+        elif r.verification_status is VerificationStatus.UNREADABLE:
+            stats.unreadable += 1
+        else:
+            stats.unverified += 1
+    return out, stats
+
+
 __all__ = [
     "MAX_SPAN_WORDS",
+    "OCR_CONCURRENCY",
     "Match",
     "MatchKind",
+    "VerificationStats",
     "find_value",
+    "verify_document",
     "is_exact",
     "is_fuzzy",
     "printed_value",
