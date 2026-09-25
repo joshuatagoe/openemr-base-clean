@@ -9,6 +9,7 @@ reading a committed baseline, not by any test.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from fractions import Fraction
@@ -29,6 +30,12 @@ def test_dirty_flag_distinguishes_clean_from_modified(tmp_path: Path, monkeypatc
     the baseline committed to the repo. A flag that is always "yes" looks like
     evidence while carrying none.
     """
+    # Inside a pre-commit hook git exports GIT_DIR / GIT_INDEX_FILE (in a worktree, pointing at
+    # the real repository). Inherited, they make every git call below - and eval_gate._git() -
+    # act on the repository being committed instead of this scratch repo: a stray commit, a
+    # clobbered index, then "cannot lock ref HEAD". Found 2026-09-25 committing from a worktree.
+    for name in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(name)
     repo = tmp_path / "r"
     repo.mkdir()
     run = lambda *a: subprocess.run(["git", *a], cwd=repo, capture_output=True, check=True)
