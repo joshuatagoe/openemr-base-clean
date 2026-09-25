@@ -7,8 +7,10 @@ The panel shows the same definitions on hover (`HELP` in
 - **Week 1 (note briefing):** when a patient is opened, the Co-Pilot reads the plan of the last visit
   note, finds its commitments ("recheck A1c", "continue metformin") and shows whether the chart holds
   evidence for each.
-- **Week 2 (document briefing):** *Brief from latest lab document* reads the newest uploaded lab
-  report, grounds it in guidelines and shows *What changed*, *Needs attention* and *What to consider*.
+- **Week 2 (document briefing):** *Brief from all read lab documents* briefs from every lab report
+  already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
+  and shows *What changed*, *Needs attention* and *What to consider*. *View source* on a document
+  citation opens the page and box it came from.
 
 ---
 
@@ -113,6 +115,7 @@ The panel shows the same definitions on hover (`HELP` in
 
 | Code | Meaning |
 |---|---|
+| `no_extracted_documents` | No lab document has been read yet for this patient (see the document list). |
 | `no_document_on_file` | No PDF, PNG or JPEG in the patient's Documents. |
 | `document_unavailable` | The newest document could not be read from OpenEMR. |
 | `document_too_large` | The newest document is over 10 MB. |

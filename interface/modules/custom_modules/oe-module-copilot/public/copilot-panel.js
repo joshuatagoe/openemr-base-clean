@@ -819,13 +819,15 @@
     }
 
     // ------------------------------------------------------------------ //
-    // Week 2: brief from the patient's latest lab document on file.
+    // Week 2: brief from every lab document already read for this patient
+    // (the module sends their stored extractions; nothing is re-read).
     // Independent of the Week 1 flow above: its own node after the card body
     // (so a Week 1 error that clears the body cannot remove it), its own
     // request to POST /api/copilot/document-briefing (same session, same
     // APICSRFTOKEN), plain text only via textContent.
     // ------------------------------------------------------------------ //
     const DOC_DEGRADED_MESSAGES = {
+        no_extracted_documents: 'No lab document has been read yet for this patient. Documents are read when the chart opens; see the list above.',
         no_document_on_file: 'No lab document (PDF, PNG or JPEG) is on file in this patient’s Documents.',
         document_unavailable: 'The latest document on file could not be read.',
         document_too_large: 'The latest document on file is over 10 MB, the largest the Co-Pilot reads.',
@@ -856,14 +858,16 @@
     }
 
     class DocumentBriefingSection {
-        constructor(container) {
+        /** @param {DocumentsSection|null} documents opens document citations in the source viewer */
+        constructor(container, documents) {
+            this.documents = documents || null;
             this.pid = container.dataset.pid;
             this.csrf = container.dataset.csrf;
             this.url = String(container.dataset.ticketUrl || '').replace(/\/briefing-ticket$/, '/document-briefing');
             this.busy = false;
             this.root = el('div', 'card-body border-top');
             this.root.dataset.role = 'document-briefing';
-            this.button = el('button', 'btn btn-outline-primary btn-sm', 'Brief from latest lab document');
+            this.button = el('button', 'btn btn-outline-primary btn-sm', 'Brief from all read lab documents');
             this.button.setAttribute('type', 'button');
             this.button.addEventListener('click', (e) => {
                 if (e && e.preventDefault) {
@@ -890,7 +894,7 @@
             this.busy = true;
             this.button.disabled = true;
             this.clear();
-            this.output.appendChild(el('p', 'text-muted small mb-0', 'Reading the latest lab document… this can take up to a minute.'));
+            this.output.appendChild(el('p', 'text-muted small mb-0', 'Briefing from the lab documents already read\u2026 this can take up to a minute.'));
             let data = null;
             let failure = null;
             try {
@@ -999,6 +1003,16 @@
             [docCitation(line.document_citation), docCitation(line.record_citation)]
                 .filter((t) => t)
                 .forEach((t) => item.appendChild(el('div', 'text-muted', t)));
+            const cite = line.document_citation;
+            if (this.documents && cite && cite.source_type === 'document' && /^\d+$/.test(String(cite.source_id || ''))) {
+                const view = el('button', 'btn btn-link btn-sm p-0', 'View source');
+                view.type = 'button';
+                view.dataset.action = 'citation-source';
+                const page = Number.isInteger(cite.page) ? cite.page : null;
+                const bbox = Array.isArray(cite.bbox) ? cite.bbox : null;
+                view.addEventListener('click', () => this.documents.openSource(Number(cite.source_id), null, { page: page, bbox: bbox, located: bbox !== null }));
+                item.appendChild(view);
+            }
             return item;
         }
 
@@ -2241,7 +2255,7 @@
         window.oeCopilotDocuments = documents;
         panel.onSectionsRendered = () => documents.annotateFiledResults();
         documents.start();
-        window.oeCopilotDocumentBriefing = new DocumentBriefingSection(container);
+        window.oeCopilotDocumentBriefing = new DocumentBriefingSection(container, documents);
     }
 
     if (document.readyState === 'loading') {
@@ -2259,6 +2273,7 @@
             describeDocument: describeDocument,
             DocumentsSection: DocumentsSection,
             SourceViewer: SourceViewer,
+            DocumentBriefingSection: DocumentBriefingSection,
             buildFileBody: buildFileBody,
             classifyFileResponse: classifyFileResponse
         };
