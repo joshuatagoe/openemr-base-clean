@@ -311,20 +311,27 @@ def sdk_import_nodes(path: Path) -> list[ast.stmt]:
     return found
 
 
-def test_boto3_is_imported_in_exactly_one_module() -> None:
+#: The only modules allowed to import the AWS SDK, each an adapter behind its own protocol:
+#: the Bedrock reranker (ADR-002) and the Textract OCR source (ADR-007, `app/page_text.py`).
+AWS_SDK_ADAPTERS = frozenset({"reranker.py", "page_text.py"})
+
+
+def _sdk_importers() -> list[str]:
+    return sorted(path.relative_to(APP_DIR).as_posix() for path in APP_DIR.rglob("*.py") if sdk_import_nodes(path))
+
+
+def test_boto3_is_imported_only_by_the_named_adapters() -> None:
     """F09 s16 (D) - "an import elsewhere is a review failure and is greppable in CI"."""
-    importers = sorted(
-        path.relative_to(APP_DIR).as_posix() for path in APP_DIR.rglob("*.py") if sdk_import_nodes(path)
-    )
-    assert importers == ["reranker.py"], f"the AWS SDK may only be imported by the adapter; found {importers}"
+    importers = _sdk_importers()
+    assert "reranker.py" in importers, "the Bedrock adapter is expected to import the SDK"
+    assert set(importers) <= AWS_SDK_ADAPTERS, f"the AWS SDK may only be imported by {sorted(AWS_SDK_ADAPTERS)}; found {importers}"
 
 
-def test_the_adapter_imports_the_sdk_lazily_not_at_module_scope() -> None:
+def test_every_adapter_imports_the_sdk_lazily_not_at_module_scope() -> None:
     """A top-level import would make the whole app unimportable without boto3 installed."""
-    nodes = sdk_import_nodes(APP_DIR / "reranker.py")
-    assert nodes, "the adapter is expected to import the SDK somewhere"
-    for node in nodes:
-        assert node.col_offset > 0, f"module-scope AWS SDK import on line {node.lineno}"
+    for name in _sdk_importers():
+        for node in sdk_import_nodes(APP_DIR / name):
+            assert node.col_offset > 0, f"{name}: module-scope AWS SDK import on line {node.lineno}"
 
 
 def test_boto3_is_imported_only_when_bedrock_is_called() -> None:
@@ -333,7 +340,12 @@ def test_boto3_is_imported_only_when_bedrock_is_called() -> None:
     import subprocess
     import sys
 
-    code = "import sys, app.main, app.reranker; print('boto3' in sys.modules)"
+    code = (
+        "import importlib.util, sys, app.main, app.reranker\n"
+        "if importlib.util.find_spec('app.page_text'):\n"
+        "    import app.page_text\n"
+        "print('boto3' in sys.modules)"
+    )
     out = subprocess.run([sys.executable, "-c", code], cwd=APP_DIR.parent, capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
 
