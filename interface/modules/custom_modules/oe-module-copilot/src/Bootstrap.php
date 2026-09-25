@@ -18,6 +18,9 @@
  *  - `POST /api/copilot/documents/:did/values/:idx/file`, `.../reject`, `.../unfile` -
  *    Verify and file / reject one extracted value (ADR-009); see
  *    Controller\FilingController.
+ *  - `GET /api/copilot/documents/:did/values` - one document's candidate values
+ *    for the panel's value list and viewer (read-only); see
+ *    Controller\DocumentValuesController.
  *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
  *    chart result (ADR-009 7b); see Controller\ResultSourceController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
@@ -54,6 +57,7 @@ use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
 use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
+use OpenEMR\Modules\Copilot\Controller\DocumentValuesController;
 use OpenEMR\Modules\Copilot\Controller\FilingController;
 use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
@@ -61,6 +65,7 @@ use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Data\SqlSchemaStatus;
 use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
+use OpenEMR\Modules\Copilot\Documents\SqlDocumentValuesReader;
 use OpenEMR\Modules\Copilot\Documents\SqlProcessingRepository;
 use OpenEMR\Modules\Copilot\Filing\SqlFilingStore;
 use OpenEMR\Modules\Copilot\Filing\ValueFiler;
@@ -81,6 +86,7 @@ final class Bootstrap
     public const ROUTE_DOCUMENTS_PROCESS = 'POST /api/copilot/documents/process';
     public const ROUTE_DOCUMENTS_LIST = 'GET /api/copilot/documents';
     public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
+    public const ROUTE_DOCUMENT_VALUES = 'GET /api/copilot/documents/:did/values';
     public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
     public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
     public const ROUTE_VALUE_UNFILE = 'POST /api/copilot/documents/:did/values/:idx/unfile';
@@ -155,6 +161,10 @@ final class Bootstrap
         $event->addToRouteMap(
             self::ROUTE_DOCUMENT_FILE,
             static fn(string $did, HttpRestRequest $request) => self::createDocumentFileController()->handleRest($did, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENT_VALUES,
+            static fn(string $did, HttpRestRequest $request) => self::createDocumentValuesController()->handleRest($did, $request)
         );
         $event->addToRouteMap(
             self::ROUTE_VALUE_FILE,
@@ -235,6 +245,18 @@ final class Bootstrap
         return new DocumentFileController(
             new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
             new SqlDocumentReader(),
+        );
+    }
+
+    /** One document's candidate values for the panel (read-only), same authorizer wiring. */
+    public static function createDocumentValuesController(): DocumentValuesController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new DocumentValuesController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlSchemaStatus(),
+            new SqlDocumentReader(),
+            new SqlDocumentValuesReader(),
         );
     }
 
