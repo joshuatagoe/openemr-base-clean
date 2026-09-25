@@ -1994,7 +1994,8 @@
             date.id = idBase + '-date';
             date.dataset.role = 'collection-date';
             date.max = new Date().toISOString().slice(0, 10);
-            const dateLabel = el('label', 'mb-0 mt-1 d-block', value.collection_date
+            // No d-block on toggled nodes: Bootstrap's !important display would defeat `hidden`.
+            const dateLabel = el('label', 'mb-0 mt-1', value.collection_date
                 ? 'Collection date as printed on the document'
                 : 'Collection date (verified from the document or another reliable record)');
             dateLabel.htmlFor = date.id;

@@ -254,6 +254,17 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
         expect(state.posts[0].body.collection_date).toBe('2026-08-30');
     });
 
+    test('the date correction field starts hidden, with nothing that would override `hidden` (Bootstrap d-* utilities)', async () => {
+        const state = server([value()]);
+        const { c } = await openPanel(state);
+        const panel = await review(c, 0);
+        const date = panel.querySelector('[data-role="collection-date"]');
+        const label = panel.querySelector('label[for="' + date.id + '"]');
+        expect(date.hidden).toBe(true);
+        expect(label.hidden).toBe(true);
+        [date, label].forEach((n) => expect(n.className).not.toMatch(/(^|\s)d-(block|flex|inline)/));
+    });
+
     test('date conflict: both dates side by side, then confirmation and a reason, then filed', async () => {
         const state = server([value()]);
         state.respond = (action, index, body) => {
