@@ -6,8 +6,11 @@
  * Everything happens in one store transaction, with the document's processing
  * record locked first so filings from one document are serialised: a second
  * click finds the candidate already `filed` and returns its result (dedup
- * layer a); the document's first filing creates the outside-lab order, its
- * seq-1 order code and one reviewed report, later filings reuse that report.
+ * layer a); the document's first filing creates the outside-lab order and its
+ * seq-1 order code, later filings reuse that order. Within it there is one
+ * reviewed report per distinct collection date (ADR-009 7c): a value reuses
+ * the report of its own date or gets a new one, so FHIR and the lab view show
+ * each value's own date.
  *
  * Rules: the candidate and its processing record must belong to the patient;
  * the document must be an `extracted` lab document; a rejected value is never
@@ -130,8 +133,10 @@ final class ValueFiler
                 ? self::WARNING_SAME_RESULT
                 : null;
 
-            $reportId = $this->store->findDocumentReport($documentId)
-                ?? $this->store->createOrderAndReport($pid, $userId, $this->store->findOrCreateOutsideLab(), $collectedAt);
+            $orderId = $this->store->findDocumentOrder($documentId)
+                ?? $this->store->createOrder($pid, $userId, $this->store->findOrCreateOutsideLab(), $collectedAt);
+            $reportId = $this->store->findReportForDate($orderId, $collectedAt)
+                ?? $this->store->createReport($orderId, $userId, $collectedAt);
 
             $flag = $candidate['flag_source'] === 'extracted' ? ($candidate['abnormal_flag'] ?? '') : '';
             $resultId = $this->store->insertResult($reportId, [

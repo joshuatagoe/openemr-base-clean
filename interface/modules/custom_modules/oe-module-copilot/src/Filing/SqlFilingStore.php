@@ -12,8 +12,8 @@
  * The chain matches what the dev-stack evidence showed is needed for every
  * view: `procedure_order` (outside lab, complete, laboratory_test, history
  * order, active) + `procedure_order_code` seq 1 (without it the order/report
- * views and FHIR return nothing) + one reviewed `procedure_report` + one
- * `procedure_result` per filed value.
+ * views and FHIR return nothing) + one reviewed `procedure_report` per
+ * distinct collection date (ADR-009 7c) + one `procedure_result` per filed value.
  *
  * @phpstan-import-type Candidate from FilingStoreInterface
  *
@@ -104,16 +104,28 @@ final class SqlFilingStore implements FilingStoreInterface
         ];
     }
 
-    public function findDocumentReport(int $documentId): ?int
+    public function findDocumentOrder(int $documentId): ?int
     {
         $rows = QueryUtils::fetchRecords(
-            "SELECT pr.procedure_report_id
+            "SELECT rp.procedure_order_id
                FROM copilot_extracted_value v
                JOIN procedure_result pr ON pr.procedure_result_id = v.procedure_result_id
                JOIN procedure_report rp ON rp.procedure_report_id = pr.procedure_report_id
               WHERE v.document_id = ? AND v.procedure_result_id IS NOT NULL
               ORDER BY pr.procedure_result_id ASC LIMIT 1",
             [$documentId]
+        );
+        $id = Scalar::int($rows[0]['procedure_order_id'] ?? null);
+        return $id > 0 ? $id : null;
+    }
+
+    public function findReportForDate(int $orderId, string $collectedAt): ?int
+    {
+        $rows = QueryUtils::fetchRecords(
+            "SELECT procedure_report_id FROM procedure_report
+              WHERE procedure_order_id = ? AND procedure_order_seq = 1 AND date_collected = ?
+              ORDER BY procedure_report_id ASC LIMIT 1",
+            [$orderId, $collectedAt]
         );
         $id = Scalar::int($rows[0]['procedure_report_id'] ?? null);
         return $id > 0 ? $id : null;
@@ -148,7 +160,7 @@ final class SqlFilingStore implements FilingStoreInterface
         );
     }
 
-    public function createOrderAndReport(int $pid, int $userId, int $labId, string $collectedAt): int
+    public function createOrder(int $pid, int $userId, int $labId, string $collectedAt): int
     {
         $orderId = (int) QueryUtils::sqlInsert(
             "INSERT INTO procedure_order SET uuid = ?, provider_id = ?, patient_id = ?, encounter_id = 0,
@@ -161,6 +173,16 @@ final class SqlFilingStore implements FilingStoreInterface
                     procedure_name = ?, procedure_type = 'laboratory_test', do_not_send = 1",
             [$orderId, self::ORDER_CODE_NAME]
         );
+        return $orderId;
+    }
+
+    /**
+     * Every report of the order sits on seq 1: OpenEMR's order-results screen
+     * and ProcedureService join reports to the order code by seq and list
+     * several reports per code (ordered by report date), so no extra code rows.
+     */
+    public function createReport(int $orderId, int $userId, string $collectedAt): int
+    {
         return (int) QueryUtils::sqlInsert(
             "INSERT INTO procedure_report SET uuid = ?, procedure_order_id = ?, procedure_order_seq = 1,
                     date_collected = ?, date_report = ?, source = ?, report_status = 'final', review_status = 'reviewed'",

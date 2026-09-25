@@ -138,11 +138,21 @@ final class FakeFilingStore implements FilingStoreInterface
         return null;
     }
 
-    public function findDocumentReport(int $documentId): ?int
+    public function findDocumentOrder(int $documentId): ?int
     {
         foreach ($this->candidates as $c) {
             if ($c['document_id'] === $documentId && $c['procedure_result_id'] !== null) {
-                return $this->results[$c['procedure_result_id']]['procedure_report_id'];
+                return $this->reports[$this->results[$c['procedure_result_id']]['procedure_report_id']]['order_id'];
+            }
+        }
+        return null;
+    }
+
+    public function findReportForDate(int $orderId, string $collectedAt): ?int
+    {
+        foreach ($this->reports as $id => $r) {
+            if ($r['order_id'] === $orderId && $r['date_collected'] === $collectedAt) {
+                return $id;
             }
         }
         return null;
@@ -160,11 +170,17 @@ final class FakeFilingStore implements FilingStoreInterface
         return $id;
     }
 
-    public function createOrderAndReport(int $pid, int $userId, int $labId, string $collectedAt): int
+    public function createOrder(int $pid, int $userId, int $labId, string $collectedAt): int
     {
-        $this->write('createOrderAndReport');
+        $this->write('createOrder');
         $orderId = $this->nextId++;
         $this->orders[$orderId] = ['pid' => $pid, 'provider_id' => $userId, 'lab_id' => $labId, 'date' => $collectedAt, 'codes' => [1]];
+        return $orderId;
+    }
+
+    public function createReport(int $orderId, int $userId, string $collectedAt): int
+    {
+        $this->write('createReport');
         $reportId = $this->nextId++;
         $this->reports[$reportId] = ['order_id' => $orderId, 'date_collected' => $collectedAt, 'date_report' => $collectedAt, 'review_status' => 'reviewed', 'source' => $userId];
         return $reportId;

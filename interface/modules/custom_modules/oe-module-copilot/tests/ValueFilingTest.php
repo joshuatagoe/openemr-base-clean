@@ -170,6 +170,51 @@ final class ValueFilingTest extends TestCase
         self::assertSame('', $second['result_code'], 'no LOINC code in the extraction -> empty, never guessed');
     }
 
+    /** ADR-009 7c.1: one order per document, one report per distinct collection date within it. */
+    public function testEachCollectionDateGetsItsOwnReportInTheDocumentsOrder(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->store->addCandidate(self::DOC, self::PID, 1, ['test_name' => 'Glucose', 'value_text' => '142', 'collection_date' => '2026-08-15']);
+        $this->store->addCandidate(self::DOC, self::PID, 2, ['test_name' => 'LDL', 'value_text' => '99', 'collection_date' => '2026-09-01']);
+
+        $first = $this->file(0)['body']['procedure_result_id'];
+        $second = $this->file(1)['body']['procedure_result_id'];
+        $third = $this->file(2)['body']['procedure_result_id'];
+
+        self::assertCount(1, $this->store->orders, 'one outside-lab order per document');
+        self::assertCount(2, $this->store->reports, 'one report per distinct collection date');
+        $orderId = array_key_first($this->store->orders);
+        foreach ($this->store->reports as $report) {
+            self::assertSame($orderId, $report['order_id']);
+        }
+
+        $reportOf = fn (int $resultId): array => $this->store->reports[$this->store->results[$resultId]['procedure_report_id']];
+        self::assertSame('2026-09-01 00:00:00', $reportOf($first)['date_collected']);
+        self::assertSame('2026-09-01 00:00:00', $reportOf($first)['date_report']);
+        self::assertSame('2026-08-15 00:00:00', $reportOf($second)['date_collected']);
+        self::assertSame('2026-08-15 00:00:00', $reportOf($second)['date_report']);
+        self::assertSame('2026-08-15 00:00:00', $this->store->results[$second]['date']);
+        self::assertSame(
+            $this->store->results[$first]['procedure_report_id'],
+            $this->store->results[$third]['procedure_report_id'],
+            'a value with an already-filed date reuses that date\'s report'
+        );
+        self::assertNotSame($this->store->results[$first]['procedure_report_id'], $this->store->results[$second]['procedure_report_id']);
+    }
+
+    public function testTheDocumentsOrderIsReusedAfterAValueWasUnfiled(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->store->addCandidate(self::DOC, self::PID, 1, ['test_name' => 'Glucose', 'value_text' => '142', 'collection_date' => '2026-08-15']);
+        $this->file(0);
+        $this->unfile(0);
+
+        self::assertSame(200, $this->file(1)['status']);
+
+        self::assertCount(1, $this->store->orders);
+        self::assertCount(2, $this->store->reports);
+    }
+
     public function testASecondClickReturnsTheExistingResult(): void
     {
         $this->store->addCandidate(self::DOC, self::PID, 0);
