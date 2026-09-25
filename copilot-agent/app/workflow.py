@@ -34,14 +34,15 @@ this state would be PHI at rest.
 
 from __future__ import annotations
 
-import base64
-import binascii
+import asyncio
 import operator
 import os
+import time
 from functools import lru_cache
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.errors import GraphRecursionError
 from langgraph.graph import END, START, StateGraph
 
 from app.briefing import ConsiderationCandidate, build_briefing, render_briefing
@@ -57,12 +58,14 @@ from app.document_briefing import (
     RoutingDecision,
     _answer_content,
     build_query,
+    chart_facts,
+    combine_documents,
     drafts_to_candidates,
     get_retriever,
+    read_lab_document,
 )
 from app.documents import LabDocument
 from app.evidence import EvidencePackage, RetrievalQuery
-from app.lab_extractor import extract_lab_document
 from app.observability import generation, log_event, score, span
 from app.providers.base import ModelProvider, ProviderError
 from app.reranker import BedrockReranker, FakeReranker
@@ -73,6 +76,23 @@ ANSWER = "answer"
 FINISH = "finish"
 
 Target = Literal["intake-extractor", "evidence-retriever", "answer", "finish"]
+
+#: Fixed reasons a run is stopped before it finishes. Both are degraded, never raised.
+BUDGET_EXHAUSTED = "budget_exhausted"
+ITERATION_LIMIT = "iteration_limit"
+
+#: Wall-clock budget for one document briefing. Below the module's client
+#: timeout (``GuzzleAgentClient::DOCUMENT_BRIEFING_TIMEOUT_SECONDS``, 90 s) so
+#: the panel always gets the agent's degraded answer, never a transport error.
+DOCUMENT_BRIEFING_BUDGET_SECONDS = 75.0
+
+#: Most supervisor decisions per briefing. A normal legacy run takes four
+#: (extract, retrieve, answer, finish); a stored-document run three.
+MAX_ROUTING_STEPS = 6
+
+
+def _now() -> float:
+    return time.monotonic()
 
 # The environment switches that would make LangChain report to LangSmith.
 LANGSMITH_SWITCHES = ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING")
@@ -115,23 +135,35 @@ def _deps(config: RunnableConfig) -> tuple[ModelProvider, FakeReranker | Bedrock
 # --------------------------------------------------------------------------- #
 
 
-def decide(state: BriefingState) -> tuple[Target, str]:
-    """The routing rule, as a pure function so every branch is unit-tested."""
+def decide(state: BriefingState, *, max_steps: int | None = None, over_budget: bool = False) -> tuple[Target, str]:
+    """The routing rule, as a pure function so every branch is unit-tested.
+
+    A worker failure and a finished briefing are reported as themselves; only
+    work still to do is stopped by the step cap or the spent budget.
+    """
     if state.get("status") is BriefingStatus.DEGRADED:
         return FINISH, "worker_failed"
+    if state.get("briefed"):
+        return FINISH, "briefing_complete"
+    if max_steps is not None and len(state.get("routing", [])) >= max_steps:
+        return FINISH, ITERATION_LIMIT
+    if over_budget:
+        return FINISH, BUDGET_EXHAUSTED
     if state.get("document") is None:
         return INTAKE_EXTRACTOR, "document_pending_extraction"
     if state.get("evidence") is None:
         return EVIDENCE_RETRIEVER, "evidence_required"
-    if not state.get("briefed"):
-        return ANSWER, "evidence_ready"
-    return FINISH, "briefing_complete"
+    return ANSWER, "evidence_ready"
 
 
-async def supervisor(state: BriefingState) -> dict[str, Any]:
-    target, reason = decide(state)
+async def supervisor(state: BriefingState, config: RunnableConfig) -> dict[str, Any]:
+    c = config["configurable"]
+    target, reason = decide(state, max_steps=c.get("max_steps"), over_budget=_now() >= c.get("deadline", float("inf")))
     step = len(state.get("routing", [])) + 1
     decision = RoutingDecision(step=step, source="supervisor", target=target, reason_code=reason, doc_type=state["doc_type"])
+    stop: dict[str, Any] = {}
+    if reason in (ITERATION_LIMIT, BUDGET_EXHAUSTED):
+        stop = {"status": BriefingStatus.DEGRADED, "reason": reason}
     with span("supervisor", stage=target, reason_code=reason):
         log_event(
             "routing.decision",
@@ -141,7 +173,7 @@ async def supervisor(state: BriefingState) -> dict[str, Any]:
             reason_code=reason,
             doc_type=state["doc_type"],
         )
-    return {"next": target, "routing": [decision]}
+    return {"next": target, "routing": [decision], **stop}
 
 
 # --------------------------------------------------------------------------- #
@@ -153,24 +185,15 @@ async def intake_extractor(state: BriefingState, config: RunnableConfig) -> dict
     provider, _ = _deps(config)
     request = state["request"]
     with span(INTAKE_EXTRACTOR, stage=state["doc_type"]) as attrs:
-        try:
-            raw = base64.b64decode(request.document_base64, validate=True)
-        except (binascii.Error, ValueError):
+        document, reason = await read_lab_document(
+            document_id=request.document_id,
+            document_base64=request.document_base64,
+            media_type=request.media_type,
+            provider=provider,
+        )
+        if document is None:
             attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "document_not_decodable"}
-        try:
-            document = await extract_lab_document(
-                document_id=request.document_id,
-                pdf_bytes=raw,
-                media_type=request.media_type,
-                provider=provider,
-            )
-        except ProviderError:
-            attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "extraction_unavailable"}
-        except ValueError:
-            attrs["outcome"] = "degraded"
-            return {"status": BriefingStatus.DEGRADED, "reason": "document_not_readable"}
+            return {"status": BriefingStatus.DEGRADED, "reason": reason}
         attrs["outcome"] = "ok"
         attrs["records"] = len(document.results)
         return {"document": document}
@@ -259,17 +282,53 @@ async def run_supervised_briefing(
     *,
     provider: ModelProvider,
     reranker: FakeReranker | BedrockReranker,
+    budget_seconds: float = DOCUMENT_BRIEFING_BUDGET_SECONDS,
+    max_steps: int = MAX_ROUTING_STEPS,
 ) -> DocumentBriefingResponse:
-    """Run the graph and assemble the panel's response from its final state."""
+    """Run the graph and assemble the panel's response from its final state.
+
+    Bounded twice, and never by raising. The supervisor checks the clock and
+    the step count before every handoff, so no new worker starts once either
+    is spent. A hard timeout at the same budget cuts off a worker already
+    running (a slow model call). Either way the run ends degraded with a fixed
+    reason, keeping the routing log and whatever the finished workers produced.
+    """
     assert_langsmith_off()  # checked per request too: the environment can change after build
-    final: BriefingState = await build_graph().ainvoke(
-        {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None},
-        config={"configurable": {"provider": provider, "reranker": reranker}, "recursion_limit": 12},
-    )
+    initial: BriefingState = {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None}
+    if request.documents is not None:
+        # Stored extractions (ADR-012): the documents are already read, so the
+        # supervisor's first decision is evidence retrieval, never extraction.
+        initial["document"] = combine_documents([d.extraction for d in request.documents])
+    graph = build_graph()
+    config: RunnableConfig = {
+        "configurable": {"provider": provider, "reranker": reranker, "deadline": _now() + budget_seconds, "max_steps": max_steps},
+        # Backstop only: the supervisor's own cap always stops first.
+        "recursion_limit": 2 * max_steps + 2,
+    }
+    final: BriefingState = dict(initial)  # type: ignore[assignment]
+    stopped: str | None = None
+    try:
+        async with asyncio.timeout(budget_seconds):
+            async for values in graph.astream(initial, config=config, stream_mode="values"):
+                final = values
+    except TimeoutError:
+        stopped = BUDGET_EXHAUSTED
+    except GraphRecursionError:
+        stopped = ITERATION_LIMIT
+    except Exception as exc:  # noqa: BLE001 - a briefing degrades, it never raises
+        # The type only: an exception message can carry document text.
+        log_event("document_briefing.failed", cid=request.correlation_id, error_type=type(exc).__name__)
+        stopped = "internal_error"
+    if stopped is not None:
+        final = {**final, "status": BriefingStatus.DEGRADED, "reason": stopped}
+        if not final.get("briefed"):
+            final["candidates"] = []  # an answer cut off mid-call proposed nothing
+        log_event("document_briefing.stopped", cid=request.correlation_id, reason_code=stopped, steps=len(final.get("routing", [])))
     base = {
         "correlation_id": request.correlation_id,
         "patient_uuid": request.patient_uuid,
-        "document_id": request.document_id,
+        "document_id": request.document_ids[0],
+        "document_ids": request.document_ids,
         "routing": tuple(final.get("routing", [])),
     }
     document, evidence = final.get("document"), final.get("evidence")
@@ -277,7 +336,13 @@ async def run_supervised_briefing(
         return DocumentBriefingResponse(**base, status=BriefingStatus.DEGRADED, degraded_reason=final.get("reason"))
 
     candidates = final.get("candidates", [])
-    briefing = build_briefing(document=document, evidence=evidence, considerations=candidates, question=request.question)
+    briefing = build_briefing(
+        document=document,
+        evidence=evidence,
+        prior_facts=chart_facts(request.prior_facts),
+        considerations=candidates,
+        question=request.question,
+    )
 
     # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates
     # and fixed labels only - never a value, a quote or an identifier.
@@ -297,7 +362,8 @@ async def run_supervised_briefing(
     log_event(
         "document_briefing.completed",
         cid=request.correlation_id,
-        document_id=request.document_id,
+        documents=len(request.document_ids),
+        prior_facts=len(request.prior_facts),
         results=len(document.results),
         snippets=len(evidence.snippets),
         considerations_proposed=len(candidates),
@@ -326,6 +392,10 @@ async def run_supervised_briefing(
 
 __all__ = [
     "ANSWER",
+    "BUDGET_EXHAUSTED",
+    "DOCUMENT_BRIEFING_BUDGET_SECONDS",
+    "ITERATION_LIMIT",
+    "MAX_ROUTING_STEPS",
     "EVIDENCE_RETRIEVER",
     "INTAKE_EXTRACTOR",
     "LangSmithEnabledError",

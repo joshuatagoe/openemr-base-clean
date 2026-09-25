@@ -19,7 +19,7 @@ matching record - it is never evidence that a commitment was not carried out.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
@@ -111,6 +111,9 @@ class RecordType(StrEnum):
     LAB_ORDER = "lab_order"
     MEDICATION = "medication"
     ALLERGY = "allergy"
+    #: A value read from an uploaded document, not yet verified or filed (ADR-011).
+    #: Never a chart record: cited under its own type so it cannot pass as one.
+    PENDING_DOCUMENT_FACT = "pending_document_fact"
 
 
 class EvidenceSource(StrEnum):
@@ -247,6 +250,44 @@ class AllergyRecord(StrictModel):
     duplicate_count: int = Field(default=1, ge=1)
 
 
+class PendingDocumentFact(StrictModel):
+    """One value read from an uploaded document and awaiting clinician review (contract C5, ADR-011).
+
+    A ``candidate`` row of the module's ``copilot_extracted_value`` table; filed
+    and rejected rows are never sent. It is document evidence, not a chart
+    record: follow-ups reach it only through ``find_pending_document_facts``
+    and must label it "not yet verified or filed".
+
+    Values are carried as printed (``value_text``), never parsed here. The flag
+    vocabulary is the printed one (H/L/HH/LL/A/N) with its provenance, because
+    a derived comparison must never read as a lab-printed flag (W2-AMB-055).
+    """
+
+    fact_id: str = Field(pattern=r"^copilot_extracted_value:[1-9][0-9]*$", description="'copilot_extracted_value:<id>'.")
+    document_id: int = Field(ge=1, description="OpenEMR documents.id the value was read from.")
+    test_name: str = Field(min_length=1)
+    value_text: str | None = Field(default=None, min_length=1, description="As printed; None when unreadable.")
+    unit: str | None = Field(default=None, min_length=1)
+    reference_range: str | None = Field(default=None, min_length=1)
+    abnormal_flag: Literal["H", "L", "HH", "LL", "A", "N"] | None = None
+    flag_source: Literal["extracted", "derived", "unavailable"]
+    collection_date: date | None = None
+    verification_status: Literal["verified_exact", "verified_fuzzy", "unverified", "unreadable"]
+    page: int | None = Field(default=None, ge=1)
+    bbox: tuple[float, float, float, float] | None = Field(default=None, description="Normalised 0..1 (x0, y0, x1, y1), top-left origin.")
+    status: Literal["candidate"]
+
+    @model_validator(mode="after")
+    def _located(self) -> PendingDocumentFact:
+        if self.bbox is not None:
+            if self.page is None:
+                raise ValueError("bbox requires a page")
+            x0, y0, x1, y1 = self.bbox
+            if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
+                raise ValueError("bbox coordinates must satisfy 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1")
+        return self
+
+
 class DataQuality(StrictModel):
     """What the module could and could not load (ARCHITECTURE.md sections 11-12).
 
@@ -282,6 +323,11 @@ class ContextBundle(StrictModel):
     data_quality: DataQuality = Field(
         default_factory=DataQuality,
         description="Source availability and normalization notes; defaults to 'all sources available'.",
+    )
+    pending_document_facts: list[PendingDocumentFact] = Field(
+        default_factory=list,
+        max_length=500,
+        description="Candidate values from uploaded documents, not yet verified or filed (ADR-011). Optional; schema stays 1.0.",
     )
 
 
@@ -567,6 +613,7 @@ __all__ = [
     "MedicationAction",
     "MedicationRecord",
     "MedicationSource",
+    "PendingDocumentFact",
     "PriorNote",
     "ReadyResponse",
     "RecordType",

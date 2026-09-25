@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from pydantic import Field, ValidationError
@@ -24,9 +25,11 @@ from app.contracts import (
     EvidenceMatch,
     EvidenceSource,
     MedicationRecord,
+    PendingDocumentFact,
     StrictModel,
 )
 from app.medications import ingredient_key
+from app.providers.prompt import PENDING_LABEL
 from app.synonyms import normalize, resolve_commitment, resolve_record, resolve_record_panel
 
 MAX_RECORDS = 10
@@ -40,6 +43,11 @@ class ToolOutput(StrictModel):
     records: list[dict[str, Any]] = Field(default_factory=list)
     truncated: bool = False
     error: str | None = None
+    pending_count: int = Field(
+        default=0,
+        ge=0,
+        description="find_results only: pending document values for the same test. They are not records here; an absence statement must account for them.",
+    )
 
     def record_ids(self) -> set[str]:
         return {str(r["record_id"]) for r in self.records if "record_id" in r}
@@ -70,6 +78,12 @@ class FindMedicationsArgs(StrictModel):
     include_inactive: bool | None = Field(default=None, description="true to include inactive records (the default when null), false for active only.")
 
 
+class FindPendingArgs(StrictModel):
+    test_query: str | None = Field(default=None, max_length=80, description="Test name or panel, e.g. 'HbA1c'; null for every pending value.")
+
+
+PENDING_TOOL = "find_pending_document_facts"
+
 TOOL_ARGS: dict[str, type[StrictModel]] = {
     "list_commitments": NoArgs,
     "find_results": FindResultsArgs,
@@ -77,6 +91,7 @@ TOOL_ARGS: dict[str, type[StrictModel]] = {
     "find_medications": FindMedicationsArgs,
     "get_baseline_note": NoArgs,
     "list_allergies": NoArgs,
+    PENDING_TOOL: FindPendingArgs,
 }
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -86,6 +101,11 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "find_medications": "Medication records for this patient from both the prescriptions table and the medication list, with status as recorded and dates.",
     "get_baseline_note": "The baseline note's plan text (verbatim) with its record id and date.",
     "list_allergies": "Allergy entries as recorded, or an explicit statement that no entries are on file (which is not the same as no known allergies).",
+    PENDING_TOOL: (
+        "Values read from documents uploaded for this patient that a clinician has NOT yet verified or filed. "
+        "Not chart records. Each has the document id, page, verification status, and conflicts_with: filed results "
+        "for the same test and day with a different value."
+    ),
 }
 
 
@@ -110,10 +130,16 @@ def strict_schema(schema: Any) -> Any:
     return schema
 
 
-def tool_definitions() -> list[dict[str, Any]]:
-    """Provider-neutral tool definitions: name, description, strict JSON schema (no numeric/length bounds)."""
+def tool_definitions(*, include_pending: bool = False) -> list[dict[str, Any]]:
+    """Provider-neutral tool definitions: name, description, strict JSON schema (no numeric/length bounds).
+
+    ``find_pending_document_facts`` is offered only when the bundle holds
+    pending facts, so a chart with no uploads sees exactly the Week 1 tools.
+    """
     defs = []
     for name, model in TOOL_ARGS.items():
+        if name == PENDING_TOOL and not include_pending:
+            continue
         schema = strict_schema(model.model_json_schema())
         defs.append({"name": name, "description": TOOL_DESCRIPTIONS[name], "input_schema": schema})
     return defs
@@ -167,6 +193,7 @@ def find_results(bundle: ContextBundle, _: list[EvidenceMatch], args: FindResult
         return ToolOutput(tool="find_results", error="unresolvable_query")
     rows = [r for r in bundle.lab_results if _record_key(r.test_name, r.code) in keys and _since_ok(r.observed_at, args.since)]
     rows.sort(key=lambda r: (r.observed_at, r.result_id), reverse=True)
+    pending = sum(1 for f in bundle.pending_document_facts if _pending_matches(f.test_name, keys, args.test_query))
     limit = args.limit or MAX_RECORDS
     records = [
         {
@@ -182,7 +209,7 @@ def find_results(bundle: ContextBundle, _: list[EvidenceMatch], args: FindResult
         }
         for r in rows[:limit]
     ]
-    return ToolOutput(tool="find_results", records=records, truncated=len(rows) > limit)
+    return ToolOutput(tool="find_results", records=records, truncated=len(rows) > limit, pending_count=pending)
 
 
 def find_orders(bundle: ContextBundle, _: list[EvidenceMatch], args: FindOrdersArgs) -> ToolOutput:
@@ -264,6 +291,78 @@ def list_allergies(bundle: ContextBundle, _: list[EvidenceMatch], __: NoArgs) ->
     return ToolOutput(tool="list_allergies", records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
 
 
+def _pending_matches(test_name: str, keys: frozenset[str], query: str) -> bool:
+    """Whether a pending value belongs to the queried test - generously.
+
+    Lab reports print names the synonym table may not know ("Glucose, Fasting").
+    Over-matching only adds a labelled value; under-matching would let "no
+    result found" hide an unfiled one, so every query word appearing in the
+    printed name also counts as a match.
+    """
+    if _record_key(test_name, None) in keys:
+        return True
+    words = set(normalize(query).split())
+    return bool(words) and words <= set(normalize(test_name).split())
+
+
+# Printed flags in the Week 1 vocabulary the verifier checks interpretation words against.
+_PRINTED_FLAG = {"H": "high", "HH": "high", "L": "low", "LL": "low", "A": "yes", "N": "no"}
+
+
+def _same_value(printed: str | None, recorded: Decimal) -> bool:
+    if printed is None:
+        return False
+    try:
+        return Decimal(printed) == recorded
+    except InvalidOperation:
+        return False
+
+
+def _conflicts(fact: PendingDocumentFact, bundle: ContextBundle) -> list[str]:
+    """Filed results for the same test on the same day whose value differs from the pending one."""
+    if fact.collection_date is None or fact.value_text is None:
+        return []  # no day to compare on, or no value: not the same observation, so not a conflict
+    key = _record_key(fact.test_name, None)
+    return sorted(
+        r.result_id
+        for r in bundle.lab_results
+        if _record_key(r.test_name, r.code) == key
+        and r.observed_at.date() == fact.collection_date
+        and not _same_value(fact.value_text, r.value)
+    )
+
+
+def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], args: FindPendingArgs) -> ToolOutput:
+    """Pending document values, each labelled and located; never mixed into ``find_results``."""
+    facts = bundle.pending_document_facts
+    if args.test_query is not None and args.test_query.strip():
+        keys = _test_keys(args.test_query)
+        if keys is None:
+            return ToolOutput(tool=PENDING_TOOL, error="unresolvable_query")
+        facts = [f for f in facts if _pending_matches(f.test_name, keys, args.test_query)]
+    records = [
+        {
+            "record_id": f.fact_id,
+            "label": PENDING_LABEL,
+            "source": "uploaded document",
+            "document_id": f.document_id,
+            "page": f.page,
+            "test_name": f.test_name,
+            "value": f.value_text,
+            "units": f.unit,
+            "range": f.reference_range,
+            # Only a flag printed on the report counts as recorded; a derived comparison is not one.
+            "abnormal_flag": _PRINTED_FLAG.get(f.abnormal_flag) if f.abnormal_flag and f.flag_source == "extracted" else None,
+            "flag_source": f.flag_source,
+            "date": None if f.collection_date is None else f.collection_date.isoformat(),
+            "verification_status": f.verification_status,
+            "conflicts_with": _conflicts(f, bundle),
+        }
+        for f in facts
+    ]
+    return ToolOutput(tool=PENDING_TOOL, records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
+
+
 TOOL_IMPLEMENTATIONS: dict[str, Callable[[ContextBundle, list[EvidenceMatch], Any], ToolOutput]] = {
     "list_commitments": list_commitments,
     "find_results": find_results,
@@ -271,6 +370,7 @@ TOOL_IMPLEMENTATIONS: dict[str, Callable[[ContextBundle, list[EvidenceMatch], An
     "find_medications": find_medications,
     "get_baseline_note": get_baseline_note,
     "list_allergies": list_allergies,
+    PENDING_TOOL: find_pending_document_facts,
 }
 
 
@@ -292,7 +392,20 @@ def run_tool(bundle: ContextBundle, matches: list[EvidenceMatch], name: str, raw
 
 def serialize_output(output: ToolOutput) -> str:
     """Compact JSON for the model; ``record_id`` values are the only citable ids."""
-    return json.dumps(output.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False)
+    data = output.model_dump(mode="json")
+    if not data["pending_count"]:
+        del data["pending_count"]  # unchanged output for every chart with no pending values
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 
 
-__all__ = ["MAX_RECORDS", "TOOL_ARGS", "ToolOutput", "run_tool", "serialize_output", "strict_schema", "tool_definitions"]
+__all__ = [
+    "MAX_RECORDS",
+    "PENDING_LABEL",
+    "PENDING_TOOL",
+    "TOOL_ARGS",
+    "ToolOutput",
+    "run_tool",
+    "serialize_output",
+    "strict_schema",
+    "tool_definitions",
+]

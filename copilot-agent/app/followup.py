@@ -73,7 +73,7 @@ async def run_turn(
 ) -> TurnOutcome:
     """Run one turn. Raises ``ProviderError`` on model failure; tool failures are returned as errors, never raised."""
     transcript: list[Any] = [*_history_messages(history), {"role": "user", "content": build_question_content(question)}]
-    tools = tool_definitions()
+    tools = tool_definitions(include_pending=bool(bundle.pending_document_facts))
     outputs: list[ToolOutput] = []
     records: list[ToolCallRecord] = []
     answer: ModelTurnAnswer | None = None

@@ -59,7 +59,15 @@ from app.contracts import (
     ReadyResponse,
     StreamEnvelope,
 )
-from app.document_briefing import DocumentBriefingRequest, DocumentBriefingResponse, build_reranker, run_document_briefing
+from app.document_briefing import (
+    DocumentBriefingRequest,
+    DocumentBriefingResponse,
+    DocumentExtractRequest,
+    DocumentExtractResponse,
+    build_reranker,
+    run_document_briefing,
+    run_document_extract,
+)
 from app.followup import ConversationTurn, run_turn
 from app.observability import configure_logging, configure_tracing, log_event, score, shutdown_tracing, span
 from app.metrics import metrics
@@ -687,6 +695,46 @@ async def conversation_turn(
 
 
 @app.post(
+    "/v1/documents/extract",
+    response_model=DocumentExtractResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["documents"],
+    responses={401: {"model": ErrorDetail}, 413: {"model": ErrorDetail}, 422: {"description": "Request failed contract validation"}},
+    openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentExtractRequest"}}}, "required": True}},
+)
+async def document_extract(
+    response: Response,
+    body: bytes = Depends(require_signed_body),
+    provider_factory: Callable[[], ModelProvider] = Depends(get_provider_factory),
+) -> DocumentExtractResponse:
+    """Week 2 (ADR-012): read one stored document into its strict schema, and nothing more.
+
+    The module calls this per unprocessed document and stores the result; the
+    briefing route then reuses the stored extraction. Signed like every module
+    call. A model or file failure is a 200 with a fixed ``degraded_reason``.
+    """
+    try:
+        request = DocumentExtractRequest.model_validate_json(body)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from None
+    response.headers[CORRELATION_HEADER] = str(request.correlation_id)
+    try:
+        provider = provider_factory()
+    except ProviderError:
+        return DocumentExtractResponse(
+            correlation_id=request.correlation_id,
+            patient_uuid=request.patient_uuid,
+            document_id=request.document_id,
+            doc_type=request.doc_type,
+            status="degraded",
+            degraded_reason="provider_not_configured",
+            prompt_version="none",
+            extraction_model="none",
+        )
+    return await run_document_extract(request, provider=provider)
+
+
+@app.post(
     "/v1/documents/briefing",
     response_model=DocumentBriefingResponse,
     status_code=status.HTTP_200_OK,
@@ -718,7 +766,8 @@ async def document_briefing(
         return DocumentBriefingResponse(
             correlation_id=request.correlation_id,
             patient_uuid=request.patient_uuid,
-            document_id=request.document_id,
+            document_id=request.document_ids[0],
+            document_ids=request.document_ids,
             status="degraded",
             degraded_reason="provider_not_configured",
         )
