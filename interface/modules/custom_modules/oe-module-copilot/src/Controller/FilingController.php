@@ -4,7 +4,8 @@
  * Verify and file / reject one extracted lab value (ADR-003, ADR-009 §2):
  *
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/file
- *        body { "filed_value": string|null, "confirm_unverified": bool }
+ *        body { "filed_value": string|null, "confirm_unverified": bool,
+ *               "collection_date": "YYYY-MM-DD"|null }  (the date only when none was extracted)
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/reject
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/unfile
  *
@@ -72,7 +73,8 @@ final class FilingController
         ValueFiler::ERROR_NOT_FILED => [409, 'This value is not filed.'],
         ValueFiler::ERROR_CONFIRMATION_REQUIRED => [422, 'This value could not be verified on the page; confirm to file it.'],
         ValueFiler::ERROR_VALUE_REQUIRED => [422, 'This value could not be read; enter the value to file it.'],
-        ValueFiler::ERROR_NO_COLLECTION_DATE => [422, 'The document gives no collection date for this value.'],
+        ValueFiler::ERROR_NO_COLLECTION_DATE => [422, 'The document gives no collection date for this value; enter the date you verified.'],
+        ValueFiler::ERROR_COLLECTION_DATE_CONFLICT => [422, 'The document states a different collection date; it cannot be overridden here.'],
         self::CODE_INVALID_REQUEST => [400, 'The request body is not valid.'],
         SchemaStatusInterface::CODE_NOT_INSTALLED => [503, 'The Co-Pilot tables are not installed; filing is disabled.'],
         self::CODE_UNAVAILABLE => [503, 'The document store could not be read.'],
@@ -189,13 +191,14 @@ final class FilingController
 
         $filedValue = null;
         $confirm = false;
+        $collectionDate = null;
         if ($event === self::AUDIT_FILED) {
             $parsed = self::parseBody($body);
             if ($parsed === null) {
                 $audit(false, self::CODE_INVALID_REQUEST);
                 return $this->error(self::CODE_INVALID_REQUEST, $correlationId, $headers);
             }
-            [$filedValue, $confirm] = $parsed;
+            [$filedValue, $confirm, $collectionDate] = $parsed;
         }
 
         try {
@@ -218,7 +221,7 @@ final class FilingController
 
         try {
             $result = match ($event) {
-                self::AUDIT_FILED => $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm),
+                self::AUDIT_FILED => $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm, $collectionDate),
                 self::AUDIT_UNFILED => $this->filer->unfile($pid, $documentId, $resultIndex),
                 default => $this->filer->reject($pid, $documentId, $resultIndex),
             };
@@ -233,7 +236,8 @@ final class FilingController
         $extra = ($result['verification_status'] !== null ? '; verification=' . $result['verification_status'] : '')
             . ($result['procedure_result_id'] !== null ? '; procedure_result_id=' . $result['procedure_result_id'] : '')
             . ($result['result_status'] !== null ? '; result_status=' . $result['result_status'] : '')
-            . ($result['warning'] !== null ? '; warning=' . $result['warning'] : '');
+            . ($result['warning'] !== null ? '; warning=' . $result['warning'] : '')
+            . (isset($result['collection_date_source']) ? '; collection_date_source=' . $result['collection_date_source'] : '');
         $audit($success, $outcome, $extra);
         if (!$success) {
             return $this->error($outcome, $correlationId, $headers);
@@ -262,11 +266,12 @@ final class FilingController
     }
 
     /**
-     * Both fields optional; `filed_value` a string of at most 255 characters or
-     * null, `confirm_unverified` a boolean.
+     * All fields optional; `filed_value` a string of at most 255 characters or
+     * null, `confirm_unverified` a boolean, `collection_date` null or a real
+     * `YYYY-MM-DD` date that is not after today (server date).
      *
      * @param array<mixed>|null $body
-     * @return array{?string, bool}|null  null when invalid
+     * @return array{?string, bool, ?string}|null  null when invalid
      */
     private static function parseBody(?array $body): ?array
     {
@@ -281,7 +286,16 @@ final class FilingController
         if (is_string($value) && mb_strlen($value) > self::FILED_VALUE_MAX_LENGTH) {
             return null;
         }
-        return [$value, $confirm];
+        $date = $body['collection_date'] ?? null;
+        if ($date !== null) {
+            if (!is_string($date) || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m) !== 1 || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+                return null;
+            }
+            if ($date > date('Y-m-d')) {
+                return null;
+            }
+        }
+        return [$value, $confirm, $date];
     }
 
     private static function id(string $raw): int

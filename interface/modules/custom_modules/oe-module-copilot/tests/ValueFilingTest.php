@@ -317,13 +317,60 @@ final class ValueFilingTest extends TestCase
         self::assertSame('6.9', $this->candidate($cid)['filed_value']);
     }
 
-    public function testAValueWithoutACollectionDateIsNotFiled(): void
+    public function testAValueWithoutACollectionDateNeedsAClinicianEnteredDate(): void
     {
         $this->store->addCandidate(self::DOC, self::PID, 0, ['collection_date' => null]);
         $result = $this->file();
         self::assertSame(422, $result['status']);
-        self::assertSame('collection_date_missing', $result['body']['detail']['code']);
+        self::assertSame('collection_date_required', $result['body']['detail']['code']);
         $this->assertNothingWritten();
+    }
+
+    public function testAClinicianEnteredCollectionDateIsFiledAndRecordedAsSuch(): void
+    {
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0, ['collection_date' => null]);
+
+        $result = $this->file(0, ['collection_date' => '2026-08-30']);
+
+        self::assertSame(200, $result['status'], json_encode($result['body']));
+        $row = array_values($this->store->results)[0];
+        self::assertSame('2026-08-30 00:00:00', $row['date']);
+        self::assertSame('2026-08-30 00:00:00', array_values($this->store->orders)[0]['date']);
+        self::assertSame('2026-08-30 00:00:00', array_values($this->store->reports)[0]['date_report']);
+        self::assertStringContainsString('collection date entered by clinician', $row['comments']);
+        self::assertStringContainsString('collection_date_source=clinician', $this->audit->events[0]['comment']);
+        self::assertStringNotContainsString('2026-08-30', $this->audit->events[0]['comment']);
+        self::assertNull($this->candidate($cid)['collection_date'], 'the extracted (missing) date is not rewritten');
+    }
+
+    public function testAnExtractedCollectionDateIsRecordedAsExtracted(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->file();
+        self::assertStringContainsString('collection_date_source=extracted', $this->audit->events[0]['comment']);
+        self::assertStringNotContainsString('clinician', array_values($this->store->results)[0]['comments']);
+    }
+
+    public function testAClinicianDateCannotOverrideAnExtractedOne(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $conflict = $this->file(0, ['collection_date' => '2026-08-30']);
+        self::assertSame(422, $conflict['status']);
+        self::assertSame('collection_date_conflict', $conflict['body']['detail']['code']);
+        $this->assertNothingWritten();
+        self::assertSame(200, $this->file(0, ['collection_date' => '2026-09-01'])['status'], 'the same date is not a conflict');
+    }
+
+    public function testACollectionDateMustBeAnIsoDateNotInTheFuture(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0, ['collection_date' => null]);
+        foreach (['2026-13-01', '2026-02-30', '09/20/2026', '2026-9-1', '', 20260920, '2999-01-01', (new \DateTimeImmutable('tomorrow'))->format('Y-m-d')] as $date) {
+            $result = $this->file(0, ['collection_date' => $date]);
+            self::assertSame(400, $result['status'], var_export($date, true));
+            self::assertSame('invalid_request', $result['body']['detail']['code']);
+        }
+        $this->assertNothingWritten();
+        self::assertSame(200, $this->file(0, ['collection_date' => (new \DateTimeImmutable('today'))->format('Y-m-d')])['status']);
     }
 
     // ------------------------------------------------------------------ //

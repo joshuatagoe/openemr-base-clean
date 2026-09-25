@@ -12,7 +12,10 @@
  * Rules: the candidate and its processing record must belong to the patient;
  * the document must be an `extracted` lab document; a rejected value is never
  * filed; `unverified` needs `confirm_unverified`; `unreadable` needs a
- * clinician-entered value; no collection date, no filing. A value the
+ * clinician-entered value. The collection date is never guessed and never the
+ * upload date (ADR-009 7b): without an extracted one the clinician must enter
+ * one they verified, and the filed result says so; a clinician date cannot
+ * override an extracted one. A value the
  * clinician changed is filed `corrected`, otherwise `final`; the extracted
  * value is kept in `comments`. The abnormal flag is filed only when the lab
  * printed it. A same-patient, same-test, same-date, same-value result already
@@ -48,7 +51,11 @@ final class ValueFiler
     public const ERROR_NOT_FILED = 'value_not_filed';
     public const ERROR_CONFIRMATION_REQUIRED = 'confirmation_required';
     public const ERROR_VALUE_REQUIRED = 'value_required';
-    public const ERROR_NO_COLLECTION_DATE = 'collection_date_missing';
+    public const ERROR_NO_COLLECTION_DATE = 'collection_date_required';
+    public const ERROR_COLLECTION_DATE_CONFLICT = 'collection_date_conflict';
+
+    public const DATE_SOURCE_EXTRACTED = 'extracted';
+    public const DATE_SOURCE_CLINICIAN = 'clinician';
 
     public const WARNING_SAME_RESULT = 'same_result_already_in_chart';
 
@@ -63,12 +70,13 @@ final class ValueFiler
     }
 
     /**
-     * @return array{outcome:string, procedure_result_id:?int, result_status:?string, warning:?string, verification_status:?string}
+     * @param ?string $enteredCollectionDate  a clinician-entered, already validated `Y-m-d` date, or null
+     * @return array{outcome:string, procedure_result_id:?int, result_status:?string, warning:?string, verification_status:?string, collection_date_source?:string}
      *   `outcome` is filed / already_filed or one of the ERROR_* codes
      */
-    public function file(int $pid, int $userId, int $documentId, int $resultIndex, ?string $filedValue, bool $confirmUnverified): array
+    public function file(int $pid, int $userId, int $documentId, int $resultIndex, ?string $filedValue, bool $confirmUnverified, ?string $enteredCollectionDate = null): array
     {
-        return $this->store->transaction(function () use ($pid, $userId, $documentId, $resultIndex, $filedValue, $confirmUnverified): array {
+        return $this->store->transaction(function () use ($pid, $userId, $documentId, $resultIndex, $filedValue, $confirmUnverified, $enteredCollectionDate): array {
             $found = $this->lock($pid, $documentId, $resultIndex);
             if (is_string($found)) {
                 return self::result($found);
@@ -105,10 +113,15 @@ final class ValueFiler
             if ($value === null || $value === '') {
                 return self::result(self::ERROR_VALUE_REQUIRED, verification: $verification);
             }
-            $collectionDate = $candidate['collection_date'];
-            if ($collectionDate === null || $collectionDate === '') {
+            $extractedDate = $candidate['collection_date'] === '' ? null : $candidate['collection_date'];
+            if ($extractedDate !== null && $enteredCollectionDate !== null && $enteredCollectionDate !== $extractedDate) {
+                return self::result(self::ERROR_COLLECTION_DATE_CONFLICT, verification: $verification);
+            }
+            $collectionDate = $extractedDate ?? $enteredCollectionDate;
+            if ($collectionDate === null) {
                 return self::result(self::ERROR_NO_COLLECTION_DATE, verification: $verification);
             }
+            $dateSource = $extractedDate !== null ? self::DATE_SOURCE_EXTRACTED : self::DATE_SOURCE_CLINICIAN;
             $collectedAt = $collectionDate . ' 00:00:00';
             $resultStatus = $entered !== null && $entered !== $extracted ? 'corrected' : 'final';
             $code = self::loincCode($document['extraction_json'], $resultIndex);
@@ -130,7 +143,8 @@ final class ValueFiler
                 'result' => $value,
                 'range' => $candidate['reference_range'] ?? '',
                 'abnormal' => self::ABNORMAL_OPTIONS[$flag] ?? '',
-                'comments' => 'Extracted value: ' . ($extracted ?? 'unreadable'),
+                'comments' => 'Extracted value: ' . ($extracted ?? 'unreadable')
+                    . ($dateSource === self::DATE_SOURCE_CLINICIAN ? '; collection date entered by clinician' : ''),
                 // ADR-009 7b: 0, not the document id - a core document link replaces the value, range and
                 // units with the file name in the order-results screen. The source link is our candidate row.
                 'document_id' => 0,
@@ -138,7 +152,7 @@ final class ValueFiler
             ]);
             $this->store->markFiled($candidate['id'], $userId, $value, $resultId);
 
-            return self::result(self::OUTCOME_FILED, $resultId, $resultStatus, $warning, $verification);
+            return ['collection_date_source' => $dateSource] + self::result(self::OUTCOME_FILED, $resultId, $resultStatus, $warning, $verification);
         });
     }
 
