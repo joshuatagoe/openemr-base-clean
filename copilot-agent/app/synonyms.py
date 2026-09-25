@@ -40,7 +40,7 @@ _TESTS: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     "bun": ("BUN", ("bun", "blood urea nitrogen", "urea nitrogen"), ("3094-0",)),
     "potassium": ("Potassium", ("potassium", "k", "k+", "serum potassium"), ("2823-3", "6298-4")),
     "sodium": ("Sodium", ("sodium", "na", "na+", "serum sodium"), ("2951-2", "2947-0")),
-    "glucose": ("Glucose", ("glucose", "blood glucose", "serum glucose", "fasting glucose", "fasting blood glucose", "fbg", "fasting blood sugar", "fbs"), ("2345-7", "1558-6")),
+    "glucose": ("Glucose", ("glucose", "blood glucose", "serum glucose", "fasting glucose", "fasting blood glucose", "fbg", "fasting blood sugar", "fbs", "glucose fasting", "glucose serum", "glucose plasma"), ("2345-7", "1558-6")),
     "calcium": ("Calcium", ("calcium", "ca", "serum calcium"), ("17861-6",)),
     "alt": ("ALT", ("alt", "alanine aminotransferase", "sgpt"), ("1742-6", "1743-4")),
     "ast": ("AST", ("ast", "aspartate aminotransferase", "sgot"), ("1920-8",)),
