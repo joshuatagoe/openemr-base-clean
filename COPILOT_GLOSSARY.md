@@ -7,8 +7,10 @@ The panel shows the same definitions on hover (`HELP` in
 - **Week 1 (note briefing):** when a patient is opened, the Co-Pilot reads the plan of the last visit
   note, finds its commitments ("recheck A1c", "continue metformin") and shows whether the chart holds
   evidence for each.
-- **Week 2 (document briefing):** *Brief from latest lab document* reads the newest uploaded lab
-  report, grounds it in guidelines and shows *What changed*, *Needs attention* and *What to consider*.
+- **Week 2 (document briefing):** *Brief from all read lab documents* briefs from every lab report
+  already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
+  and shows *What changed*, *Needs attention* and *What to consider*. *View source* on a document
+  citation opens the page and box it came from.
 
 ---
 
@@ -113,6 +115,7 @@ The panel shows the same definitions on hover (`HELP` in
 
 | Code | Meaning |
 |---|---|
+| `no_extracted_documents` | No lab document has been read yet for this patient (see the document list). |
 | `no_document_on_file` | No PDF, PNG or JPEG in the patient's Documents. |
 | `document_unavailable` | The newest document could not be read from OpenEMR. |
 | `document_too_large` | The newest document is over 10 MB. |
@@ -120,6 +123,52 @@ The panel shows the same definitions on hover (`HELP` in
 | `document_not_decodable` / `document_not_readable` | The file bytes are corrupt, or the model could read nothing from it. |
 | `extraction_unavailable` / `answer_model_unavailable` | A model call failed. After an answer-model failure the record lines still show, without guidance. |
 | `provider_not_configured` | The agent has no model key configured. |
+
+---
+
+## Week 2 — documents in this chart (list, source viewer, Verify and file)
+
+When the chart opens, the panel reads any new uploaded documents (two per call, repeated until none
+remain) and lists every document. Nothing is filed into the chart automatically: each value waits
+for a clinician to compare it with its highlighted source and **Verify and file** or **Reject** it.
+
+**Document status** (badge on each document)
+
+| Label | Meaning |
+|---|---|
+| Waiting to be read | Not read yet. Documents are read when the chart is opened, two at a time. |
+| Being read | Being read now. |
+| Read | Read. Its values are listed as candidates; nothing is in the chart until a clinician files it. |
+| Could not be read | Failed this time; the reason is shown. Most failures are retried the next time the chart opens (up to three attempts). |
+| Already read (same file) | The same file was already read in this chart; its values are under that document. |
+| Not read / Needs a category | Needs the "Lab Report" category, or is a file type the Co-Pilot does not read (only PDF, PNG, JPEG, ≤ 10 MB). |
+| Held: identity check | The name or date of birth printed on the document does not match this chart. Its values are not shown or used until a clinician confirms the patient; if it is another patient's, move it in Documents. |
+| N to review | Values from this document waiting for a clinician to file or reject. |
+| same file in another patient's chart | The identical file is also filed in another chart. With a matching printed name/DOB here, the other copy is the likely misfiling; without one, this copy is held. |
+
+**Value verification** (how the system located the value on the page — never a model's claim)
+
+| Label | Meaning |
+|---|---|
+| Found on the page | This exact value was found on the page; the box shows where. Found is not the same as correct — check it. |
+| Found on the page (close match) | A close match was found (e.g. different spacing); the box shows where. |
+| Not found on the page | No box. Shown with "Could not locate this value on the page (unverified)"; filing needs an extra confirmation that you checked it yourself. |
+| Unreadable | The value could not be read; it can only be filed with a value you type from the document. |
+
+**Value status and actions**
+
+| Label | Meaning |
+|---|---|
+| Waiting for review | Read from the document, not in the chart. |
+| Review source | Opens the document at the value's page with the box drawn over it, and the filing controls beside it. |
+| Verify and file | Files the value as an outside-lab result after you compared it with the source. Filing is signing: needs lab-write and sign permissions. A changed value is filed as corrected (the value as read is kept). A missing collection date must be entered from the document or another reliable record — never guessed, never the upload date. |
+| The collection dates differ | The date you entered differs from the one read from the document. Both are shown side by side; filing your date needs a confirmation and a reason, recorded in the EHR audit log. |
+| same result already in the chart | Filed, with a warning: a result with the same test, date and value was already in the chart — check for a duplicate. |
+| Filed ✓ | Verified and filed into the chart by a clinician. |
+| Reject | Marks the value not to be filed (two clicks). It cannot be filed afterwards. |
+| Un-file / Un-filed (entered in error) | Withdraws a filed value (two clicks): the chart result is kept for history, marked entered-in-error, and no longer counts as chart data. It cannot be filed again. |
+| Source document | On a chart result filed from a document: opens the page and box it came from. |
+| Box on the page | Where the system found the value. It shows where it read, not that it read correctly. |
 
 ---
 

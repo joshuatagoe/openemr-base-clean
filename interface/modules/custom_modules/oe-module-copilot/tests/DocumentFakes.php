@@ -6,6 +6,7 @@ namespace OpenEMR\Modules\Copilot\Tests;
 
 use OpenEMR\Modules\Copilot\Data\SchemaStatusInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Documents\DocumentValuesReaderInterface;
 use OpenEMR\Modules\Copilot\Documents\PatientDocumentSourceInterface;
 use OpenEMR\Modules\Copilot\Documents\ProcessingRepositoryInterface;
 use RuntimeException;
@@ -201,5 +202,48 @@ final class FakeSchemaStatus implements SchemaStatusInterface
     public function isReady(): bool
     {
         return $this->ready;
+    }
+}
+
+/** In-memory processing records and candidate values for the values read route. */
+final class FakeDocumentValues implements DocumentValuesReaderInterface
+{
+    /** @var array<int, array{pid:int, status:string, identity_check:?string, doc_type:string, last_error_code:?string}> */
+    public array $records = [];
+
+    /** @var array<int, list<array<string,mixed>>> document_id -> value rows (pid defaults to the record's) */
+    public array $rows = [];
+
+    /** @var list<int> documents whose values were read */
+    public array $read = [];
+
+    public function findRecord(int $documentId, int $pid): ?array
+    {
+        $r = $this->records[$documentId] ?? null;
+        if ($r === null || $r['pid'] !== $pid) {
+            return null;
+        }
+        return ['status' => $r['status'], 'identity_check' => $r['identity_check'], 'doc_type' => $r['doc_type'], 'last_error_code' => $r['last_error_code']];
+    }
+
+    public function listValues(int $documentId, int $pid): array
+    {
+        $this->read[] = $documentId;
+        $owner = $this->records[$documentId]['pid'] ?? null;
+        return $owner === $pid ? ($this->rows[$documentId] ?? []) : [];
+    }
+
+    /**
+     * @param array<string,mixed> $overrides
+     * @return array<string,mixed>
+     */
+    public static function row(int $resultIndex, array $overrides = []): array
+    {
+        return array_merge([
+            'result_index' => $resultIndex, 'test_name' => 'Hemoglobin A1c', 'value_text' => '7.1', 'unit' => '%',
+            'reference_range' => '4.0-5.6', 'abnormal_flag' => 'H', 'flag_source' => 'extracted', 'collection_date' => '2026-09-01',
+            'verification_status' => 'verified_exact', 'page' => 1, 'bbox' => '0.1,0.2,0.3,0.25', 'status' => 'candidate',
+            'procedure_result_id' => null,
+        ], $overrides);
     }
 }

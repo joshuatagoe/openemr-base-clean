@@ -90,6 +90,22 @@ shows verified commitments, interval annotations, withheld counts and a
 question box (with the scope statement and example questions from USER.md UC-04),
 and deletes the bundle on unload.
 
+### Vendored pdf.js (source viewer, ADR-008)
+
+| | |
+|---|---|
+| Package | `pdfjs-dist` **6.3.289** (Apache-2.0), modern build |
+| npm integrity | `sha512-ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==` (checked against `npm pack pdfjs-dist@6.3.289` and the tarball's own SHA-512, 2026-09-25) |
+| Files | `public/vendor/pdfjs/pdf.min.mjs` (sha256 `f80490490320511e5df18c580b9edd6b5db8058dceebaf6f161992e0a964b9e2`), `pdf.worker.min.mjs` (sha256 `8ab0e5e30031b4a06ecfddd5ae9562f0227f830ee7ec9ed1a968b134243d2386`), `LICENSE` — copied unmodified from `package/build/` and the package root; `.gitattributes` keeps them byte-exact |
+| Settings | worker from the same-origin file; `enableScripting: false`; canvas only (no annotation, form or XFA layer); bytes fetched with the CSRF header and passed as `getDocument({data})` |
+| Browsers | current browsers only (Chrome 125+, Safari 18+, Firefox ESR) |
+
+Security record: CVE-2024-4367 fixed in 4.2.67; CVE-2026-16633 (GHSA-hq66-cqwq-w95j)
+fixed in 6.2.108 — 6.3.289 is past both. **On every bump:** re-check the pdf.js
+advisory feed (GitHub security advisories for mozilla/pdf.js), take the new
+integrity from `npm pack`, and update this table. JPX/JBIG2 wasm and standard
+fonts are not vendored; add them only if scanned labs in those encodings must render.
+
 ## Tests and checks
 
 ```
