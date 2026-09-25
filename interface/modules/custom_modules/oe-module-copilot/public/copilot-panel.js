@@ -97,7 +97,31 @@
         guideline_citation: 'Publisher, year and the population the guidance was written for. Tier A: guidance for general US adults in primary care; can support a consideration. Tier B: care-process material only; never the sole support for a threshold or target.',
         uncertainty: 'What the evidence does not settle for this patient - stated rather than hidden.',
         route: 'The supervisor\u2019s handoffs in order: which worker ran next, and why. intake-extractor reads the document; evidence-retriever finds guideline passages; answer proposes considerations, which are screened before display.',
-        provenance: 'Everything that produced this briefing: both models, the reranker (fake-lexical = local deterministic ranking, not a learned model) and the exact guideline corpus version.'
+        provenance: 'Everything that produced this briefing: both models, the reranker (fake-lexical = local deterministic ranking, not a learned model) and the exact guideline corpus version.',
+        // Week 2 - documents in this chart (list, values, source viewer, filing)
+        doc_status_queued: 'Not read yet. Documents are read when the chart is opened, two at a time.',
+        doc_status_processing: 'Being read now.',
+        doc_status_extracted: 'Read. Its values are listed below as candidates: nothing is in the chart until a clinician verifies and files it.',
+        doc_status_failed: 'Could not be read this time. The reason is shown; most failures are tried again the next time the chart is opened (up to three attempts).',
+        doc_status_skipped_duplicate: 'The same file was already read in this chart; its values are listed under that document. Nothing is read twice.',
+        doc_status_unsupported: 'Not read: it needs a Co-Pilot category (Lab Report), or it is a kind of file the Co-Pilot does not read.',
+        doc_status_held_identity: 'Held: the patient printed on the document may not be this patient. Its values are not shown or used until a clinician confirms the patient.',
+        pending_count: 'Values read from this document that are waiting for a clinician to verify and file or reject.',
+        verification_verified_exact: 'The system found this exact value on the page; the box shows where. Found is not the same as correct - check it.',
+        verification_verified_fuzzy: 'The system found a close match on the page (for example different spacing); the box shows where. Check it.',
+        verification_unverified: 'The system could not find this value on the page, so there is no box. Filing it needs an extra confirmation that you checked it yourself.',
+        verification_unreadable: 'The value could not be read. It can only be filed with a value you type from the document.',
+        value_candidate: 'Read from the document, not in the chart. Waiting for a clinician to verify and file or reject.',
+        value_filed: 'Verified and filed into the chart by a clinician (an outside-lab result).',
+        value_rejected: 'Rejected by a clinician; never filed. It cannot be filed later.',
+        value_unfiled: 'Was filed, then withdrawn: the chart result is kept and marked entered-in-error. It cannot be filed again.',
+        verify_and_file: 'Files this value into the chart as an outside-lab result, after you have compared it with the highlighted source. Filing is signing: it needs lab-write and sign permissions.',
+        reject_value: 'Marks this value as not to be filed (for example misread or not a result). It cannot be filed afterwards.',
+        unfile_value: 'Withdraws a filed value: the chart result is kept for history and marked entered-in-error, so it no longer counts as chart data.',
+        bbox_overlay: 'Where on the page the system found this value. It shows where the system read, not that it read correctly.',
+        bbox_missing: 'The system could not locate this value on the page, so no box is drawn. It never guesses a position.',
+        collection_date_conflict: 'The date you entered differs from the collection date printed on the document. Filing your date needs your confirmation and a reason; both dates and the reason go to the EHR audit log.',
+        filed_result_source: 'This chart result was filed from an uploaded document. Opens the document at the page and box it came from.'
     };
 
     function explain(node, key) {
@@ -449,6 +473,9 @@
                 : 'All sources read. "No matching record found" means no evidence in this system, not that it was not done.')
                 + (footer.duplicates_collapsed ? ' ' + String(footer.duplicates_collapsed) + ' duplicate record(s) collapsed.' : '');
             this.body.appendChild(foot);
+            if (typeof this.onSectionsRendered === 'function') {
+                this.onSectionsRendered();
+            }
         }
 
         renderPlanCheckUnavailable(code) {
@@ -1043,6 +1070,403 @@
         }
     }
 
+    // ------------------------------------------------------------------ //
+    // Week 2 Final: documents in this chart (ADR-012), their values, the
+    // source viewer (ADR-008) and Verify and file (ADR-003, ADR-009).
+    // Every request goes to the module under the local API bridge with the
+    // APICSRFTOKEN header; the module binds it to the session's patient.
+    // Everything is rendered with textContent; nothing is logged.
+    // ------------------------------------------------------------------ //
+    const DOC_TYPE_LABELS = {
+        lab_pdf: 'Lab report',
+        intake_form: 'Intake form',
+        unsupported: 'No Co-Pilot category'
+    };
+    const DOC_STATUS = {
+        queued: ['Waiting to be read', 'badge-secondary'],
+        processing: ['Being read', 'badge-info'],
+        extracted: ['Read', 'badge-success'],
+        failed: ['Could not be read', 'badge-danger'],
+        skipped_duplicate: ['Already read (same file)', 'badge-light border'],
+        unsupported: ['Not read', 'badge-light border'],
+        held_identity: ['Held: identity check', 'badge-warning']
+    };
+    const DOC_CODE_TEXT = {
+        needs_category: 'Needs a category: file it under “Lab Report” in this patient’s Documents to have it read.',
+        unsupported_media_type: 'Only PDF, PNG and JPEG files are read.',
+        document_too_large: 'Over 10 MB, the largest file the Co-Pilot reads.',
+        doc_type_not_supported_yet: 'Intake forms are not read yet.',
+        same_content_as_other_document: 'The same file was already read in this chart; its values are listed under that document.',
+        same_file_in_other_chart: 'The same file is also filed in another patient’s chart, and the name and date of birth printed on it do not confirm this patient: it may be misfiled.',
+        same_file_also_in_other_chart: 'The same file is also filed in another patient’s chart. The name and date of birth printed on it match this chart, so the other copy is the likely misfiling.',
+        moved_after_filing: 'This document was moved here from another chart after a value from it had been filed there; it is not read again automatically. A clinician needs to review it.',
+        bad_extraction: 'The reading came back malformed. It will be tried again the next time the chart is opened.',
+        store_failed: 'The reading could not be saved. It will be tried again the next time the chart is opened.',
+        document_unavailable: 'The file could not be read from OpenEMR.',
+        already_in_progress: 'Another request is reading it right now.',
+        agent_not_configured: 'The Co-Pilot agent is not configured on this server.',
+        agent_unreachable: 'The Co-Pilot agent could not be reached. It will be tried again the next time the chart is opened.',
+        agent_timeout: 'The Co-Pilot agent took too long. It will be tried again the next time the chart is opened.',
+        agent_rejected: 'The Co-Pilot agent refused the request. It will be tried again the next time the chart is opened.',
+        agent_bad_response: 'The Co-Pilot agent’s answer was not usable. It will be tried again the next time the chart is opened.',
+        agent_degraded: 'The Co-Pilot agent could not read it this time. It will be tried again the next time the chart is opened.'
+    };
+    const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const VERIFICATION_LABELS = {
+        verified_exact: ['Found on the page', 'badge-success'],
+        verified_fuzzy: ['Found on the page (close match)', 'badge-success'],
+        unverified: ['Not found on the page', 'badge-warning'],
+        unreadable: ['Unreadable', 'badge-danger']
+    };
+    const VALUE_STATUS = {
+        candidate: ['Waiting for review', 'badge-info'],
+        filed: ['Filed ✓', 'badge-success'],
+        rejected: ['Rejected', 'badge-secondary'],
+        unfiled: ['Un-filed (entered in error)', 'badge-secondary']
+    };
+    const MAX_PROCESS_CALLS = 10;
+    const MAX_VALUE_LISTS = 20;
+
+    /**
+     * Plain-language description of one row of GET /api/copilot/documents.
+     * Pure; unknown codes are shown as codes, never guessed.
+     */
+    function describeDocument(doc) {
+        const status = String(doc.status || '');
+        const code = doc.error_code ? String(doc.error_code) : null;
+        let label = (DOC_STATUS[status] || [status || 'unknown', 'badge-secondary'])[0];
+        let badge = (DOC_STATUS[status] || [null, 'badge-secondary'])[1];
+        if (status === 'unsupported' && code === 'needs_category') {
+            label = 'Needs a category';
+            badge = 'badge-warning';
+        }
+        const notes = [];
+        if (status === 'held_identity') {
+            notes.push(HELD_TEXT);
+        }
+        if (code) {
+            notes.push(DOC_CODE_TEXT[code] || ('Reason code: ' + code + '.'));
+        }
+        if (status === 'extracted') {
+            const n = Number(doc.pending_count) || 0;
+            notes.push(n === 0 ? 'No values waiting for review.' : (n === 1 ? '1 value waiting for review.' : n + ' values waiting for review.'));
+            if (doc.identity_check === 'missing') {
+                notes.push('The name and date of birth printed on it could not be compared with this chart; check the document is this patient’s before filing.');
+            }
+        }
+        return {
+            typeLabel: DOC_TYPE_LABELS[doc.doc_type] || String(doc.doc_type || 'Document'),
+            statusLabel: label,
+            badge: badge,
+            helpKey: 'doc_status_' + status,
+            notes: notes,
+            showValues: status === 'extracted'
+        };
+    }
+
+    /** Module routes under the local API bridge, bound to the session's patient. */
+    class CopilotApi {
+        constructor(container) {
+            this.csrf = container.dataset.csrf;
+            this.pid = Number(container.dataset.pid);
+            const ticketUrl = String(container.dataset.ticketUrl || '');
+            this.base = ticketUrl.replace(/\/briefing-ticket$/, '');
+            this.webroot = ticketUrl.split('/apis/')[0];
+            this.abort = new AbortController();
+        }
+
+        headers(json) {
+            const h = { 'APICSRFTOKEN': this.csrf, 'Accept': json ? 'application/json' : '*/*' };
+            if (json) {
+                h['Content-Type'] = 'application/json';
+            }
+            return h;
+        }
+
+        /** @returns {Promise<{status:number, data:object|null}>} status 0 when the request could not be sent */
+        async json(method, path, body) {
+            let resp;
+            try {
+                resp = await fetch(this.base + path, {
+                    method: method,
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    signal: this.abort.signal,
+                    headers: this.headers(true),
+                    body: body === undefined ? undefined : JSON.stringify(body)
+                });
+            } catch {
+                return { status: 0, data: null };
+            }
+            let data = null;
+            try {
+                data = await resp.json();
+            } catch {
+                data = null;
+            }
+            return { status: resp.status, data: data };
+        }
+
+        /** The stored bytes of one document (ADR-008 file route). */
+        file(documentId) {
+            return fetch(this.base + '/document-file/' + encodeURIComponent(String(documentId)), {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                signal: this.abort.signal,
+                headers: this.headers(false)
+            });
+        }
+    }
+
+    function problemText(result, fallback) {
+        const detail = result && result.data && result.data.detail ? result.data.detail : null;
+        if (detail && detail.message) {
+            return String(detail.message) + ' (' + String(detail.code || 'http_' + result.status) + ')';
+        }
+        return fallback + ' (' + (result && result.status ? 'http_' + result.status : 'network') + ')';
+    }
+
+    function valueText(v) {
+        if (v.value_text === null || v.value_text === undefined || v.value_text === '') {
+            return 'unreadable';
+        }
+        return String(v.value_text) + (v.unit ? ' ' + String(v.unit) : '');
+    }
+
+    class DocumentsSection {
+        constructor(container) {
+            this.api = new CopilotApi(container);
+            this.docs = [];
+            this.values = {}; // document_id -> values response
+            this.filedResults = {}; // procedure_result_id -> true
+            this.root = el('div', 'card-body border-top');
+            this.root.dataset.role = 'documents';
+            this.root.setAttribute('aria-label', 'Documents in this chart');
+            this.root.appendChild(el('h6', 'mb-1', 'Documents in this chart'));
+            this.status = el('p', 'small text-muted mb-2', 'Checking for new documents…');
+            this.status.dataset.role = 'documents-status';
+            this.status.setAttribute('role', 'status');
+            this.status.setAttribute('aria-live', 'polite');
+            this.list = el('ul', 'list-group');
+            this.list.dataset.role = 'document-list';
+            this.viewerHost = el('div', 'mt-2');
+            this.viewerHost.dataset.role = 'viewer-host';
+            this.root.appendChild(this.status);
+            this.root.appendChild(this.list);
+            this.root.appendChild(this.viewerHost);
+            container.appendChild(this.root);
+            const onLeave = () => this.api.abort.abort();
+            window.addEventListener('pagehide', onLeave);
+        }
+
+        /** Chart open: process unread documents (two per call) until none remain, then list them. */
+        async start() {
+            let calls = 0;
+            let last = null;
+            for (;;) {
+                calls += 1;
+                const result = await this.api.json('POST', '/documents/process', { pid: this.api.pid });
+                if (result.status !== 200 || !result.data) {
+                    if (last === null) {
+                        this.status.textContent = problemText(result, 'The documents could not be checked.');
+                        return;
+                    }
+                    break;
+                }
+                last = result.data;
+                if (last.status !== 'ok') {
+                    this.status.textContent = 'Documents are unavailable (' + String(last.degraded_reason || 'degraded') + ').';
+                    return;
+                }
+                const remaining = Number(last.remaining) || 0;
+                const processed = Array.isArray(last.processed) ? last.processed.length : 0;
+                this.renderList(Array.isArray(last.documents) ? last.documents : []);
+                if (remaining <= 0) {
+                    this.status.textContent = this.summary();
+                    break;
+                }
+                if (processed === 0 || calls >= MAX_PROCESS_CALLS) {
+                    this.status.textContent = remaining + ' document(s) are still being read or could not be read now; they are tried again the next time the chart is opened.';
+                    break;
+                }
+                this.status.textContent = 'Reading new documents… ' + remaining + ' left.';
+            }
+            await this.loadAllValues();
+        }
+
+        summary() {
+            const pending = this.docs.reduce((n, d) => n + (d.status === 'extracted' ? (Number(d.pending_count) || 0) : 0), 0);
+            if (!this.docs.length) {
+                return 'No documents on file.';
+            }
+            return this.docs.length + ' document(s) on file; ' + pending + ' value(s) waiting for review.';
+        }
+
+        async refreshList() {
+            const result = await this.api.json('GET', '/documents?pid=' + encodeURIComponent(String(this.api.pid)));
+            if (result.status === 200 && result.data && result.data.status === 'ok') {
+                this.renderList(Array.isArray(result.data.documents) ? result.data.documents : []);
+                this.status.textContent = this.summary();
+                await this.loadAllValues();
+            }
+        }
+
+        renderList(docs) {
+            this.docs = docs;
+            while (this.list.firstChild) {
+                this.list.removeChild(this.list.firstChild);
+            }
+            if (!docs.length) {
+                this.list.appendChild(el('li', 'list-group-item small text-muted', 'No documents on file for this patient.'));
+                return;
+            }
+            docs.forEach((doc) => {
+                const d = describeDocument(doc);
+                const item = el('li', 'list-group-item py-2 small');
+                item.dataset.role = 'document-item';
+                item.dataset.documentId = String(doc.document_id);
+                const head = el('div', 'd-flex flex-wrap align-items-center');
+                head.appendChild(el('strong', 'mr-2', d.typeLabel));
+                head.appendChild(el('span', 'text-muted mr-2', 'uploaded ' + fmtDate(doc.uploaded_at) + ' · document ' + String(doc.document_id)));
+                head.appendChild(explain(el('span', 'badge ' + d.badge + ' mr-1', d.statusLabel), d.helpKey));
+                if (doc.status === 'extracted' && Number(doc.pending_count) > 0) {
+                    head.appendChild(explain(el('span', 'badge badge-info mr-1', String(doc.pending_count) + ' to review'), 'pending_count'));
+                }
+                const view = el('button', 'btn btn-link btn-sm p-0 ml-auto', 'View document');
+                view.type = 'button';
+                view.dataset.action = 'view-document';
+                view.addEventListener('click', () => this.openSource(doc.document_id, null, null));
+                if (!doc.error_code || ['unsupported_media_type', 'document_too_large'].indexOf(String(doc.error_code)) < 0) {
+                    head.appendChild(view);
+                }
+                item.appendChild(head);
+                d.notes.forEach((n) => item.appendChild(el('div', doc.status === 'held_identity' || doc.status === 'failed' ? 'text-warning' : 'text-muted', n)));
+                const holder = el('div', 'mt-1');
+                holder.dataset.role = 'value-list';
+                item.appendChild(holder);
+                if (this.values[doc.document_id] && d.showValues) {
+                    this.renderValues(doc, this.values[doc.document_id], holder);
+                }
+                this.list.appendChild(item);
+            });
+        }
+
+        async loadAllValues() {
+            const wanted = this.docs.filter((d) => describeDocument(d).showValues).slice(0, MAX_VALUE_LISTS);
+            for (const doc of wanted) {
+                await this.loadValues(doc);
+            }
+        }
+
+        async loadValues(doc) {
+            const holder = this.holderFor(doc.document_id);
+            const result = await this.api.json('GET', '/documents/' + encodeURIComponent(String(doc.document_id)) + '/values');
+            if (!holder) {
+                return;
+            }
+            if (result.status !== 200 || !result.data) {
+                while (holder.firstChild) {
+                    holder.removeChild(holder.firstChild);
+                }
+                holder.appendChild(el('div', 'text-danger', problemText(result, 'The values could not be read.')));
+                return;
+            }
+            this.values[doc.document_id] = result.data;
+            (Array.isArray(result.data.values) ? result.data.values : []).forEach((v) => {
+                if (v.procedure_result_id && (v.status === 'filed' || v.status === 'unfiled')) {
+                    this.filedResults[String(v.procedure_result_id)] = true;
+                }
+            });
+            this.renderValues(doc, result.data, holder);
+            this.annotateFiledResults();
+        }
+
+        holderFor(documentId) {
+            const item = this.list.querySelector('[data-role="document-item"][data-document-id="' + String(Number(documentId)) + '"]');
+            return item ? item.querySelector('[data-role="value-list"]') : null;
+        }
+
+        valueFor(documentId, resultIndex) {
+            const data = this.values[documentId];
+            const values = data && Array.isArray(data.values) ? data.values : [];
+            return values.find((v) => v.result_index === resultIndex) || null;
+        }
+
+        renderValues(doc, data, holder) {
+            while (holder.firstChild) {
+                holder.removeChild(holder.firstChild);
+            }
+            const values = Array.isArray(data.values) ? data.values : [];
+            if (!values.length) {
+                holder.appendChild(el('div', 'text-muted', 'No values were read from this document.'));
+                return;
+            }
+            const list = el('ul', 'list-unstyled mb-0 pl-2 border-left');
+            values.forEach((v) => list.appendChild(this.valueRow(doc, v)));
+            holder.appendChild(list);
+        }
+
+        valueRow(doc, v) {
+            const row = el('li', 'py-1');
+            row.dataset.role = 'value-row';
+            row.dataset.resultIndex = String(v.result_index);
+            const line = el('div', 'd-flex flex-wrap align-items-center');
+            line.appendChild(el('strong', 'mr-1', String(v.test_name || 'unnamed test')));
+            line.appendChild(el('span', 'mr-2', valueText(v)));
+            const ver = VERIFICATION_LABELS[v.verification_status] || [String(v.verification_status || 'unknown'), 'badge-secondary'];
+            line.appendChild(explain(el('span', 'badge ' + ver[1] + ' mr-1', ver[0]), 'verification_' + String(v.verification_status)));
+            const st = VALUE_STATUS[v.status] || [String(v.status || 'unknown'), 'badge-secondary'];
+            line.appendChild(explain(el('span', 'badge ' + st[1] + ' mr-1', st[0]), 'value_' + String(v.status)));
+            if (v.status === 'candidate') {
+                const review = el('button', 'btn btn-outline-primary btn-sm py-0 ml-1', 'Review source');
+                review.type = 'button';
+                review.dataset.action = 'review';
+                review.setAttribute('aria-label', 'Review the source of ' + String(v.test_name || 'this value') + ' before filing');
+                review.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+                line.appendChild(review);
+            } else if (v.status === 'filed' || v.status === 'unfiled') {
+                const view = el('button', 'btn btn-link btn-sm py-0', 'View source');
+                view.type = 'button';
+                view.dataset.action = 'view';
+                view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+                line.appendChild(view);
+                if (v.status === 'filed') {
+                    line.appendChild(this.unfileButton(doc.document_id, v));
+                }
+            }
+            row.appendChild(line);
+            const detail = [];
+            if (v.reference_range) {
+                detail.push('range ' + String(v.reference_range));
+            }
+            detail.push(v.collection_date ? 'collected ' + String(v.collection_date) : 'no collection date on the document');
+            if (v.page) {
+                detail.push('page ' + String(v.page));
+            }
+            const info = el('div', 'text-muted', detail.join(' · '));
+            if (v.flag_source === 'extracted' && v.abnormal_flag) {
+                info.appendChild(document.createTextNode(' '));
+                info.appendChild(explain(el('span', 'badge badge-warning', 'flag printed on the report: ' + String(v.abnormal_flag)), 'flag_printed'));
+            }
+            row.appendChild(info);
+            return row;
+        }
+
+        // Replaced by the source viewer and filing controls (below).
+        openSource() {
+            return undefined;
+        }
+
+        unfileButton() {
+            return el('span');
+        }
+
+        annotateFiledResults() {
+            return undefined;
+        }
+    }
+
     function boot() {
         const container = document.getElementById('oe-copilot-panel');
         if (!container || container.dataset.booted === '1') {
@@ -1052,6 +1476,10 @@
         const panel = new CopilotPanel(container);
         window.oeCopilotPanel = panel;
         panel.start();
+        const documents = new DocumentsSection(container);
+        window.oeCopilotDocuments = documents;
+        panel.onSectionsRendered = () => documents.annotateFiledResults();
+        documents.start();
         window.oeCopilotDocumentBriefing = new DocumentBriefingSection(container);
     }
 
@@ -1063,6 +1491,12 @@
 
     // Pure helpers, exported for the jest tests only (browsers have no `module`).
     if (typeof module === 'object' && module && module.exports) {
-        module.exports = { overlayRect: overlayRect, pdfFrame: pdfFrame, imageFrame: imageFrame };
+        module.exports = {
+            overlayRect: overlayRect,
+            pdfFrame: pdfFrame,
+            imageFrame: imageFrame,
+            describeDocument: describeDocument,
+            DocumentsSection: DocumentsSection
+        };
     }
 })();
