@@ -766,7 +766,8 @@ async def document_briefing(
         return DocumentBriefingResponse(
             correlation_id=request.correlation_id,
             patient_uuid=request.patient_uuid,
-            document_id=request.document_id,
+            document_id=request.document_ids[0],
+            document_ids=request.document_ids,
             status="degraded",
             degraded_reason="provider_not_configured",
         )

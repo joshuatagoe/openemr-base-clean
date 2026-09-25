@@ -55,6 +55,8 @@ from app.document_briefing import (
     RoutingDecision,
     _answer_content,
     build_query,
+    chart_facts,
+    combine_documents,
     drafts_to_candidates,
     get_retriever,
     read_lab_document,
@@ -251,14 +253,20 @@ async def run_supervised_briefing(
 ) -> DocumentBriefingResponse:
     """Run the graph and assemble the panel's response from its final state."""
     assert_langsmith_off()  # checked per request too: the environment can change after build
+    initial: BriefingState = {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None}
+    if request.documents is not None:
+        # Stored extractions (ADR-012): the documents are already read, so the
+        # supervisor's first decision is evidence retrieval, never extraction.
+        initial["document"] = combine_documents([d.extraction for d in request.documents])
     final: BriefingState = await build_graph().ainvoke(
-        {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None},
+        initial,
         config={"configurable": {"provider": provider, "reranker": reranker}, "recursion_limit": 12},
     )
     base = {
         "correlation_id": request.correlation_id,
         "patient_uuid": request.patient_uuid,
-        "document_id": request.document_id,
+        "document_id": request.document_ids[0],
+        "document_ids": request.document_ids,
         "routing": tuple(final.get("routing", [])),
     }
     document, evidence = final.get("document"), final.get("evidence")
@@ -266,7 +274,13 @@ async def run_supervised_briefing(
         return DocumentBriefingResponse(**base, status=BriefingStatus.DEGRADED, degraded_reason=final.get("reason"))
 
     candidates = final.get("candidates", [])
-    briefing = build_briefing(document=document, evidence=evidence, considerations=candidates, question=request.question)
+    briefing = build_briefing(
+        document=document,
+        evidence=evidence,
+        prior_facts=chart_facts(request.prior_facts),
+        considerations=candidates,
+        question=request.question,
+    )
 
     # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates
     # and fixed labels only - never a value, a quote or an identifier.
@@ -286,7 +300,8 @@ async def run_supervised_briefing(
     log_event(
         "document_briefing.completed",
         cid=request.correlation_id,
-        document_id=request.document_id,
+        documents=len(request.document_ids),
+        prior_facts=len(request.prior_facts),
         results=len(document.results),
         snippets=len(evidence.snippets),
         considerations_proposed=len(candidates),
