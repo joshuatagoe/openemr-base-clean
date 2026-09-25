@@ -273,4 +273,39 @@ final class FakeAgentClient implements AgentClientInterface
             'provenance' => null,
         ];
     }
+
+    /** @var list<array{request:array<string,mixed>, cid:string}> */
+    public array $extractionPosts = [];
+
+    /**
+     * Per document id: a response body fragment (merged over the echoed ids) or an exception.
+     *
+     * @var array<int, array<string,mixed>|AgentUnavailableException>
+     */
+    public array $extractions = [];
+
+    public function postDocumentExtraction(array $request, string $correlationId): array
+    {
+        $this->extractionPosts[] = ['request' => $request, 'cid' => $correlationId];
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
+        $documentId = $request['document_id'] ?? null;
+        $planned = is_int($documentId) ? ($this->extractions[$documentId] ?? []) : [];
+        if ($planned instanceof AgentUnavailableException) {
+            throw $planned;
+        }
+        return $planned + [
+            'correlation_id' => $correlationId,
+            'patient_uuid' => $request['patient_uuid'] ?? null,
+            'document_id' => $documentId,
+            'doc_type' => $request['doc_type'] ?? null,
+            'status' => 'ok',
+            'degraded_reason' => null,
+            'prompt_version' => 'lab-extract-test',
+            'extraction_model' => 'fake-model',
+            'extraction' => ['document_id' => $documentId, 'doc_type' => 'lab_pdf', 'collection_date' => null, 'results' => []],
+            'printed_identity' => null,
+        ];
+    }
 }

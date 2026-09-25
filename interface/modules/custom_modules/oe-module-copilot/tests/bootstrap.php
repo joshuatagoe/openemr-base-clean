@@ -15,3 +15,4 @@ $loader = require $root . '/vendor/autoload.php';
 $loader->addPsr4('OpenEMR\\Modules\\Copilot\\', __DIR__ . '/../src');
 $loader->addPsr4('OpenEMR\\Modules\\Copilot\\Tests\\', __DIR__);
 require_once __DIR__ . '/Fakes.php'; // several small doubles in one file; not PSR-4 discoverable
+require_once __DIR__ . '/DocumentFakes.php'; // Week 2 Final document-processing doubles, same reason
