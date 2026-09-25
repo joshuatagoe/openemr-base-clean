@@ -19,6 +19,7 @@ use OpenEMR\Modules\Copilot\Controller\FilingController;
 use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
 use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
 use OpenEMR\Modules\Copilot\Filing\ValueFiler;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
@@ -35,13 +36,25 @@ final class SessionReleaseTest extends TestCase
 
     private Session $session;
 
+    /** Shared with the observing agent: how many times the session lock was released so far. */
+    private SessionReleaseCounter $released;
+
     protected function setUp(): void
     {
         $this->session = new Session(new MockArraySessionStorage());
         $this->session->set('authUserID', 1);
         $this->session->set('authUser', 'dr_smith');
         $this->session->set('pid', self::PID);
-        self::assertTrue($this->session->isStarted());
+        $this->released = new SessionReleaseCounter();
+        $counter = $this->released;
+        SessionRelease::useCloser(static function () use ($counter): void {
+            $counter->count++;
+        });
+    }
+
+    protected function tearDown(): void
+    {
+        SessionRelease::useCloser(null);
     }
 
     private function request(string $method = 'GET', string $content = ''): HttpRestRequest
@@ -58,7 +71,7 @@ final class SessionReleaseTest extends TestCase
 
     public function testProcessingReleasesTheSessionBeforeCallingTheAgent(): void
     {
-        $agent = new SessionObservingAgent($this->session);
+        $agent = new SessionObservingAgent($this->released);
         $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(25)]], [25 => 'lab-bytes']);
         $reader = new FakeReader(patients: [self::PID => ['pid' => self::PID, 'uuid' => '3b9d2c1e-8f7a-4b6c-9d0e-1f2a3b4c5d6e']]);
         $controller = new DocumentsController(
@@ -73,8 +86,7 @@ final class SessionReleaseTest extends TestCase
         $response = $controller->handleProcessRest($this->request('POST', '{}'));
 
         self::assertSame(200, $response->getStatusCode());
-        self::assertSame([false], $agent->sessionOpenAtCall, 'the session lock is released before the agent call');
-        self::assertFalse($this->session->isStarted());
+        self::assertSame([1], $agent->releasesAtCall, 'the session lock is released before the agent call');
     }
 
     public function testListReleasesTheSession(): void
@@ -83,12 +95,12 @@ final class SessionReleaseTest extends TestCase
             self::authorizer(),
             new FakeReader(),
             new FakeSchemaStatus(true),
-            new DocumentProcessor(new FakePatientDocuments(), new FakeProcessingRepository(), new SessionObservingAgent($this->session), new CapturingLogger()),
+            new DocumentProcessor(new FakePatientDocuments(), new FakeProcessingRepository(), new SessionObservingAgent($this->released), new CapturingLogger()),
             new CapturingLogger(),
             new AuditCapture(),
         );
         $controller->handleListRest($this->request());
-        self::assertFalse($this->session->isStarted());
+        self::assertSame(1, $this->released->count);
     }
 
     public function testFileRouteReleasesTheSession(): void
@@ -96,17 +108,16 @@ final class SessionReleaseTest extends TestCase
         $source = new FakeFileSource(docs: [5 => ['pid' => self::PID, 'media_type' => 'application/pdf', 'size' => 3]], bytes: [5 => 'pdf']);
         $response = (new DocumentFileController(self::authorizer(), $source, new CapturingLogger(), new AuditCapture()))->handleRest('5', $this->request());
         self::assertSame(200, $response->getStatusCode());
-        self::assertFalse($this->session->isStarted());
+        self::assertSame(1, $this->released->count);
     }
 
     public function testFilingRoutesReleaseTheSession(): void
     {
         $store = new FakeFilingStore();
         $controller = new FilingController(self::authorizer(), new FakeAcl(self::FULL_ACL), new FakeWriteAcl(['patients/lab' => true]), new FakeSchemaStatus(true), new FakeFileSource(), new ValueFiler($store), new CapturingLogger(), new AuditCapture());
-        foreach (['handleFileRest', 'handleRejectRest', 'handleUnfileRest'] as $method) {
-            $this->session->get('pid'); // reopen
+        foreach (['handleFileRest', 'handleRejectRest', 'handleUnfileRest'] as $i => $method) {
             $controller->$method('5', '0', $this->request('POST', '{}'));
-            self::assertFalse($this->session->isStarted(), $method);
+            self::assertSame($i + 1, $this->released->count, $method);
         }
     }
 
@@ -123,28 +134,32 @@ final class SessionReleaseTest extends TestCase
             new AuditCapture(),
         );
         $ticket->handleRest($this->request('POST', '{}'));
-        self::assertFalse($this->session->isStarted(), 'briefing-ticket');
+        self::assertSame(1, $this->released->count, 'briefing-ticket');
 
-        $this->session->get('pid');
         $briefing = new DocumentBriefingController(self::authorizer(), new FakeReader(patients: $patients), new FakeDocumentReader([]), new FakeAgentClient(), new CapturingLogger(), new AuditCapture());
         $briefing->handleRest($this->request('POST', '{}'));
-        self::assertFalse($this->session->isStarted(), 'document-briefing');
+        self::assertSame(2, $this->released->count, 'document-briefing');
     }
 
     public function testResultSourceReleasesTheSession(): void
     {
         (new ResultSourceController(self::authorizer(), new FakeFilingStore(), new FakeFileSource(), new CapturingLogger(), new AuditCapture()))->handleRest('5', $this->request());
-        self::assertFalse($this->session->isStarted());
+        self::assertSame(1, $this->released->count);
     }
 }
 
-/** Records whether the session was still open each time the agent was called. */
+final class SessionReleaseCounter
+{
+    public int $count = 0;
+}
+
+/** Records how many session releases had happened each time the agent was called. */
 final class SessionObservingAgent implements AgentClientInterface
 {
-    /** @var list<bool> */
-    public array $sessionOpenAtCall = [];
+    /** @var list<int> */
+    public array $releasesAtCall = [];
 
-    public function __construct(private readonly Session $session)
+    public function __construct(private readonly SessionReleaseCounter $released)
     {
     }
 
@@ -160,7 +175,7 @@ final class SessionObservingAgent implements AgentClientInterface
 
     public function postDocumentExtraction(array $request, string $correlationId): array
     {
-        $this->sessionOpenAtCall[] = $this->session->isStarted();
+        $this->releasesAtCall[] = $this->released->count;
         return (new FakeAgentClient())->postDocumentExtraction($request, $correlationId);
     }
 }
