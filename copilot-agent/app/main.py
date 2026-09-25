@@ -106,6 +106,16 @@ CORRELATION_HEADER = "X-Correlation-Id"
 settings = ServiceSettings()
 
 
+async def _warm_renderer() -> None:
+    from app.page_text import warm_renderer
+
+    try:
+        await asyncio.to_thread(warm_renderer)
+        log_event("ocr.renderer_warm", outcome="ok")
+    except Exception as exc:  # noqa: BLE001 - warm-up is an optimisation; failure only costs the first render
+        log_event("ocr.renderer_warm", outcome="failed", error_type=type(exc).__name__)
+
+
 @asynccontextmanager
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
@@ -122,6 +132,9 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     gate.configure(model_settings.provider_concurrency, model_settings.provider_queue_wait_seconds)
     application.state.store = BundleStore(ttl_seconds=settings.bundle_ttl_seconds)
     log_event("service.start", environment=settings.environment, bundle_ttl_seconds=settings.bundle_ttl_seconds, tracing=traced)
+    # pdfium's first render costs ~5 s in a fresh process (ADR-007). Pay it in the background
+    # after startup, so neither the health check nor the first OCR'd document waits for it.
+    application.state.renderer_warmup = asyncio.create_task(_warm_renderer()) if settings.ocr == "textract" else None
     yield
     log_event("service.stop")
     shutdown_tracing()

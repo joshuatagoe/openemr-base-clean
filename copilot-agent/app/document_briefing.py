@@ -46,7 +46,7 @@ from app.briefing import (
 )
 from app.contracts import Citation, LabResult as ChartLabResult, RecordType, StrictModel
 from app.corpus import ClaimKind
-from app.documents import ExtractionMetadata, LabDocument, LabResult, VerificationStatus
+from app.documents import SUPPORTED_MEDIA_TYPES, ExtractionMetadata, LabDocument, LabResult, MediaType, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
 from app.lab_extractor import extract_lab_document
 from app.providers.prompt import LAB_EXTRACTION_PROMPT_VERSION
@@ -56,7 +56,6 @@ from app.providers.stub_provider import StubProvider
 from app.reranker import BedrockReranker, FakeReranker
 from app.retrieval import HybridRetriever, build_retriever
 
-SUPPORTED_MEDIA_TYPES = ("application/pdf", "image/png", "image/jpeg")
 
 # Largest stored file the agent will read: well above any real lab report or
 # intake form, well below the model's 32 MB request limit. The PHP module checks
@@ -123,7 +122,7 @@ class DocumentBriefingRequest(StrictModel):
     documents: list[StoredDocument] | None = Field(default=None, min_length=1, max_length=MAX_BRIEFING_DOCUMENTS)
     prior_facts: list[ChartLabResult] = Field(default_factory=list, max_length=MAX_PRIOR_FACTS)
     document_id: int | None = Field(default=None, ge=1)
-    media_type: Literal["application/pdf", "image/png", "image/jpeg"] | None = None
+    media_type: MediaType | None = None
     document_base64: str | None = Field(
         default=None,
         min_length=1,
@@ -181,7 +180,7 @@ class DocumentExtractRequest(StrictModel):
     patient_uuid: UUID
     document_id: int = Field(ge=1)
     doc_type: DocType
-    media_type: Literal["application/pdf", "image/png", "image/jpeg"]
+    media_type: MediaType
     document_base64: str = Field(
         min_length=1,
         max_length=MAX_DOCUMENT_BASE64_CHARS,
@@ -607,7 +606,9 @@ async def run_document_extract(request: DocumentExtractRequest, *, provider: Mod
                     **base,
                     prompt_version=document.extraction_metadata.prompt_version,
                     extraction_model=document.extraction_metadata.model_id,
-                    extraction=document,
+                    # ADR-012: the printed name/DOB go to the module once, top-level, for its
+                    # identity check - never inside the extraction it stores (extraction_json).
+                    extraction=document.model_copy(update={"printed_identity": None}),
                     printed_identity=printed_identity_of(document),
                 )
                 attrs["records"] = len(document.results)

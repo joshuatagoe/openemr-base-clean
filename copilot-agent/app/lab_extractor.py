@@ -319,6 +319,7 @@ _RESULT_ROW = re.compile(
 )
 _COLLECTED = re.compile(r"COLLECTED:\s*(\d{4}-\d{2}-\d{2})")
 _ORDERING_PROVIDER = re.compile(r"ORDERING PROVIDER:\s*(.+?)\s*$")
+_PATIENT = re.compile(r"PATIENT:\s*(?P<name>.+?)\s{2,}DOB:\s*(?P<dob>\d{4}-\d{2}-\d{2})")
 _DOCUMENT_ID = re.compile(r"<document_id>(\d+)</document_id>")
 _LEGIBLE_NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
 
@@ -480,6 +481,8 @@ def _stub_lab_draft(content: list[ContentPart]) -> LabDraft:
 
     collection_date = None
     ordering_provider = None
+    patient_name = None
+    patient_dob = None
     results: list[LabResultDraft] = []
 
     for line in lines:
@@ -487,6 +490,8 @@ def _stub_lab_draft(content: list[ContentPart]) -> LabDraft:
             collection_date = m.group(1)
         if ordering_provider is None and (m := _ORDERING_PROVIDER.search(line)):
             ordering_provider = m.group(1)
+        if patient_name is None and (m := _PATIENT.search(line)):
+            patient_name, patient_dob = m.group("name"), m.group("dob")
 
         row = _RESULT_ROW.match(line)
         if row is None:
@@ -513,6 +518,8 @@ def _stub_lab_draft(content: list[ContentPart]) -> LabDraft:
     return LabDraft(
         collection_date=collection_date,
         ordering_provider=ordering_provider,
+        patient_name=patient_name,
+        patient_dob=patient_dob,
         page_count=page_count,
         results=results,
     )

@@ -37,8 +37,8 @@ from tests.test_document_extract import extract_body, signed
 from tests.test_followup import turn
 from tests.test_handoff import post_bundle, ticket_for
 
-PRINTED_NAME = "Evelyn Whitfield-Synthetic"
-PRINTED_DOB = date(1961, 4, 3)
+PRINTED_NAME = "Whitfield, Evelyn R."
+PRINTED_DOB = date(1981, 3, 14)
 LABEL = "not yet verified or filed"
 
 
@@ -62,23 +62,9 @@ class _ChartOpenProvider(StubProvider):
 
 
 @pytest.fixture
-def with_printed_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stand in for Lane 1's LabDocument.printed_identity until it lands."""
-    import app.document_briefing as db
-
-    real = db.extract_lab_document
-
-    class _Identity:
-        name = PRINTED_NAME
-        dob = PRINTED_DOB
-
-    async def _with_identity(**kwargs: Any) -> Any:
-        document = await real(**kwargs)
-        if getattr(document, "printed_identity", None) is None:
-            object.__setattr__(document, "printed_identity", _Identity())
-        return document
-
-    monkeypatch.setattr(db, "extract_lab_document", _with_identity)
+def with_printed_identity() -> None:
+    """The fixture PDF prints "PATIENT: Whitfield, Evelyn R.  DOB: 1981-03-14"; since Lane 1 landed,
+    the offline stub parses it like the real model does, so no stand-in is needed."""
 
 
 def candidates_from(document_id: int, extraction: dict[str, Any], first_id: int) -> list[dict[str, Any]]:
@@ -155,6 +141,8 @@ def test_chart_open_extract_brief_and_follow_up_over_the_wave_1_contracts(fixtur
 
     ex = out["extract"]
     assert ex["printed_identity"] == {"name": PRINTED_NAME, "dob": PRINTED_DOB.isoformat()}
+    # ADR-012: identity is returned once, top-level, never inside the extraction the module stores.
+    assert ex["extraction"].get("printed_identity") is None and PRINTED_NAME not in json.dumps(ex["extraction"])
     assert ex["extraction"]["document_id"] == 201 and ex["prompt_version"] and ex["extraction_model"]
 
     b = out["briefing"]
