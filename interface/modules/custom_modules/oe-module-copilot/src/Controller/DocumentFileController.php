@@ -36,6 +36,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Documents\DocumentFileSourceInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -164,12 +165,7 @@ final class DocumentFileController
     public function handleRest(string $documentId, HttpRestRequest $request): Response
     {
         $id = preg_match('/^[1-9]\d{0,18}$/', $documentId) === 1 ? (int) $documentId : 0;
-        $session = $request->getSession();
-        $result = $this->viewForSession([
-            'authUserID' => $session->get('authUserID'),
-            'authUser' => $session->get('authUser'),
-            'pid' => $session->get('pid'),
-        ], $id);
+        $result = $this->viewForSession(SessionRelease::readAndRelease($request->getSession()), $id);
         if (!headers_sent()) {
             header_remove('Cache-Control');
         }

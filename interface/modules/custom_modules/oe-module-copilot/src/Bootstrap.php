@@ -210,6 +210,7 @@ final class Bootstrap
             reporter: $reporter,
             pendingFacts: new SqlProcessingRepository(),
             schema: new SqlSchemaStatus(),
+            documentAccess: new SqlDocumentReader(),
         );
     }
 

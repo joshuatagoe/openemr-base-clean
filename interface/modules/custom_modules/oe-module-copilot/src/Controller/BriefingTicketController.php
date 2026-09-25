@@ -53,10 +53,12 @@ use OpenEMR\Modules\Copilot\ContextBundleBuilder;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
 use OpenEMR\Modules\Copilot\Data\SchemaStatusInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Documents\DocumentFileSourceInterface;
 use OpenEMR\Modules\Copilot\Documents\ProcessingRepositoryInterface;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\TicketOutcomeReporterInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use OpenEMR\Modules\Copilot\Support\UtcDate;
 use OpenEMR\Modules\Copilot\Ticket\TicketSigner;
 use Psr\Log\LoggerInterface;
@@ -125,6 +127,7 @@ final class BriefingTicketController
         ?TicketOutcomeReporterInterface $reporter = null,
         private readonly ?ProcessingRepositoryInterface $pendingFacts = null,
         private readonly ?SchemaStatusInterface $schema = null,
+        private readonly ?DocumentFileSourceInterface $documentAccess = null,
     ) {
         $this->reporter = $reporter ?? new NullTicketOutcomeReporter();
         $this->logger = $logger ?? ServiceContainer::getLogger();
@@ -214,7 +217,7 @@ final class BriefingTicketController
             $allergies = $this->readOptional($correlationId, 'allergies', $sectionSourcesUnavailable, fn(): array => $this->reader->listAllergies($pid));
             $medications = $this->readOptional($correlationId, 'medications', $sectionSourcesUnavailable, fn(): array => $this->reader->listMedications($pid, self::LAB_RESULT_LIMIT));
 
-            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf, $allergies, $this->readPendingFacts($correlationId, $pid));
+            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf, $allergies, $this->readPendingFacts($correlationId, $pid, $username));
             $asOfUtc = UtcDate::toIso($asOf, $this->builder->getLocalZone());
             $sections = $this->sections($bundle, $asOfUtc, $asOfSource, $identity, $scheduled, $encounterReason, $allergies, $sectionSourcesUnavailable);
         } catch (SourceUnavailableException $e) {
@@ -308,7 +311,8 @@ final class BriefingTicketController
     /** REST route adapter: `POST /api/copilot/briefing-ticket` under the local API bridge. */
     public function handleRest(HttpRestRequest $request): JsonResponse
     {
-        $session = $request->getSession();
+        // Read the session, then release its lock before the agent hand-off (Support\SessionRelease).
+        $session = SessionRelease::readAndRelease($request->getSession(), ['authUserID', 'authUser', 'pid', 'encounter']);
         $requestedPid = null;
         $refreshBundleId = null;
         $refreshCorrelationId = null;
@@ -320,12 +324,7 @@ final class BriefingTicketController
             $rawCid = $json['refresh_correlation_id'] ?? null;
             $refreshCorrelationId = is_string($rawCid) && $rawCid !== '' ? $rawCid : null;
         }
-        $result = $this->handleForSession([
-            'authUserID' => $session->get('authUserID'),
-            'authUser' => $session->get('authUser'),
-            'pid' => $session->get('pid'),
-            'encounter' => $session->get('encounter'),
-        ], $requestedPid, $refreshBundleId, $refreshCorrelationId);
+        $result = $this->handleForSession($session, $requestedPid, $refreshBundleId, $refreshCorrelationId);
         if (!headers_sent()) {
             // PHP's session cache limiter pre-sets a weaker Cache-Control; ensure no-store is the only one sent.
             header_remove('Cache-Control');
@@ -389,19 +388,29 @@ final class BriefingTicketController
 
     /**
      * Pending document facts for follow-ups (ADR-011, contract C5): candidate
-     * values of this patient's extracted, non-held documents. None while the
-     * module tables are missing; a read failure is logged by code and the
-     * bundle goes without them rather than failing the briefing.
+     * values of this patient's extracted, non-held documents, only from
+     * documents the user may open (core `can_access()`, as for the briefing
+     * reader). None while the module tables are missing; a read or access-check
+     * failure is logged by code and the bundle goes without them rather than
+     * failing the briefing.
      *
      * @return list<array<string,mixed>>
      */
-    private function readPendingFacts(string $correlationId, int $pid): array
+    private function readPendingFacts(string $correlationId, int $pid, string $username): array
     {
         if ($this->pendingFacts === null || $this->schema === null || !$this->schema->isReady()) {
             return [];
         }
         try {
-            return $this->pendingFacts->listPendingFacts($pid, self::LAB_RESULT_LIMIT);
+            $facts = $this->pendingFacts->listPendingFacts($pid, self::LAB_RESULT_LIMIT);
+            if ($this->documentAccess === null) {
+                return $facts;
+            }
+            $allowed = [];
+            foreach (array_unique(array_column($facts, 'document_id')) as $documentId) {
+                $allowed[$documentId] = $this->documentAccess->canAccess((int) $documentId, $username);
+            }
+            return array_values(array_filter($facts, static fn(array $f): bool => $allowed[$f['document_id']] ?? false));
         } catch (Throwable $e) {
             $this->logger->warning('copilot pending facts unavailable', ['cid' => $correlationId, 'type' => $e::class]);
             return [];

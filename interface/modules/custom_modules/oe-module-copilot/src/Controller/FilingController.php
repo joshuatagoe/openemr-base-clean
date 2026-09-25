@@ -39,6 +39,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Documents\DocumentFileSourceInterface;
 use OpenEMR\Modules\Copilot\Filing\ValueFiler;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -308,11 +309,15 @@ final class FilingController
         return preg_match('/^\d{1,5}$/', $raw) === 1 ? (int) $raw : -1;
     }
 
-    /** @return array{authUserID:mixed, authUser:mixed, pid:mixed} */
+    /**
+     * The session values, read once; the session lock is then released before
+     * any slow work (Support\SessionRelease).
+     *
+     * @return array<string, mixed>
+     */
     private static function session(HttpRestRequest $request): array
     {
-        $session = $request->getSession();
-        return ['authUserID' => $session->get('authUserID'), 'authUser' => $session->get('authUser'), 'pid' => $session->get('pid')];
+        return SessionRelease::readAndRelease($request->getSession());
     }
 
     /** @param array{status:int, body:array<string,mixed>, headers:array<string,string>} $result */

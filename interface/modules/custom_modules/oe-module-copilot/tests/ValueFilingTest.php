@@ -642,6 +642,8 @@ final class ValueFilingTest extends TestCase
     {
         $source = (string) file_get_contents(__DIR__ . '/../src/Filing/SqlFilingStore.php');
         self::assertStringContainsString('createUuid()', $source);
+        self::assertMatchesRegularExpression('/GET_LOCK\(.*FOR UPDATE/s', $source, 'the provider row is created under a named lock with a locking read');
+        self::assertMatchesRegularExpression('/finally \{.*RELEASE_LOCK/s', $source, 'the named lock is released after the transaction ends');
         $code = (string) preg_replace('#/\*.*?\*/#s', '', $source); // the doc comment may name what is forbidden
         foreach (['ProcedureService', 'FHIR', 'Fhir', 'createMissingUuids', 'commitTransaction', 'sqlCommitTrans', 'OpenEMR\\Services'] as $forbidden) {
             self::assertStringNotContainsString($forbidden, $code, $forbidden . ' commits or may commit the filing transaction');

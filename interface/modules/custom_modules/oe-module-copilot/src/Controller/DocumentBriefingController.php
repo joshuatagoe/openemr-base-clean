@@ -50,6 +50,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -270,7 +271,8 @@ final class DocumentBriefingController
     /** REST route adapter: `POST /api/copilot/document-briefing` under the local API bridge. */
     public function handleRest(HttpRestRequest $request): JsonResponse
     {
-        $session = $request->getSession();
+        // Read the session, then release its lock before the agent hand-off (Support\SessionRelease).
+        $session = SessionRelease::readAndRelease($request->getSession());
         $requestedPid = null;
         $question = null;
         // getRequestBodyJSON() is broken in this checkout; read the raw body.
@@ -279,11 +281,7 @@ final class DocumentBriefingController
             $requestedPid = Scalar::positiveIntOrNull($json['pid'] ?? null);
             $question = is_string($json['question'] ?? null) ? $json['question'] : null;
         }
-        $result = $this->handleForSession([
-            'authUserID' => $session->get('authUserID'),
-            'authUser' => $session->get('authUser'),
-            'pid' => $session->get('pid'),
-        ], $requestedPid, $question);
+        $result = $this->handleForSession($session, $requestedPid, $question);
         if (!headers_sent()) {
             header_remove('Cache-Control');
         }

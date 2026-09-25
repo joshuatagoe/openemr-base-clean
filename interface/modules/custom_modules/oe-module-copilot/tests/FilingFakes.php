@@ -43,9 +43,14 @@ final class FakeFileSource implements DocumentFileSourceInterface
         return ['document_id' => $documentId, 'media_type' => $d['media_type'], 'size' => $d['size']];
     }
 
+    public ?SourceUnavailableException $accessFailure = null;
+
     public function canAccess(int $documentId, string $username): bool
     {
         $this->accessChecked[] = $documentId;
+        if ($this->accessFailure !== null) {
+            throw $this->accessFailure;
+        }
         return !in_array($documentId, $this->denied, true);
     }
 

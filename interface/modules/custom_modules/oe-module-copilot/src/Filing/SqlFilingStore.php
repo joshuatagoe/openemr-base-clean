@@ -33,9 +33,23 @@ final class SqlFilingStore implements FilingStoreInterface
 {
     public const ORDER_CODE_NAME = 'Outside lab results (from document)';
 
+    /** MariaDB named lock that serialises creating the outside-lab provider row. */
+    public const OUTSIDE_LAB_LOCK = 'copilot_outside_lab_provider';
+    public const OUTSIDE_LAB_LOCK_SECONDS = 10;
+
+    private bool $holdsOutsideLabLock = false;
+
     public function transaction(callable $work): mixed
     {
-        return QueryUtils::inTransaction($work);
+        try {
+            return QueryUtils::inTransaction($work);
+        } finally {
+            // Held until after commit (or rollback), so a concurrent first filing sees the committed row.
+            if ($this->holdsOutsideLabLock) {
+                $this->holdsOutsideLabLock = false;
+                QueryUtils::fetchRecords("SELECT RELEASE_LOCK(?) AS released", [self::OUTSIDE_LAB_LOCK]);
+            }
+        }
     }
 
     public function lockDocument(int $documentId): ?array
@@ -105,10 +119,22 @@ final class SqlFilingStore implements FilingStoreInterface
         return $id > 0 ? $id : null;
     }
 
+    /**
+     * Found by name; created under a named lock held until the transaction
+     * ends, and read with a locking read (the latest committed rows, not the
+     * transaction's snapshot), so two concurrent first filings never create two.
+     */
     public function findOrCreateOutsideLab(): int
     {
+        if (!$this->holdsOutsideLabLock) {
+            $got = QueryUtils::fetchRecords("SELECT GET_LOCK(?, ?) AS got", [self::OUTSIDE_LAB_LOCK, self::OUTSIDE_LAB_LOCK_SECONDS]);
+            if (Scalar::int($got[0]['got'] ?? null) !== 1) {
+                throw new \RuntimeException('outside_lab_lock_timeout');
+            }
+            $this->holdsOutsideLabLock = true;
+        }
         $rows = QueryUtils::fetchRecords(
-            "SELECT ppid FROM procedure_providers WHERE name = ? ORDER BY ppid ASC LIMIT 1",
+            "SELECT ppid FROM procedure_providers WHERE name = ? ORDER BY ppid ASC LIMIT 1 FOR UPDATE",
             [self::OUTSIDE_LAB_NAME]
         );
         $id = Scalar::int($rows[0]['ppid'] ?? null);

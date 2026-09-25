@@ -28,6 +28,7 @@ use OpenEMR\Modules\Copilot\Documents\CandidateMapper;
 use OpenEMR\Modules\Copilot\Documents\DocumentFileSourceInterface;
 use OpenEMR\Modules\Copilot\Filing\FilingStoreInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -134,12 +135,7 @@ final class ResultSourceController
     public function handleRest(string $resultId, HttpRestRequest $request): JsonResponse
     {
         $id = preg_match('/^[1-9]\d{0,18}$/', $resultId) === 1 ? (int) $resultId : 0;
-        $session = $request->getSession();
-        $result = $this->sourceForSession([
-            'authUserID' => $session->get('authUserID'),
-            'authUser' => $session->get('authUser'),
-            'pid' => $session->get('pid'),
-        ], $id);
+        $result = $this->sourceForSession(SessionRelease::readAndRelease($request->getSession()), $id);
         if (!headers_sent()) {
             header_remove('Cache-Control');
         }
