@@ -24,6 +24,7 @@ guideline claims.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import re
@@ -526,14 +527,38 @@ def build_reranker(kind: str, *, region: str) -> FakeReranker | BedrockReranker:
 # --------------------------------------------------------------------------- #
 
 
+#: Longest document read (the F02 proposal). Each OCR'd page can cost a Textract call of up to
+#: its own timeout, so an unbounded page count would outlast the module's 90 s client timeout.
+MAX_DOCUMENT_PAGES = 20
+
+#: Wall-clock budget for reading one document, below the module's 90 s extract timeout, so the
+#: agent stops (and stops spending) before the module gives up on the request.
+DOCUMENT_EXTRACT_BUDGET_SECONDS = 75.0
+
+
+def pdf_page_count(raw: bytes) -> int | None:
+    """Pages in a PDF, or None when pdfium cannot open it (the extractor then reports it)."""
+    import pypdfium2 as pdfium  # noqa: PLC0415 - loaded with the page-text stack, only for PDFs
+
+    try:
+        document = pdfium.PdfDocument(raw)
+    except Exception:  # noqa: BLE001 - an unreadable PDF is the extractor's to report, with its own code
+        return None
+    try:
+        return len(document)
+    finally:
+        document.close()
+
+
 async def read_lab_document(
     *,
     document_id: int,
     document_base64: str,
     media_type: str,
     provider: ModelProvider,
+    budget_seconds: float | None = None,
 ) -> tuple[LabDocument | None, str | None]:
-    """Decode and extract one lab document. Never raises for a bad file or a model failure.
+    """Decode and extract one lab document. Never raises for a bad file, a model failure or a slow read.
 
     Returns the document, or ``None`` with a fixed reason code. Shared by the
     extract route and the briefing graph's intake-extractor, so both report the
@@ -543,13 +568,20 @@ async def read_lab_document(
         raw = base64.b64decode(document_base64, validate=True)
     except (binascii.Error, ValueError):
         return None, "document_not_decodable"
+    if media_type == "application/pdf":
+        pages = pdf_page_count(raw)
+        if pages is not None and pages > MAX_DOCUMENT_PAGES:
+            return None, "too_many_pages"
     try:
-        document = await extract_lab_document(
-            document_id=document_id,
-            pdf_bytes=raw,
-            media_type=media_type,
-            provider=provider,
-        )
+        async with asyncio.timeout(DOCUMENT_EXTRACT_BUDGET_SECONDS if budget_seconds is None else budget_seconds):
+            document = await extract_lab_document(
+                document_id=document_id,
+                pdf_bytes=raw,
+                media_type=media_type,
+                provider=provider,
+            )
+    except TimeoutError:
+        return None, "budget_exhausted"
     except ProviderError:
         return None, "extraction_unavailable"
     except ValueError:
