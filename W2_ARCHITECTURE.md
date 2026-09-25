@@ -18,10 +18,13 @@ a file in this repo, it is marked as planned.
 | `ModelProvider` port, generic `parse_structured(schema=…)` | **Built** | `copilot-agent/app/providers/base.py` |
 | Provider-neutral `TextPart` / `DocumentPart` content | **Built** | `copilot-agent/app/providers/base.py:189–204` |
 | Lab-PDF extraction + deterministic post-processing | **Built** | `copilot-agent/app/lab_extractor.py` |
-| Document schemas, citation with bbox | **Built** | `copilot-agent/app/documents.py` |
+| Document schemas, citation with bbox field | **Built (schema only)** | `copilot-agent/app/documents.py`. No box is produced yet and values are marked verified without a check — see §1.4; ADR-007 fixes both |
+| Box and verification source: text layer first, Textract for scans and photos | **Planned** (ADR-007) | pdfplumber word boxes; Textract `DetectDocumentText` one page per call; one matcher; fake OCR in CI |
+| Source preview with highlight box | **Planned** (ADR-008) | module route `GET /api/copilot/document-file/{id}`; pdf.js for PDFs, `<img>` for photos, one overlay |
+| Per-document processing record and analysis trigger | **Planned** (ADR-012) | replaces "newest document"; `doc_type` from the document category; trigger open: on chart open vs hybrid |
 | Eval gate: 5 boolean rubrics, exact arithmetic, floors | **Built** | `copilot-agent/scripts/eval_gate.py`, `app/rubrics.py` |
 | CI job that runs the gate | **Built** | `.gitlab-ci.yml` (one job, `eval-gate`) |
-| Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) |
+| Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; today the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) — to be replaced by per-document selection (ADR-012) |
 | Signed module → agent document route | **Built** | `POST /api/copilot/document-briefing` (module) → `POST /v1/documents/briefing` (agent, `app/document_briefing.py`) |
 | Sparse + dense retrieval, RRF (k = 60) | **Built** | `copilot-agent/app/retrieval.py` — BM25 and a hashed-n-gram dense index, both local and deterministic |
 | Reranking | **Built; Cohere live in production** (2026-09-24) | `copilot-agent/app/reranker.py` — Cohere Rerank 3.5 via Amazon Bedrock in production (`COPILOT_RERANKER=bedrock`); the local deterministic `FakeReranker` is the default and what the offline CI gate uses |
@@ -34,8 +37,8 @@ a file in this repo, it is marked as planned.
 | Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
 | Per-encounter trace for the document briefing (`§CR7`) | **Built** | `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and worker spans, with `lab_extract`, `retrieval.hybrid`, `rerank` and `answer_considerations` under the worker that made each call, plus per-encounter scores; `app/document_briefing.py`, leak test in `tests/test_tracing.py` |
 | Supervisor / `intake-extractor` / `evidence-retriever` graph | **Built** (2026-09-23) | `copilot-agent/app/workflow.py` — LangGraph state graph; every handoff logged, traced as a `supervisor` span and returned to the panel as `routing`. Document briefing only; the Week 1 note briefing is unchanged (§2) |
-| Intake-form extraction | **Planned** | no schema, no fixture |
-| Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003. Extracted values are displayed as *not yet in the chart* and are never filed |
+| Intake-form extraction | **Planned** | no schema, no fixture. Values will be shown as pending document evidence, not filed, in Week 2 (ADR-010) |
+| Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003, ADR-009. Extracted values are displayed as *not yet in the chart* and are never filed today |
 
 Two runtime dependencies were added: `langgraph` (MIT, in-process) for the supervisor graph
 (ADR-001), and `boto3` for the Bedrock reranker (ADR-002). Otherwise `copilot-agent/pyproject.toml` depends only on the Week 1 set (`anthropic`, `fastapi`,
@@ -130,13 +133,18 @@ silently corrected box highlights the wrong text, which is worse than no box. `b
 
 - **No Co-Pilot upload endpoint — by design.** Upload uses OpenEMR's own Documents screen; the module
   reads the newest stored document (`SqlDocumentReader`) and posts it, signed, to
-  `/v1/documents/briefing`. *(Corrected 2026-09-23: an earlier revision said no storage wiring existed
+  `/v1/documents/briefing`. "Newest document" is unsafe (two uploads at once, a non-lab upload, a
+  re-uploaded old report) and is replaced by a per-document processing record (ADR-012). *(Corrected 2026-09-23: an earlier revision said no storage wiring existed
   and `extract_lab_document` had no caller; both stopped being true when the route was wired.)*
 - **No intake-form extraction.** `app/documents.py` defines `LabDocument` and nothing else; "intake"
   appears only in comments describing the seam that will accept it.
 - **No persistence of derived facts**, and therefore no round-trip demonstration yet. The planned
-  path (ADR-003, §1.5): a per-result *Verify and file* action writes a `procedure_result` row linked to
-  the source document, read back through FHIR for the round-trip.
+  path (ADR-003, ADR-009): a per-result *Verify and file* action writes an outside-lab order, its
+  required order-code row, a report and one `procedure_result` per value linked to the source
+  document, read back through FHIR for the round-trip.
+- **No bounding boxes, and verification is not checked.** The model's draft schema has no box, and
+  `draft_to_results` marks every legible value `VERIFIED_EXACT` without comparing it with the page
+  (`lab_extractor.py:394-396`), contrary to §1.3's "never a model self-report". ADR-007 (§1.6) fixes both.
 - **No comparison with earlier chart values.** `build_briefing` accepts prior chart facts, but the
   document route sends only the document, so *What changed* reports "the supplied records hold no
   earlier value" whenever there is no earlier value *in the document*. The module already reads
@@ -159,6 +167,28 @@ clinician; it is not treated as permission.
 **Known limitation, recorded rather than solved:** per-result verification on a large multi-analyte
 panel becomes tedious, and tedium invites rubber-stamping. Week 2's scenario is one or two values;
 a larger panel needs a different answer, and inventing one now would be premature.
+
+### 1.6 Where boxes and verification come from (ADR-007, planned)
+
+Every extracted value is checked against the page itself, not against the model's claim. PDF pages
+with a text layer give word boxes directly (pdfplumber). Pages without one are rendered to an image
+and read by AWS Textract, one page per call; phone photos are rotated upright from their EXIF
+orientation and sent to Textract directly. If a value is missing from a page's text layer and the
+page contains images — a printed form with handwritten answers — that page is read by Textract too.
+All sources produce one list of words with boxes, in one coordinate frame (0–1, top-left, relative to
+the page's cropbox), and one matcher looks up each value: found gives `VERIFIED_EXACT` or
+`VERIFIED_FUZZY` with its page and box; not found gives `UNVERIFIED` with no box. A Textract failure
+makes the affected values `UNVERIFIED`; extraction never fails as a whole. CI uses a fake OCR source,
+so the gate needs no AWS access.
+
+### 1.7 How the box is shown (ADR-008, planned)
+
+The panel opens the cited document by its id and page through a module route that serves the stored
+file only for the chart that is open. PDFs are drawn with a pinned, vendored pdf.js (scripting off,
+canvas only); photos with a plain image element. One overlay converts the stored box into pixels over
+either. A value with no box shows the page with "Could not locate this value on the page
+(unverified)" — a box is never guessed. Server-side rendering was rejected: the OpenEMR image has no
+Ghostscript and its ImageMagick policy disables PDF.
 
 ---
 
@@ -525,6 +555,13 @@ the vendor-documentation citations are in the planning record and are not restat
 | Design principles (SOLID), and the one violation that was fixed | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
 | ADR-003 — clinician verification before filing | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
 | ADR-004/005/006 — the corpus, three times | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
+| ADR-007 — boxes and verification: text layer first, Textract for scans and photos | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
+| ADR-008 — source preview: pdf.js, image element, one overlay | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
+| ADR-009 — filing into OpenEMR's lab tables with an outside-lab order | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
+| ADR-010 — intake forms shown as evidence, not filed, in Week 2 | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
+| ADR-011 — document follow-ups through the Week 1 follow-up path | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
+| ADR-012 — per-document selection, processing record, analysis trigger | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
+| Status of every ADR in one table | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` → Decision index |
 | Gate mechanics, thresholds, the blocked MR | [`EVAL_GATE.md`](EVAL_GATE.md) |
 | Week 1 architecture as submitted | [`ARCHITECTURE.md`](ARCHITECTURE.md) — frozen record; corrections in §6.1 above |
 
