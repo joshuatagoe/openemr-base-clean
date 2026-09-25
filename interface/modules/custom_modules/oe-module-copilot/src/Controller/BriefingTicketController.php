@@ -51,7 +51,9 @@ use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\ContextBundleBuilder;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
+use OpenEMR\Modules\Copilot\Data\SchemaStatusInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
+use OpenEMR\Modules\Copilot\Documents\ProcessingRepositoryInterface;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\TicketOutcomeReporterInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
@@ -61,6 +63,7 @@ use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Throwable;
 
 final class BriefingTicketController
 {
@@ -120,6 +123,8 @@ final class BriefingTicketController
         ?Closure $serverTime = null,
         ?Closure $unixTime = null,
         ?TicketOutcomeReporterInterface $reporter = null,
+        private readonly ?ProcessingRepositoryInterface $pendingFacts = null,
+        private readonly ?SchemaStatusInterface $schema = null,
     ) {
         $this->reporter = $reporter ?? new NullTicketOutcomeReporter();
         $this->logger = $logger ?? ServiceContainer::getLogger();
@@ -209,7 +214,7 @@ final class BriefingTicketController
             $allergies = $this->readOptional($correlationId, 'allergies', $sectionSourcesUnavailable, fn(): array => $this->reader->listAllergies($pid));
             $medications = $this->readOptional($correlationId, 'medications', $sectionSourcesUnavailable, fn(): array => $this->reader->listMedications($pid, self::LAB_RESULT_LIMIT));
 
-            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf, $allergies);
+            $bundle = $this->builder->build($correlationId, $patient, $note, $labResults, $userUuid, $labOrders, $medications, $asOf, $allergies, $this->readPendingFacts($correlationId, $pid));
             $asOfUtc = UtcDate::toIso($asOf, $this->builder->getLocalZone());
             $sections = $this->sections($bundle, $asOfUtc, $asOfSource, $identity, $scheduled, $encounterReason, $allergies, $sectionSourcesUnavailable);
         } catch (SourceUnavailableException $e) {
@@ -279,6 +284,8 @@ final class BriefingTicketController
             'results' => count($bundle['lab_results']),
             'sources_unavailable' => $bundle['data_quality']['sources_unavailable'],
             'omitted' => $this->builder->getOmittedCounts(),
+            'excluded' => $this->builder->getExcludedCounts(),
+            'pending_facts' => count($bundle['pending_document_facts'] ?? []),
             'agent' => $agentOutcome,
             'ticket' => $ticket !== null,
         ]);
@@ -378,6 +385,27 @@ final class BriefingTicketController
             'degraded' => null,
             'warnings' => [],
         ], 'headers' => $headers];
+    }
+
+    /**
+     * Pending document facts for follow-ups (ADR-011, contract C5): candidate
+     * values of this patient's extracted, non-held documents. None while the
+     * module tables are missing; a read failure is logged by code and the
+     * bundle goes without them rather than failing the briefing.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function readPendingFacts(string $correlationId, int $pid): array
+    {
+        if ($this->pendingFacts === null || $this->schema === null || !$this->schema->isReady()) {
+            return [];
+        }
+        try {
+            return $this->pendingFacts->listPendingFacts($pid, self::LAB_RESULT_LIMIT);
+        } catch (Throwable $e) {
+            $this->logger->warning('copilot pending facts unavailable', ['cid' => $correlationId, 'type' => $e::class]);
+            return [];
+        }
     }
 
     /**

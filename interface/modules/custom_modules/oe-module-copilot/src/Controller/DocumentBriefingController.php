@@ -2,7 +2,14 @@
 
 /**
  * `POST /api/copilot/document-briefing` (Week 2): brief the physician from the
- * selected patient's most recent lab document on file.
+ * selected patient's documents.
+ *
+ * With the module tables installed (ADR-012), the briefing covers every
+ * extracted, non-held document: the stored extractions and the chart's lab
+ * history (`prior_facts`) are sent (contract C4) and nothing is re-extracted;
+ * nothing extracted yet is `degraded` / `no_extracted_documents`. Until the
+ * tables exist, the legacy single-document path below still runs (the agent
+ * accepts `document_base64` for one more release).
  *
  * Authorization is the ticket route's, unchanged: the patient is the one
  * selected in the authenticated OpenEMR session; a `pid` in the body is only a
@@ -35,7 +42,10 @@ use OpenEMR\Common\Logging\EventAuditLogger;
 use OpenEMR\Modules\Copilot\Agent\AgentClientInterface;
 use OpenEMR\Modules\Copilot\Agent\AgentUnavailableException;
 use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
+use OpenEMR\Modules\Copilot\ContextBundleBuilder;
 use OpenEMR\Modules\Copilot\Data\ClinicalReaderInterface;
+use OpenEMR\Modules\Copilot\Data\SchemaStatusInterface;
+use OpenEMR\Modules\Copilot\Documents\ProcessingRepositoryInterface;
 use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
@@ -53,6 +63,12 @@ final class DocumentBriefingController
     public const DEGRADED_DOCUMENT_UNAVAILABLE = 'document_unavailable';
     public const DEGRADED_AGENT_UNAVAILABLE = 'agent_unavailable';
     public const DEGRADED_DOCUMENT_TOO_LARGE = 'document_too_large';
+    public const DEGRADED_NO_EXTRACTED_DOCUMENTS = 'no_extracted_documents';
+
+    /** Stored-extraction mode: documents per briefing, and the chart lab history sent as prior_facts. */
+    public const MAX_DOCUMENTS = 20;
+    public const PRIOR_FACTS_SINCE = '1900-01-01 00:00:00';
+    public const PRIOR_FACTS_LIMIT = 500;
 
     /** Matches DocumentBriefingRequest.question's max_length. */
     public const QUESTION_MAX_LENGTH = 500;
@@ -79,6 +95,9 @@ final class DocumentBriefingController
         private readonly AgentClientInterface $agent,
         ?LoggerInterface $logger = null,
         ?callable $auditWriter = null,
+        private readonly ?ProcessingRepositoryInterface $records = null,
+        private readonly ?SchemaStatusInterface $schema = null,
+        private readonly ?ContextBundleBuilder $builder = null,
     ) {
         $this->logger = $logger ?? ServiceContainer::getLogger();
         $this->auditWriter = $auditWriter ?? static function (string $event, string $user, bool $success, string $comment, int $pid): void {
@@ -126,8 +145,9 @@ final class DocumentBriefingController
             }
             $patientUuid = $patient['uuid'];
 
-            $document = $this->documents->findLatestDocument($pid);
-            if ($document === null) {
+            if ($this->usesStoredExtractions()) {
+                [$body, $outcome] = $this->briefFromStoredExtractions($correlationId, $pid, $patientUuid, $question);
+            } elseif (($document = $this->documents->findLatestDocument($pid)) === null) {
                 $outcome = self::DEGRADED_NO_DOCUMENT;
                 $body = self::degraded($correlationId, $patientUuid, null, $outcome);
             } else {
@@ -179,6 +199,68 @@ final class DocumentBriefingController
         $this->logger->info('copilot document briefing', ['cid' => $correlationId, 'basis' => $decision['basis'], 'outcome' => $outcome]);
 
         return ['status' => 200, 'body' => $body, 'headers' => $headers];
+    }
+
+    /** Stored-extraction mode (ADR-012) needs its collaborators and the module tables; otherwise the legacy path runs. */
+    private function usesStoredExtractions(): bool
+    {
+        return $this->records !== null && $this->schema !== null && $this->builder !== null && $this->schema->isReady();
+    }
+
+    /**
+     * Brief from every extracted document of the patient (contract C4): the stored
+     * extractions go to the agent, which does not extract again, plus the chart's
+     * lab history as `prior_facts` in the Week 1 bundle shape (entered-in-error
+     * excluded). Held documents are never sent.
+     *
+     * @return array{array<string,mixed>, string}  body, outcome code
+     * @throws SourceUnavailableException  when the processing record cannot be read
+     */
+    private function briefFromStoredExtractions(string $correlationId, int $pid, string $patientUuid, ?string $question): array
+    {
+        assert($this->records !== null && $this->builder !== null);
+        try {
+            $stored = $this->records->listExtractions($pid, self::MAX_DOCUMENTS);
+        } catch (Throwable $e) {
+            throw new SourceUnavailableException('copilot_document', $e);
+        }
+        $documents = [];
+        foreach ($stored as $row) {
+            $extraction = json_decode($row['extraction_json'], true, 64);
+            if (is_array($extraction)) {
+                $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
+            }
+        }
+        if ($documents === []) {
+            return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_NO_EXTRACTED_DOCUMENTS), self::DEGRADED_NO_EXTRACTED_DOCUMENTS];
+        }
+
+        try {
+            $priorFacts = $this->builder->mapLabResults($this->reader->listLabResults($pid, self::PRIOR_FACTS_SINCE, self::PRIOR_FACTS_LIMIT));
+        } catch (SourceUnavailableException $e) {
+            $this->logger->warning('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
+            $priorFacts = [];
+        }
+
+        $question = $question === null ? null : trim($question);
+        $request = [
+            'correlation_id' => $correlationId,
+            'patient_uuid' => $patientUuid,
+            'documents' => $documents,
+            'prior_facts' => $priorFacts,
+            'question' => $question === null || $question === '' ? null : mb_substr($question, 0, self::QUESTION_MAX_LENGTH),
+        ];
+        try {
+            $body = $this->agent->postDocumentBriefing($request, $correlationId);
+            return [$body, 'agent_' . Scalar::str($body['status'] ?? 'unknown') . '; documents=' . count($documents) . '; prior_facts=' . count($priorFacts)];
+        } catch (AgentUnavailableException $e) {
+            $this->logger->warning('copilot document briefing hand-off failed', [
+                'cid' => $correlationId,
+                'reason' => $e->getReason(),
+                'http_status' => $e->getHttpStatus(),
+            ]);
+            return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_AGENT_UNAVAILABLE), $e->getReason()];
+        }
     }
 
     /** REST route adapter: `POST /api/copilot/document-briefing` under the local API bridge. */

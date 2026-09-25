@@ -46,8 +46,12 @@ use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
+use OpenEMR\Modules\Copilot\Controller\DocumentsController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
+use OpenEMR\Modules\Copilot\Data\SqlSchemaStatus;
+use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
+use OpenEMR\Modules\Copilot\Documents\SqlProcessingRepository;
 use OpenEMR\Modules\Copilot\Observability\LangfuseTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
@@ -62,6 +66,8 @@ final class Bootstrap
     public const GLOBAL_ADMIN_OVERRIDE = 'copilot_admin_relationship_override';
     public const ROUTE_BRIEFING_TICKET = 'POST /api/copilot/briefing-ticket';
     public const ROUTE_DOCUMENT_BRIEFING = 'POST /api/copilot/document-briefing';
+    public const ROUTE_DOCUMENTS_PROCESS = 'POST /api/copilot/documents/process';
+    public const ROUTE_DOCUMENTS_LIST = 'GET /api/copilot/documents';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -121,6 +127,14 @@ final class Bootstrap
             self::ROUTE_DOCUMENT_BRIEFING,
             static fn(HttpRestRequest $request) => self::createDocumentBriefingController()->handleRest($request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENTS_PROCESS,
+            static fn(HttpRestRequest $request) => self::createDocumentsController()->handleProcessRest($request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENTS_LIST,
+            static fn(HttpRestRequest $request) => self::createDocumentsController()->handleListRest($request)
+        );
         return $event;
     }
 
@@ -157,6 +171,22 @@ final class Bootstrap
             new GuzzleAgentClient($config),
             $config,
             reporter: $reporter,
+            pendingFacts: new SqlProcessingRepository(),
+            schema: new SqlSchemaStatus(),
+        );
+    }
+
+    /** Chart-open processing and the document list (ADR-012), same authorizer wiring. */
+    public static function createDocumentsController(): DocumentsController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        $logger = ServiceContainer::getLogger();
+        return new DocumentsController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlClinicalReader(),
+            new SqlSchemaStatus(),
+            new DocumentProcessor(new SqlDocumentReader(), new SqlProcessingRepository(), new GuzzleAgentClient(CopilotConfig::fromEnvironment()), $logger),
+            $logger,
         );
     }
 
@@ -169,6 +199,9 @@ final class Bootstrap
             new SqlClinicalReader(),
             new SqlDocumentReader(),
             new GuzzleAgentClient(CopilotConfig::fromEnvironment()),
+            records: new SqlProcessingRepository(),
+            schema: new SqlSchemaStatus(),
+            builder: new ContextBundleBuilder(UtcDate::serverZone()),
         );
     }
 }

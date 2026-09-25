@@ -16,6 +16,10 @@
  *   `high`/`low`); rows the contract cannot represent are omitted and counted.
  *   Deferred, documented: results with status `cancel`/`error`/blank and
  *   non-numeric (text) results are not carried yet.
+ * - Results marked `entered-in-error` (un-filed, ADR-009 section 7) are
+ *   excluded deliberately and counted in getExcludedCounts(), not as unmapped.
+ * - Pending document facts (candidate values, ADR-011 / contract C5) are added
+ *   as `pending_document_facts` only when there are any.
  * - All timestamps are UTC ISO-8601.
  * - An unavailable lab source is declared in data_quality.sources_unavailable;
  *   it is never rendered as an empty list.
@@ -33,6 +37,7 @@ namespace OpenEMR\Modules\Copilot;
 
 use DateTimeZone;
 use InvalidArgumentException;
+use OpenEMR\Modules\Copilot\Documents\CandidateMapper;
 use OpenEMR\Modules\Copilot\Support\Scalar;
 use OpenEMR\Modules\Copilot\Support\UtcDate;
 
@@ -58,6 +63,8 @@ final class ContextBundleBuilder
         'final' => 'final',
         'prelim' => 'preliminary',
         'correct' => 'corrected',
+        // ADR-009 section 7: a clinician-edited filed value is written as `corrected` (core `correct` maps to FHIR unknown).
+        'corrected' => 'corrected',
         'incomplete' => 'incomplete',
     ];
 
@@ -75,8 +82,18 @@ final class ContextBundleBuilder
         'vlow' => 'low',
     ];
 
+    /**
+     * Result statuses excluded on purpose (not "unmapped"): a result un-filed as
+     * entered-in-error keeps its history in OpenEMR and FHIR but leaves the
+     * active bundle (ADR-009 section 7).
+     */
+    public const EXCLUDED_RESULT_STATUSES = ['entered-in-error' => 'entered_in_error'];
+
     /** @var array<string,int> counts of rows the contract could not carry (reported, never logged with content) */
     private array $omitted = ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0, 'orders_omitted' => 0, 'medications_omitted' => 0];
+
+    /** @var array<string,int> counts of rows left out deliberately, by reason */
+    private array $excluded = ['entered_in_error' => 0];
 
     public function __construct(private readonly DateTimeZone $localZone)
     {
@@ -98,6 +115,7 @@ final class ContextBundleBuilder
      * @param list<array<string,mixed>>|null $medications  null when the medications source could not be read
      * @param string|null $nowLocal  local 'Y-m-d H:i:s' used to derive medication status (AUDIT DATA-003)
      * @param list<array<string,mixed>>|null $allergies  null when the allergies source could not be read
+     * @param list<array<string,mixed>> $pendingFacts  candidate rows (ProcessingRepositoryInterface::listPendingFacts)
      * @return array{
      *   schema_version:string, correlation_id:string, patient_uuid:string, user_uuid?:string,
      *   prior_note:array{note_id:string, encounter_id:string, note_date:string, plan_text:string},
@@ -105,10 +123,11 @@ final class ContextBundleBuilder
      *   lab_results:list<array<string,mixed>>,
      *   lab_orders:list<array<string,mixed>>,
      *   medications:list<array<string,mixed>>,
-     *   allergies:list<array<string,mixed>>
+     *   allergies:list<array<string,mixed>>,
+     *   pending_document_facts?:list<array<string,mixed>>
      * }
      */
-    public function build(string $correlationId, array $patient, array $note, ?array $labResults, ?string $userUuid = null, ?array $labOrders = null, ?array $medications = null, ?string $nowLocal = null, ?array $allergies = null): array
+    public function build(string $correlationId, array $patient, array $note, ?array $labResults, ?string $userUuid = null, ?array $labOrders = null, ?array $medications = null, ?string $nowLocal = null, ?array $allergies = null, array $pendingFacts = []): array
     {
         $noteDateUtc = UtcDate::toIso(Scalar::str($note['note_date']), $this->localZone);
 
@@ -191,6 +210,12 @@ final class ContextBundleBuilder
         if ($userUuid !== null) {
             $bundle['user_uuid'] = $userUuid;
         }
+        // Contract C5: optional, schema stays 1.0. Sent only when there is something to send,
+        // so an agent that predates the field keeps accepting bundles without pending facts.
+        $pending = $this->mapPendingFacts($pendingFacts);
+        if ($pending !== []) {
+            $bundle['pending_document_facts'] = $pending;
+        }
         return $bundle;
     }
 
@@ -198,6 +223,75 @@ final class ContextBundleBuilder
     public function getOmittedCounts(): array
     {
         return $this->omitted;
+    }
+
+    /** @return array<string,int> rows left out on purpose (entered-in-error), counted apart from omissions */
+    public function getExcludedCounts(): array
+    {
+        return $this->excluded;
+    }
+
+    /**
+     * Chart lab rows in the bundle's `lab_results` shape, with the same mapping,
+     * omissions and exclusions (the briefing's `prior_facts`, contract C4).
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    public function mapLabResults(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            $mapped = $this->mapResult($row);
+            if ($mapped !== null) {
+                $out[] = $mapped;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Candidate rows as contract C5 PendingDocumentFact objects. Only candidates
+     * of non-held documents reach this method (the repository filters).
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    public function mapPendingFacts(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $r) {
+            $id = Scalar::int($r['id'] ?? null);
+            $testName = trim(Scalar::str($r['test_name'] ?? null));
+            if ($id <= 0 || $testName === '') {
+                continue;
+            }
+            $page = $r['page'] ?? null;
+            $page = is_int($page) && $page > 0 ? $page : null;
+            $out[] = [
+                'fact_id' => 'copilot_extracted_value:' . $id,
+                'document_id' => Scalar::int($r['document_id'] ?? null),
+                'test_name' => $testName,
+                'value_text' => self::nullableText($r['value_text'] ?? null),
+                'unit' => self::nullableText($r['unit'] ?? null),
+                'reference_range' => self::nullableText($r['reference_range'] ?? null),
+                'abnormal_flag' => self::nullableText($r['abnormal_flag'] ?? null),
+                'flag_source' => self::nullableText($r['flag_source'] ?? null) ?? 'unavailable',
+                'collection_date' => self::nullableText($r['collection_date'] ?? null),
+                'verification_status' => self::nullableText($r['verification_status'] ?? null) ?? 'unverified',
+                'page' => $page,
+                // C5 rejects a box without a page.
+                'bbox' => $page === null ? null : CandidateMapper::bboxToList(self::nullableText($r['bbox'] ?? null)),
+                'status' => 'candidate',
+            ];
+        }
+        return $out;
+    }
+
+    private static function nullableText(mixed $value): ?string
+    {
+        $text = trim(Scalar::str($value));
+        return $text === '' ? null : $text;
     }
 
     /**
@@ -209,6 +303,11 @@ final class ContextBundleBuilder
         $testName = trim(Scalar::str($row['test_name'] ?? null));
         if ($testName === '') {
             $this->omitted['empty_test_name']++;
+            return null;
+        }
+        $excludedAs = self::EXCLUDED_RESULT_STATUSES[strtolower(trim(Scalar::str($row['result_status'] ?? null)))] ?? null;
+        if ($excludedAs !== null) {
+            $this->excluded[$excludedAs]++;
             return null;
         }
         $value = trim(Scalar::str($row['value'] ?? null));
