@@ -36,6 +36,7 @@ type.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import re
 from datetime import UTC, date, datetime
@@ -56,6 +57,7 @@ from app.documents import (
     VerificationStatus,
 )
 from app.observability import generation, log_event
+from app.page_text import PageWords, text_layer_pages
 from app.providers.base import (
     ContentPart,
     DocumentPart,
@@ -69,6 +71,7 @@ from app.providers.prompt import (
     build_lab_document_content,
 )
 from app.providers.stub_provider import StubProvider
+from app.verification import verify_result
 
 # A one-page report with a dozen results fits comfortably; the ceiling exists so
 # a malformed document cannot turn into an unbounded generation.
@@ -183,6 +186,13 @@ def summarize(results: list[LabResult], *, model_id: str, page_count: int) -> Ex
 # --------------------------------------------------------------------------- #
 
 
+async def _page_words(document: bytes, media_type: str) -> tuple[PageWords, ...]:
+    """The words the matcher searches. CPU-bound parsing runs off the event loop."""
+    if media_type == "application/pdf":
+        return await asyncio.to_thread(text_layer_pages, document)
+    return ()
+
+
 async def extract_lab_document(
     *,
     document_id: int,
@@ -232,6 +242,12 @@ async def extract_lab_document(
     results = apply_derived_flags(
         stamp_source_identity(draft_to_results(proposed, document_id), document_id)
     )
+    # Verification and boxes come from the page, never from the model (ADR-007).
+    pages = await _page_words(pdf_bytes, media_type)
+    results = [
+        verify_result(result, pages, page_hint=row.page)
+        for result, row in zip(results, proposed.results, strict=True)
+    ]
     document = LabDocument(
         document_id=document_id,  # assigned here, never taken from the model
         collection_date=_as_date(proposed.collection_date),
@@ -387,8 +403,10 @@ def draft_to_results(draft: LabDraft, document_id: int) -> list[LabResult]:
                 abnormal_flag_source=(
                     AbnormalFlagSource.EXTRACTED if printed else AbnormalFlagSource.UNAVAILABLE
                 ),
+                # Never a model self-report: a legible row starts unverified, and
+                # only app.verification (the page) can raise it (ADR-007).
                 verification_status=(
-                    VerificationStatus.UNREADABLE if row.unreadable else VerificationStatus.VERIFIED_EXACT
+                    VerificationStatus.UNREADABLE if row.unreadable else VerificationStatus.UNVERIFIED
                 ),
                 citation=DocumentCitation(
                     source_id=str(document_id),
