@@ -98,11 +98,27 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
     public function hashExistsForOtherPatient(int $pid, string $sha256): bool
     {
         foreach ($this->records as $r) {
-            if ($r['pid'] !== $pid && $r['content_sha256'] === $sha256) {
+            // 'live' => false models a copy deleted or moved away in OpenEMR.
+            if ($r['pid'] !== $pid && $r['content_sha256'] === $sha256 && ($r['live'] ?? true)) {
                 return true;
             }
         }
         return false;
+    }
+
+    public function releaseMovedRecord(int $documentId, int $pid): bool
+    {
+        $r = $this->records[$documentId] ?? null;
+        if ($r === null || $r['pid'] === $pid) {
+            return true;
+        }
+        foreach ($this->values[$documentId] ?? [] as $v) {
+            if ($v['status'] === 'filed') {
+                return false;
+            }
+        }
+        unset($this->records[$documentId], $this->values[$documentId]);
+        return true;
     }
 
     public function claim(int $documentId, int $pid, string $sha256, string $docType, int $maxAttempts, int $staleSeconds): bool

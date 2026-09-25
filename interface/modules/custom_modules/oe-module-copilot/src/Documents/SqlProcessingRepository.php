@@ -71,11 +71,35 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
 
     public function hashExistsForOtherPatient(int $pid, string $sha256): bool
     {
+        // Only a copy still filed in that chart counts: a copy deleted or moved away in OpenEMR
+        // (e.g. the front desk correcting a wrong-patient upload) must not block the correction.
         $rows = QueryUtils::fetchRecords(
-            "SELECT 1 AS found FROM copilot_document WHERE content_sha256 = ? AND pid <> ? LIMIT 1",
+            "SELECT 1 AS found FROM copilot_document d
+               JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
+              WHERE d.content_sha256 = ? AND d.pid <> ? LIMIT 1",
             [$sha256, $pid]
         );
         return $rows !== [];
+    }
+
+    public function releaseMovedRecord(int $documentId, int $pid): bool
+    {
+        return QueryUtils::inTransaction(static function () use ($documentId, $pid): bool {
+            $rows = QueryUtils::fetchRecords("SELECT pid FROM copilot_document WHERE document_id = ? FOR UPDATE", [$documentId]);
+            if ($rows === [] || Scalar::int($rows[0]['pid'] ?? null) === $pid) {
+                return true;
+            }
+            $filed = QueryUtils::fetchRecords(
+                "SELECT 1 AS found FROM copilot_extracted_value WHERE document_id = ? AND status = 'filed' LIMIT 1",
+                [$documentId]
+            );
+            if ($filed !== []) {
+                return false;
+            }
+            QueryUtils::sqlStatementThrowException("DELETE FROM copilot_extracted_value WHERE document_id = ?", [$documentId]);
+            QueryUtils::sqlStatementThrowException("DELETE FROM copilot_document WHERE document_id = ?", [$documentId]);
+            return true;
+        });
     }
 
     public function claim(int $documentId, int $pid, string $sha256, string $docType, int $maxAttempts, int $staleSeconds): bool

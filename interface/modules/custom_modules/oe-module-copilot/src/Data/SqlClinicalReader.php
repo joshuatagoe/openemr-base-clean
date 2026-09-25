@@ -110,24 +110,30 @@ final class SqlClinicalReader implements ClinicalReaderInterface
     public function listLabResults(int $pid, string $sinceLocal, int $limit): array
     {
         try {
+            // The NEWEST $limit results after $sinceLocal, returned oldest-first. With Week 1's short
+            // since-last-note window every result fits, so this is identical to before; for the Week 2
+            // chart history (all time) a cap must drop the oldest results, never the recent ones.
             $rows = QueryUtils::fetchRecords(
-                "SELECT pr.procedure_result_id AS result_id,
-                        po.procedure_order_id AS order_id,
-                        pr.result_text AS test_name,
-                        pr.result_code AS code,
-                        pr.result AS value,
-                        pr.units,
-                        pr.`range` AS `range`,
-                        pr.abnormal,
-                        pr.result_status,
-                        COALESCE(pr.date, rp.date_report, po.date_ordered) AS observed_at
-                   FROM procedure_order po
-                   JOIN procedure_report rp ON rp.procedure_order_id = po.procedure_order_id
-                   JOIN procedure_result pr ON pr.procedure_report_id = rp.procedure_report_id
-                  WHERE po.patient_id = ?
-                    AND COALESCE(pr.date, rp.date_report, po.date_ordered) > ?
-                  ORDER BY observed_at ASC, pr.procedure_result_id ASC
-                  LIMIT " . max(1, min($limit, 500)),
+                "SELECT * FROM (
+                    SELECT pr.procedure_result_id AS result_id,
+                           po.procedure_order_id AS order_id,
+                           pr.result_text AS test_name,
+                           pr.result_code AS code,
+                           pr.result AS value,
+                           pr.units,
+                           pr.`range` AS `range`,
+                           pr.abnormal,
+                           pr.result_status,
+                           COALESCE(pr.date, rp.date_report, po.date_ordered) AS observed_at
+                      FROM procedure_order po
+                      JOIN procedure_report rp ON rp.procedure_order_id = po.procedure_order_id
+                      JOIN procedure_result pr ON pr.procedure_report_id = rp.procedure_report_id
+                     WHERE po.patient_id = ?
+                       AND COALESCE(pr.date, rp.date_report, po.date_ordered) > ?
+                     ORDER BY observed_at DESC, pr.procedure_result_id DESC
+                     LIMIT " . max(1, min($limit, 500)) . "
+                 ) newest
+                 ORDER BY observed_at ASC, result_id ASC",
                 [$pid, $sinceLocal]
             );
         } catch (Throwable $e) {

@@ -42,7 +42,15 @@ interface ProcessingRepositoryInterface
     public function findSamePatientDuplicate(int $pid, string $sha256, int $excludingDocumentId): ?int;
 
     /** Whether any other patient has a document with this content hash on record. */
+    /** True when the same content is filed, and still live (not deleted or moved away), in another patient's chart. */
     public function hashExistsForOtherPatient(int $pid, string $sha256): bool;
+
+    /**
+     * A document moved to this patient in OpenEMR keeps our record under its old patient. Clear that
+     * record and its candidates so it is processed afresh here. Returns false (and changes nothing)
+     * when a value from it was already filed - that needs a clinician, not an automatic reset.
+     */
+    public function releaseMovedRecord(int $documentId, int $pid): bool;
 
     /**
      * Atomically take a document for processing: creates the record in

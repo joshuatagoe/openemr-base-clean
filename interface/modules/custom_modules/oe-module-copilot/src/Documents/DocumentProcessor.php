@@ -50,6 +50,9 @@ final class DocumentProcessor
 
     public const CODE_DUPLICATE = 'same_content_as_other_document';
     public const CODE_OTHER_CHART = 'same_file_in_other_chart';
+    /** Informational: the printed name/DOB match this chart, so the copy elsewhere is the misfiled one. */
+    public const CODE_OTHER_CHART_NOTED = 'same_file_also_in_other_chart';
+    public const CODE_MOVED_AFTER_FILING = 'moved_after_filing';
     public const CODE_BAD_EXTRACTION = 'bad_extraction';
     public const CODE_STORE_FAILED = 'store_failed';
     public const CODE_NOT_SUPPORTED_YET = 'doc_type_not_supported_yet';
@@ -198,6 +201,9 @@ final class DocumentProcessor
         $sha256 = hash('sha256', $bytes);
 
         try {
+            if (!$this->records->releaseMovedRecord($documentId, $pid)) {
+                return self::CODE_MOVED_AFTER_FILING;
+            }
             $duplicateOf = $this->records->findSamePatientDuplicate($pid, $sha256, $documentId);
             if (!$this->records->claim($documentId, $pid, $sha256, $docType, self::MAX_ATTEMPTS, self::STALE_SECONDS)) {
                 return self::CODE_BUSY;
@@ -266,7 +272,10 @@ final class DocumentProcessor
             );
         unset($printed, $response['printed_identity']);
 
-        $held = $identity === IdentityComparator::MISMATCH || $otherChart;
+        // A printed name/DOB that matches this chart outranks the fingerprint: when the same file is
+        // also in another chart, that other copy is the misfiled one (its own identity check holds it).
+        // Without a match, a copy in another chart is treated as a likely misfiling and held.
+        $held = $identity === IdentityComparator::MISMATCH || ($otherChart && $identity !== IdentityComparator::MATCH);
         $status = $held ? ProcessingRepositoryInterface::STATUS_HELD_IDENTITY : ProcessingRepositoryInterface::STATUS_EXTRACTED;
         $promptVersion = Scalar::str($response['prompt_version'] ?? null);
         try {
@@ -278,7 +287,7 @@ final class DocumentProcessor
                 $promptVersion === '' ? null : mb_substr($promptVersion, 0, 40),
                 $json,
                 $candidates,
-                $otherChart ? self::CODE_OTHER_CHART : null,
+                $otherChart ? ($held ? self::CODE_OTHER_CHART : self::CODE_OTHER_CHART_NOTED) : null,
             );
         } catch (Throwable $e) {
             $this->logger->error('copilot extraction store failed', ['cid' => $correlationId, 'document_id' => $documentId, 'type' => $e::class]);

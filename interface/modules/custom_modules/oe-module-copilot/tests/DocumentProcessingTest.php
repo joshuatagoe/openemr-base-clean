@@ -225,20 +225,109 @@ final class DocumentProcessingTest extends TestCase
         self::assertSame([], $agent->extractionPosts);
     }
 
-    public function testSameFileInAnotherPatientsChartIsHeldWithACodeAndNeverMerged(): void
+    /** A record for the same bytes in another patient's chart. */
+    private static function otherChartCopy(int $documentId, bool $live = true): array
+    {
+        return ['document_id' => $documentId, 'pid' => self::OTHER_PID, 'content_sha256' => hash('sha256', 'shared-bytes'), 'doc_type' => 'lab_pdf', 'status' => 'held_identity', 'prompt_version' => 'lab-v3', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'mismatch', 'extraction_json' => '{}', 'created_at' => '2026-09-24 09:00:00', 'updated_at' => '2026-09-24 09:00:00', 'live' => $live];
+    }
+
+    /** @return array<string,mixed> an OK extract response with no printed name or DOB anywhere */
+    private static function okWithoutIdentity(int $documentId): array
+    {
+        $response = self::ok($documentId, ['printed_identity' => null]);
+        $response['extraction']['printed_identity'] = null;
+        return $response;
+    }
+
+    /**
+     * Decision 2026-09-25: a printed name/DOB that matches this chart outranks the fingerprint.
+     * The front desk uploaded to the wrong patient, then re-uploaded to the right one: the right
+     * copy is extracted (with an informational code) and never merged with the other chart.
+     */
+    public function testSameFileWithAMatchingIdentityIsExtractedWithANote(): void
     {
         $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(21)]], [21 => 'shared-bytes']);
         $repo = new FakeProcessingRepository();
-        $repo->records[20] = ['document_id' => 20, 'pid' => self::OTHER_PID, 'content_sha256' => hash('sha256', 'shared-bytes'), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'lab-v3', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{}', 'created_at' => '2026-09-24 09:00:00', 'updated_at' => '2026-09-24 09:00:00'];
+        $repo->records[20] = self::otherChartCopy(20);
         $agent = new FakeAgentClient();
         $agent->extractions[21] = self::ok(21);
 
         $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
 
+        self::assertSame('extracted', $repo->records[21]['status']);
+        self::assertSame('match', $repo->records[21]['identity_check']);
+        self::assertSame(DocumentProcessor::CODE_OTHER_CHART_NOTED, $repo->records[21]['last_error_code']);
+        self::assertSame('held_identity', $repo->records[20]['status'], 'the other chart is untouched');
+        self::assertNotSame([], $repo->listPendingFacts(self::PID, 50));
+        self::assertSame([], $repo->listPendingFacts(self::OTHER_PID, 50), 'never merged into the other chart');
+    }
+
+    /** Without a matching printed identity, the same file in another chart is a likely misfiling: held. */
+    public function testSameFileWithoutAMatchingIdentityIsHeld(): void
+    {
+        $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(21)]], [21 => 'shared-bytes']);
+        $repo = new FakeProcessingRepository();
+        $repo->records[20] = self::otherChartCopy(20);
+        $agent = new FakeAgentClient();
+        $agent->extractions[21] = self::okWithoutIdentity(21);
+
+        $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
+
         self::assertSame('held_identity', $repo->records[21]['status']);
+        self::assertSame('missing', $repo->records[21]['identity_check']);
         self::assertSame(DocumentProcessor::CODE_OTHER_CHART, $repo->records[21]['last_error_code']);
-        self::assertSame('extracted', $repo->records[20]['status'], 'the other chart is untouched');
         self::assertSame([], $repo->listPendingFacts(self::PID, 50));
+    }
+
+    /** A copy deleted or moved away in OpenEMR no longer counts, so a correction is never blocked by it. */
+    public function testACopyNoLongerFiledInTheOtherChartDoesNotCount(): void
+    {
+        $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(21)]], [21 => 'shared-bytes']);
+        $repo = new FakeProcessingRepository();
+        $repo->records[20] = self::otherChartCopy(20, live: false);
+        $agent = new FakeAgentClient();
+        $agent->extractions[21] = self::okWithoutIdentity(21);
+
+        $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
+
+        self::assertSame('extracted', $repo->records[21]['status']);
+        self::assertNull($repo->records[21]['last_error_code']);
+    }
+
+    /** A document moved to this patient in OpenEMR is processed afresh here; the old record is cleared. */
+    public function testADocumentMovedToThisPatientIsProcessedAfresh(): void
+    {
+        $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(25)]], [25 => 'moved-bytes']);
+        $repo = new FakeProcessingRepository();
+        $repo->records[25] = ['document_id' => 25, 'pid' => self::OTHER_PID, 'content_sha256' => hash('sha256', 'moved-bytes'), 'doc_type' => 'lab_pdf', 'status' => 'held_identity', 'prompt_version' => 'lab-v3', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'mismatch', 'extraction_json' => '{}', 'created_at' => '2026-09-24 09:00:00', 'updated_at' => '2026-09-24 09:00:00'];
+        $repo->values[25] = [['id' => 90, 'document_id' => 25, 'pid' => self::OTHER_PID, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+        $agent->extractions[25] = self::ok(25);
+
+        $result = $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
+
+        self::assertSame([['document_id' => 25, 'outcome' => 'extracted']], $result['processed']);
+        self::assertSame(self::PID, $repo->records[25]['pid']);
+        self::assertSame('match', $repo->records[25]['identity_check']);
+        foreach ($repo->values[25] as $v) {
+            self::assertSame(self::PID, $v['pid'], 'no candidate from the old chart survives');
+        }
+    }
+
+    /** Once a value from a document was filed, moving the document needs a clinician, not an automatic reset. */
+    public function testAMovedDocumentWithAFiledValueIsNotReset(): void
+    {
+        $docs = new FakePatientDocuments([self::PID => [FakePatientDocuments::doc(26)]], [26 => 'filed-bytes']);
+        $repo = new FakeProcessingRepository();
+        $repo->records[26] = ['document_id' => 26, 'pid' => self::OTHER_PID, 'content_sha256' => hash('sha256', 'filed-bytes'), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'lab-v3', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{}', 'created_at' => '2026-09-24 09:00:00', 'updated_at' => '2026-09-24 09:00:00'];
+        $repo->values[26] = [['id' => 91, 'document_id' => 26, 'pid' => self::OTHER_PID, 'status' => 'filed']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->processor($docs, $repo, $agent)->process(self::PID, self::PUUID, 'dr_smith', self::CHART, self::CID);
+
+        self::assertSame([['document_id' => 26, 'outcome' => DocumentProcessor::CODE_MOVED_AFTER_FILING]], $result['processed']);
+        self::assertSame(self::OTHER_PID, $repo->records[26]['pid'], 'the old record is left for a clinician');
+        self::assertSame([], $agent->extractionPosts, 'nothing is sent to the agent');
     }
 
     public function testOnlyLabAndIntakeCategoriesWithSupportedFilesAreProcessed(): void
