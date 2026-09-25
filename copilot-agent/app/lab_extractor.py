@@ -59,7 +59,7 @@ from app.documents import (
     VerificationStatus,
 )
 from app.observability import generation, log_event, span
-from app.page_text import OcrSource, default_ocr_source
+from app.page_text import OcrSource, configured_render_dpi, default_ocr_source
 from app.providers.base import (
     ContentPart,
     DocumentPart,
@@ -251,6 +251,7 @@ async def extract_lab_document(
             document=pdf_bytes,
             media_type=media_type,
             ocr=ocr if ocr is not None else default_ocr_source(),
+            dpi=configured_render_dpi(),
         )
         # Counts and fixed codes only - never a word, a value or a page image.
         attrs.update(

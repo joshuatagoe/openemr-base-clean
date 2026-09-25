@@ -74,6 +74,14 @@ class ServiceSettings(BaseSettings):
         "(needs AWS credentials). The panel shows which one ran.",
     )
     bedrock_region: str = Field(default="us-east-1", description="Region where Cohere Rerank 3.5 is allowed (the AWS organisation's region policy permits bedrock:Rerank only in us-east-1).")
+    ocr: Literal["fake", "textract"] = Field(
+        default="fake",
+        description="OCR for scanned pages and photos (ADR-007). fake = offline, reads nothing unless scripted, "
+        "so OCR-dependent values stay unverified; textract = AWS Textract DetectDocumentText (needs AWS credentials).",
+    )
+    textract_region: str = Field(default="us-east-2", description="The AWS organisation's region policy allows Textract only in us-east-2 (ADR-007 s11a).")
+    textract_timeout_seconds: float = Field(default=10.0, gt=0, le=60, description="Whole budget per page, retries included; botocore retries are off.")
+    ocr_render_dpi: int = Field(default=200, ge=72, le=400, description="Render resolution for OCR: 8-point text at ~22 px, above Textract's 15 px minimum.")
     bundle_ttl_seconds: int = Field(default=900, ge=60, le=3600, description="15 minutes by default.")
     signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
     # Signed bodies are read in chunks and refused past this size, before the

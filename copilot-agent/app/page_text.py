@@ -21,11 +21,13 @@ counts and fixed codes only.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
+import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 import pdfplumber
 import pypdfium2 as pdfium
@@ -245,13 +247,178 @@ class FakeOcr:
         return tuple(Word(text=w.text, page=page, bbox=w.bbox, source="ocr") for w in self.pages.get(page, ()))
 
 
+# --------------------------------------------------------------------------- #
+# The Textract adapter: with reranker.py, one of the two places boto3 may appear
+# --------------------------------------------------------------------------- #
+
+#: ADR-007 s11a: the organisation's service control policy allows Textract in
+#: us-east-2 only (it is denied in us-east-1 and us-west-2). Independent of the
+#: Bedrock region.
+DEFAULT_TEXTRACT_REGION = "us-east-2"
+DEFAULT_TEXTRACT_TIMEOUT_SECONDS = 10.0
+DEFAULT_TEXTRACT_MAX_ATTEMPTS = 2
+TEXTRACT_RETRY_BASE_SECONDS = 0.2
+
+#: Errors a retry cannot fix: permissions, region policy, a document Textract rejects.
+_PERMANENT_TEXTRACT_ERRORS = frozenset({
+    "AccessDeniedException",
+    "UnrecognizedClientException",
+    "InvalidSignatureException",
+    "ExpiredTokenException",
+    "InvalidParameterException",
+    "UnsupportedDocumentException",
+    "BadDocumentException",
+    "DocumentTooLargeException",
+    "ValidationException",
+})
+
+
+def _aws_error_code(exc: Exception) -> str | None:
+    """botocore's ``ClientError`` carries a fixed code such as ``ThrottlingException``."""
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code")
+        return str(code) if code else None
+    return None
+
+
+async def _backoff_sleep(seconds: float) -> None:  # patched out in tests
+    await asyncio.sleep(seconds)
+
+
+class TextractOcr:
+    """AWS Textract ``DetectDocumentText``, synchronous, one page image per call.
+
+    Timeouts and retries: botocore's own retries are off; this adapter makes at
+    most ``max_attempts`` calls with jittered backoff, all inside one
+    ``timeout_seconds`` budget per page. Permissions, region-policy and
+    rejected-document errors are not retried. Every failure is an
+    :class:`OcrError` with a fixed code, which the caller turns into unverified
+    values. Logs carry the exception class and AWS error code - never the
+    message, never a word.
+
+    ``client`` injects a stand-in for tests; otherwise boto3 is imported on the
+    first call (lazily, like the reranker, so importing this module needs no SDK).
+    """
+
+    name = "aws-textract"
+
+    def __init__(
+        self,
+        *,
+        client: Any | None = None,
+        region: str = DEFAULT_TEXTRACT_REGION,
+        timeout_seconds: float = DEFAULT_TEXTRACT_TIMEOUT_SECONDS,
+        max_attempts: int = DEFAULT_TEXTRACT_MAX_ATTEMPTS,
+    ) -> None:
+        self.region = region
+        self.timeout_seconds = timeout_seconds
+        self.max_attempts = max(1, max_attempts)
+        self._client = client
+
+    def client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        try:
+            import boto3  # noqa: PLC0415 - lazy by design (ADR-007 s8)
+            from botocore.config import Config  # noqa: PLC0415
+        except ImportError as exc:  # pragma: no cover - boto3 is a declared dependency
+            raise OcrError(OCR_UNAVAILABLE) from exc
+        self._client = boto3.client(
+            "textract",
+            region_name=self.region,
+            config=Config(
+                read_timeout=self.timeout_seconds,
+                connect_timeout=self.timeout_seconds,
+                retries={"max_attempts": 0},  # retry is bounded here, not by botocore
+            ),
+        )
+        return self._client
+
+    async def read_page(self, png: bytes, *, page: int) -> tuple[Word, ...]:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.timeout_seconds
+        for attempt in range(1, self.max_attempts + 1):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            try:
+                client = self.client()
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(client.detect_document_text, Document={"Bytes": png}), remaining
+                )
+            except TimeoutError:
+                log_event("ocr.textract_timeout", page=page, attempt=attempt, region=self.region)
+                raise OcrError(OCR_TIMEOUT) from None
+            except OcrError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - every fault ends in one fixed code
+                code = _aws_error_code(exc)
+                log_event("ocr.textract_error", page=page, attempt=attempt, error_type=type(exc).__name__,
+                          reason_code=code, region=self.region)
+                if code in _PERMANENT_TEXTRACT_ERRORS or attempt >= self.max_attempts:
+                    raise OcrError(OCR_UNAVAILABLE) from None
+                pause = TEXTRACT_RETRY_BASE_SECONDS * (2 ** (attempt - 1)) * (0.5 + random.random())  # noqa: S311
+                if pause >= deadline - loop.time():
+                    raise OcrError(OCR_TIMEOUT) from None
+                await _backoff_sleep(pause)
+                continue
+            return self._words(response, page)
+        raise OcrError(OCR_TIMEOUT)
+
+    @staticmethod
+    def _words(response: Any, page: int) -> tuple[Word, ...]:
+        """WORD blocks as Words. Textract boxes are already 0-1 of the image we sent."""
+        try:
+            words: list[Word] = []
+            for block in response["Blocks"]:
+                if block.get("BlockType") != "WORD":
+                    continue
+                text = str(block.get("Text", "")).strip()
+                geometry = block["Geometry"]["BoundingBox"]
+                left, top = float(geometry["Left"]), float(geometry["Top"])
+                box = normalised_box(
+                    left, top, left + float(geometry["Width"]), top + float(geometry["Height"]),
+                    width=1.0, height=1.0,
+                )
+                if text and box is not None:  # partly off the image: dropped, never clamped
+                    words.append(Word(text=text, page=page, bbox=box, source="ocr"))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            raise OcrError(OCR_FAILED) from None
+        return tuple(words)
+
+
+_TEXTRACT_SOURCES: dict[tuple[str, float], TextractOcr] = {}
+
+
 def default_ocr_source() -> OcrSource:
-    """The OCR source extraction uses when the caller names none."""
-    return FakeOcr()
+    """The OCR source extraction uses when the caller names none (``COPILOT_OCR``, default fake).
+
+    One TextractOcr per (region, timeout) is kept, so its boto3 client and
+    credential lookup are paid once per process rather than per document.
+    """
+    from app.settings import ServiceSettings  # noqa: PLC0415 - read at call time, so env changes apply
+
+    settings = ServiceSettings()
+    if settings.ocr != "textract":
+        return FakeOcr()
+    key = (settings.textract_region, settings.textract_timeout_seconds)
+    if key not in _TEXTRACT_SOURCES:
+        _TEXTRACT_SOURCES[key] = TextractOcr(region=key[0], timeout_seconds=key[1])
+    return _TEXTRACT_SOURCES[key]
+
+
+def configured_render_dpi() -> int:
+    """``COPILOT_OCR_RENDER_DPI`` (default 200)."""
+    from app.settings import ServiceSettings  # noqa: PLC0415
+
+    return ServiceSettings().ocr_render_dpi
 
 
 __all__ = [
     "DEFAULT_RENDER_DPI",
+    "DEFAULT_TEXTRACT_REGION",
+    "DEFAULT_TEXTRACT_TIMEOUT_SECONDS",
     "OCR_FAILED",
     "OCR_MAX_BYTES",
     "OCR_MAX_SIDE_PX",
@@ -261,10 +428,12 @@ __all__ = [
     "OcrCall",
     "OcrError",
     "OcrSource",
+    "TextractOcr",
     "PageWords",
     "Word",
     "WordSource",
     "normalised_box",
+    "configured_render_dpi",
     "default_ocr_source",
     "orient_image",
     "render_page_png",
