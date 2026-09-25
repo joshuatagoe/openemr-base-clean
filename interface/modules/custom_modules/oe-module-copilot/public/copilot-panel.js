@@ -1234,6 +1234,83 @@
         return String(v.value_text) + (v.unit ? ' ' + String(v.unit) : '');
     }
 
+    const FILE_WARNINGS = {
+        same_result_already_in_chart: 'A result with the same test, collection date and value is already in the chart. It was filed anyway; check whether it is a duplicate.'
+    };
+    const OVERRIDE_REASON_MAX = 500;
+
+    /**
+     * The body of POST .../values/:idx/file, or the reason it must not be sent
+     * yet (ADR-009 §2, 7b.3, 7c.2). Pure. `input`: {typed, confirmUnverified,
+     * date, confirmDate, reason} from the controls beside the value.
+     */
+    function buildFileBody(value, input) {
+        const typed = String(input.typed || '').trim();
+        const extracted = value.value_text === null || value.value_text === undefined ? '' : String(value.value_text);
+        const refuse = (code, message) => ({ ok: false, code: code, message: message });
+        if (value.verification_status === 'unreadable' && typed === '') {
+            return refuse('value_required', 'Type the value as printed on the document to file it.');
+        }
+        if (value.verification_status === 'unverified' && !input.confirmUnverified) {
+            return refuse('confirmation_required', 'The system could not find this value on the page. Confirm that you checked it against the document yourself.');
+        }
+        const date = String(input.date || '').trim();
+        if (!value.collection_date && date === '') {
+            return refuse('collection_date_required', 'No collection date could be read. Enter the collection date you verified on the document or another reliable record.');
+        }
+        const body = {
+            filed_value: typed !== '' && typed !== extracted ? typed : null,
+            confirm_unverified: value.verification_status === 'unverified' && input.confirmUnverified === true
+        };
+        if (date !== '') {
+            body.collection_date = date;
+        }
+        if (input.confirmDate) {
+            const reason = String(input.reason || '').trim();
+            if (reason === '') {
+                return refuse('reason_required', 'Give a reason for correcting the collection date.');
+            }
+            if (reason.length > OVERRIDE_REASON_MAX) {
+                return refuse('reason_too_long', 'The reason can be at most 500 characters.');
+            }
+            body.confirm_date_override = true;
+            body.override_reason = reason;
+        }
+        return { ok: true, body: body };
+    }
+
+    /** How the panel reads an answer of the filing routes. Pure. */
+    function classifyFileResponse(status, data) {
+        const detail = data && data.detail ? data.detail : {};
+        const code = String(detail.code || '');
+        const message = detail.message ? String(detail.message) : '';
+        if (status === 200 && data) {
+            return {
+                kind: data.already_filed ? 'already_filed' : 'filed',
+                message: data.already_filed ? 'This value was already filed; nothing new was written.' : 'Filed into the chart.',
+                warning: data.warning ? (FILE_WARNINGS[data.warning] || 'Warning: ' + String(data.warning)) : null
+            };
+        }
+        if (code === 'collection_date_conflict') {
+            return { kind: 'date_conflict', message: message, extracted: detail.extracted_collection_date || null, entered: detail.entered_collection_date || null };
+        }
+        const kinds = {
+            collection_date_required: 'date_required',
+            confirmation_required: 'confirm_unverified',
+            value_required: 'value_required',
+            value_rejected: 'closed',
+            value_unfiled: 'closed',
+            value_already_filed: 'closed',
+            document_not_extracted: 'closed',
+            not_fileable: 'closed',
+            value_not_found: 'closed'
+        };
+        return {
+            kind: kinds[code] || 'error',
+            message: message ? message + ' (' + code + ')' : 'The request could not be completed (' + (status ? 'http_' + status : 'network') + ').'
+        };
+    }
+
     // pdf.js 6.3.289, vendored next to this script (module README records version and integrity).
     const SCRIPT_SRC = document.currentScript && document.currentScript.src ? document.currentScript.src : '';
     const PDFJS_VERSION = '6.3.289';
@@ -1564,6 +1641,7 @@
     class DocumentsSection {
         /** @param {{loadPdfjs?: function}} [options] test seam for the viewer */
         constructor(container, options) {
+            this.container = container;
             this.api = new CopilotApi(container);
             this.docs = [];
             this.values = {}; // document_id -> values response
@@ -1813,7 +1891,7 @@
         }
 
         /** The value beside the page: what was read, how it was verified, where it stands. */
-        valuePanel(doc, value) {
+        valuePanel(doc, value, notice) {
             const panel = el('div', 'small');
             panel.dataset.role = 'value-panel';
             panel.dataset.documentId = String(doc.document_id);
@@ -1839,15 +1917,314 @@
             status.appendChild(explain(el('span', 'badge ' + st[1], st[0]), 'value_' + String(value.status)));
             status.dataset.role = 'value-status';
             panel.appendChild(status);
+            const message = el('div', 'mt-1');
+            message.dataset.role = 'filing-message';
+            message.setAttribute('role', 'status');
+            message.setAttribute('aria-live', 'polite');
+            if (notice) {
+                message.className = 'mt-1 ' + (notice.error ? 'text-danger' : 'text-success');
+                message.textContent = String(notice.text || '');
+                if (notice.warning) {
+                    message.appendChild(el('div', 'text-warning', String(notice.warning)));
+                }
+            }
+            const data = this.values[doc.document_id];
+            if (value.status === 'candidate' && data && data.status === 'extracted') {
+                panel.appendChild(this.filingForm(doc, value, message));
+            } else if (value.status === 'filed') {
+                panel.appendChild(this.unfileButton(doc.document_id, value, message));
+            }
+            panel.appendChild(message);
             return panel;
         }
 
-        unfileButton() {
-            return el('span');
+        /** Verify and file / Reject beside the outlined value (ADR-003, ADR-009). */
+        filingForm(doc, value, message) {
+            const idBase = 'oe-copilot-' + String(doc.document_id) + '-' + String(value.result_index);
+            const box = el('div', 'mt-2');
+            box.dataset.role = 'filing-form';
+            let busy = false;
+            let conflictShown = false;
+
+            const label = el('label', 'mb-0 d-block', 'Value to file');
+            const input = el('input', 'form-control form-control-sm');
+            input.type = 'text';
+            input.maxLength = 255;
+            input.id = idBase + '-value';
+            input.value = value.value_text === null || value.value_text === undefined ? '' : String(value.value_text);
+            input.dataset.role = 'filed-value';
+            label.htmlFor = input.id;
+            box.appendChild(label);
+            box.appendChild(input);
+            box.appendChild(el('div', 'text-muted mb-1', value.verification_status === 'unreadable'
+                ? 'Unreadable: type the value exactly as printed on the document.'
+                : 'Change it only if the document shows something different. A changed value is filed as corrected, and the value as read is kept.'));
+
+            let confirm = null;
+            if (value.verification_status === 'unverified') {
+                box.appendChild(explain(el('div', 'text-warning', 'The system could not find this value on the page. Filing it needs your extra confirmation.'), 'verification_unverified'));
+                const wrap = el('div', 'form-check');
+                confirm = el('input', 'form-check-input');
+                confirm.type = 'checkbox';
+                confirm.id = idBase + '-confirm';
+                confirm.dataset.role = 'confirm-unverified';
+                const cl = el('label', 'form-check-label', 'I checked this value against the document myself');
+                cl.htmlFor = confirm.id;
+                wrap.appendChild(confirm);
+                wrap.appendChild(cl);
+                box.appendChild(wrap);
+            }
+
+            const date = el('input', 'form-control form-control-sm');
+            date.type = 'date';
+            date.id = idBase + '-date';
+            date.dataset.role = 'collection-date';
+            date.max = new Date().toISOString().slice(0, 10);
+            const dateLabel = el('label', 'mb-0 mt-1 d-block', value.collection_date
+                ? 'Collection date as printed on the document'
+                : 'Collection date (verified from the document or another reliable record)');
+            dateLabel.htmlFor = date.id;
+            if (value.collection_date) {
+                const correct = el('button', 'btn btn-link btn-sm p-0', 'Correct the collection date');
+                correct.type = 'button';
+                correct.dataset.action = 'correct-date';
+                date.hidden = true;
+                dateLabel.hidden = true;
+                correct.addEventListener('click', () => {
+                    date.hidden = false;
+                    dateLabel.hidden = false;
+                    correct.hidden = true;
+                    date.focus();
+                });
+                box.appendChild(correct);
+            }
+            box.appendChild(dateLabel);
+            box.appendChild(date);
+
+            const conflict = el('div', 'border border-warning rounded p-2 mt-2');
+            conflict.dataset.role = 'date-conflict';
+            conflict.hidden = true;
+            explain(conflict, 'collection_date_conflict');
+            conflict.appendChild(el('div', 'font-weight-bold mb-1', 'The collection dates differ'));
+            const dates = el('table', 'table table-sm table-bordered mb-1');
+            const headRow = el('tr');
+            headRow.appendChild(el('th', null, 'Read from the document'));
+            headRow.appendChild(el('th', null, 'You entered'));
+            const dateRow = el('tr');
+            const extractedCell = el('td');
+            const enteredCell = el('td');
+            dateRow.appendChild(extractedCell);
+            dateRow.appendChild(enteredCell);
+            dates.appendChild(headRow);
+            dates.appendChild(dateRow);
+            conflict.appendChild(dates);
+            const cwrap = el('div', 'form-check');
+            const confirmDate = el('input', 'form-check-input');
+            confirmDate.type = 'checkbox';
+            confirmDate.id = idBase + '-confirm-date';
+            confirmDate.dataset.role = 'confirm-date';
+            const cdl = el('label', 'form-check-label', 'The date read from the document is wrong; file the date I entered');
+            cdl.htmlFor = confirmDate.id;
+            cwrap.appendChild(confirmDate);
+            cwrap.appendChild(cdl);
+            conflict.appendChild(cwrap);
+            const reasonLabel = el('label', 'mb-0 mt-1 d-block', 'Reason for the correction (kept in the EHR audit log)');
+            const reason = el('textarea', 'form-control form-control-sm');
+            reason.id = idBase + '-reason';
+            reason.rows = 2;
+            reason.maxLength = OVERRIDE_REASON_MAX;
+            reason.dataset.role = 'override-reason';
+            reasonLabel.htmlFor = reason.id;
+            conflict.appendChild(reasonLabel);
+            conflict.appendChild(reason);
+            box.appendChild(conflict);
+
+            const buttons = el('div', 'mt-2');
+            const file = el('button', 'btn btn-success btn-sm mr-2', 'Verify and file');
+            file.type = 'button';
+            file.dataset.action = 'file';
+            explain(file, 'verify_and_file');
+            const reject = el('button', 'btn btn-outline-danger btn-sm', 'Reject');
+            reject.type = 'button';
+            reject.dataset.action = 'reject';
+            explain(reject, 'reject_value');
+            buttons.appendChild(file);
+            buttons.appendChild(reject);
+            box.appendChild(buttons);
+
+            const say = (text, cls) => {
+                message.textContent = text;
+                message.className = 'mt-1 ' + (cls || 'text-muted');
+            };
+            const update = () => {
+                file.disabled = busy
+                    || (confirm !== null && !confirm.checked)
+                    || (conflictShown && (!confirmDate.checked || reason.value.trim() === ''));
+                reject.disabled = busy;
+            };
+            [confirm, confirmDate, reason].forEach((n) => {
+                if (n) {
+                    n.addEventListener('change', update);
+                    n.addEventListener('input', update);
+                }
+            });
+            date.addEventListener('change', () => {
+                // A different date needs its own confirmation: start the correction over.
+                conflictShown = false;
+                conflict.hidden = true;
+                confirmDate.checked = false;
+                update();
+            });
+
+            file.addEventListener('click', async () => {
+                const built = buildFileBody(value, {
+                    typed: input.value,
+                    confirmUnverified: confirm !== null && confirm.checked,
+                    date: date.hidden ? '' : date.value,
+                    confirmDate: conflictShown && confirmDate.checked,
+                    reason: reason.value
+                });
+                if (!built.ok) {
+                    say(built.message, 'text-danger');
+                    if (built.code === 'collection_date_required') {
+                        date.hidden = false;
+                        dateLabel.hidden = false;
+                    }
+                    return;
+                }
+                busy = true;
+                update();
+                say('Filing…');
+                const result = await this.api.json('POST', '/documents/' + encodeURIComponent(String(doc.document_id)) + '/values/' + encodeURIComponent(String(value.result_index)) + '/file', built.body);
+                busy = false;
+                const r = classifyFileResponse(result.status, result.data);
+                if (r.kind === 'filed' || r.kind === 'already_filed') {
+                    await this.afterAction(doc, value.result_index, { text: r.message, warning: r.warning });
+                    return;
+                }
+                if (r.kind === 'closed') {
+                    await this.afterAction(doc, value.result_index, { text: r.message, error: true });
+                    return;
+                }
+                if (r.kind === 'date_conflict') {
+                    extractedCell.textContent = String(r.extracted || 'none');
+                    enteredCell.textContent = String(r.entered || date.value);
+                    conflictShown = true;
+                    conflict.hidden = false;
+                    say('The collection date you entered differs from the one read from the document. Check both, confirm the correction and give a reason, then file again.', 'text-warning');
+                } else {
+                    if (r.kind === 'date_required') {
+                        date.hidden = false;
+                        dateLabel.hidden = false;
+                    }
+                    say(r.message, 'text-danger');
+                }
+                update();
+            });
+
+            reject.addEventListener('click', async () => {
+                if (reject.dataset.armed !== '1') {
+                    reject.dataset.armed = '1';
+                    reject.textContent = 'Confirm reject';
+                    say('Click “Confirm reject” to reject this value. A rejected value cannot be filed afterwards.', 'text-warning');
+                    return;
+                }
+                busy = true;
+                update();
+                const result = await this.api.json('POST', '/documents/' + encodeURIComponent(String(doc.document_id)) + '/values/' + encodeURIComponent(String(value.result_index)) + '/reject', {});
+                busy = false;
+                if (result.status === 200) {
+                    await this.afterAction(doc, value.result_index, { text: result.data && result.data.already_rejected ? 'This value was already rejected.' : 'Rejected. It will not be filed.' });
+                    return;
+                }
+                const r = classifyFileResponse(result.status, result.data);
+                if (r.kind === 'closed') {
+                    await this.afterAction(doc, value.result_index, { text: r.message, error: true });
+                    return;
+                }
+                say(r.message, 'text-danger');
+                update();
+            });
+            update();
+            return box;
         }
 
+        /** Two-step Un-file: the chart result is kept, marked entered-in-error (ADR-009 §7, 7b). */
+        unfileButton(documentId, value, message) {
+            const button = el('button', 'btn btn-outline-secondary btn-sm py-0 ml-1', 'Un-file');
+            button.type = 'button';
+            button.dataset.action = 'unfile';
+            explain(button, 'unfile_value');
+            const say = (text, cls) => {
+                if (message) {
+                    message.textContent = text;
+                    message.className = 'mt-1 ' + (cls || 'text-muted');
+                } else {
+                    button.title = text;
+                }
+            };
+            button.addEventListener('click', async () => {
+                if (button.dataset.armed !== '1') {
+                    button.dataset.armed = '1';
+                    button.textContent = 'Confirm un-file';
+                    say('Un-filing keeps the chart result and marks it entered-in-error. Click “Confirm un-file” to continue.', 'text-warning');
+                    return;
+                }
+                button.disabled = true;
+                const result = await this.api.json('POST', '/documents/' + encodeURIComponent(String(documentId)) + '/values/' + encodeURIComponent(String(value.result_index)) + '/unfile', {});
+                const doc = this.docFor(documentId);
+                if (result.status === 200) {
+                    await this.afterAction(doc, value.result_index, { text: result.data && result.data.already_unfiled ? 'This value was already un-filed.' : 'Un-filed: the chart result is kept and marked entered-in-error.' });
+                    return;
+                }
+                const r = classifyFileResponse(result.status, result.data);
+                if (r.kind === 'closed') {
+                    await this.afterAction(doc, value.result_index, { text: r.message, error: true });
+                    return;
+                }
+                button.disabled = false;
+                say(r.message, 'text-danger');
+            });
+            return button;
+        }
+
+        /** After file / reject / un-file: refresh the list and values, and the panel beside the page. */
+        async afterAction(doc, resultIndex, notice) {
+            await this.refreshList();
+            const panel = this.viewerHost.querySelector('[data-role="value-panel"]');
+            if (panel && panel.dataset.documentId === String(doc.document_id) && panel.dataset.resultIndex === String(resultIndex)) {
+                const fresh = this.valueFor(doc.document_id, resultIndex);
+                if (fresh) {
+                    panel.replaceWith(this.valuePanel(this.docFor(doc.document_id), fresh, notice));
+                }
+            }
+        }
+
+        /** Chart results filed from a document get a link back to their source (result-source route). */
         annotateFiledResults() {
-            return undefined;
+            const items = this.container.querySelectorAll('[data-record-id^="procedure_result:"]');
+            items.forEach((item) => {
+                const rid = String(item.dataset.recordId).slice('procedure_result:'.length);
+                if (!/^\d+$/.test(rid) || !this.filedResults[rid] || item.querySelector('[data-action="result-source"]')) {
+                    return;
+                }
+                const link = el('button', 'btn btn-link btn-sm py-0', 'Source document');
+                link.type = 'button';
+                link.dataset.action = 'result-source';
+                explain(link, 'filed_result_source');
+                link.addEventListener('click', () => this.openResultSource(rid, link));
+                item.appendChild(link);
+            });
+        }
+
+        async openResultSource(rid, link) {
+            const result = await this.api.json('GET', '/results/' + encodeURIComponent(rid) + '/source');
+            if (result.status !== 200 || !result.data) {
+                link.textContent = 'Source document: ' + problemText(result, 'unavailable');
+                return;
+            }
+            const s = result.data;
+            await this.openSource(s.document_id, s.result_index, { page: s.page, bbox: s.bbox, located: Array.isArray(s.bbox) });
         }
     }
 
@@ -1881,7 +2258,9 @@
             imageFrame: imageFrame,
             describeDocument: describeDocument,
             DocumentsSection: DocumentsSection,
-            SourceViewer: SourceViewer
+            SourceViewer: SourceViewer,
+            buildFileBody: buildFileBody,
+            classifyFileResponse: classifyFileResponse
         };
     }
 })();
