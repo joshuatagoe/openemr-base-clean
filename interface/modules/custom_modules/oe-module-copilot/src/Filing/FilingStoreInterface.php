@@ -49,18 +49,33 @@ interface FilingStoreInterface
      */
     public function lockCandidate(int $documentId, int $resultIndex): ?array;
 
-    /** The `procedure_report` an earlier filing from this document created, or null. */
-    public function findDocumentReport(int $documentId): ?int;
+    /**
+     * The `procedure_order` an earlier filing from this document created (found
+     * through any of its filed or un-filed values), or null.
+     */
+    public function findDocumentOrder(int $documentId): ?int;
+
+    /**
+     * The `procedure_report` of this order collected at exactly `$collectedAt`
+     * (ADR-009 7c: one report per distinct collection date), or null.
+     */
+    public function findReportForDate(int $orderId, string $collectedAt): ?int;
 
     /** Id of the "Outside lab (document)" provider row, creating it the first time. */
     public function findOrCreateOutsideLab(): int;
 
     /**
      * One outside-lab `procedure_order` (complete, laboratory_test, history
-     * order, active), its `procedure_order_code` seq 1, and one reviewed
-     * `procedure_report`; returns the report id.
+     * order, active) and its `procedure_order_code` seq 1; returns the order id.
      */
-    public function createOrderAndReport(int $pid, int $userId, int $labId, string $collectedAt): int;
+    public function createOrder(int $pid, int $userId, int $labId, string $collectedAt): int;
+
+    /**
+     * One reviewed `procedure_report` on the order's seq 1, collected and
+     * reported at `$collectedAt` (the report date is FHIR's effectiveDateTime
+     * and the lab view's date); returns the report id.
+     */
+    public function createReport(int $orderId, int $userId, string $collectedAt): int;
 
     /**
      * @param ResultRow $result

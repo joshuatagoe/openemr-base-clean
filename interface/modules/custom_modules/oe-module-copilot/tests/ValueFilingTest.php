@@ -170,6 +170,51 @@ final class ValueFilingTest extends TestCase
         self::assertSame('', $second['result_code'], 'no LOINC code in the extraction -> empty, never guessed');
     }
 
+    /** ADR-009 7c.1: one order per document, one report per distinct collection date within it. */
+    public function testEachCollectionDateGetsItsOwnReportInTheDocumentsOrder(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->store->addCandidate(self::DOC, self::PID, 1, ['test_name' => 'Glucose', 'value_text' => '142', 'collection_date' => '2026-08-15']);
+        $this->store->addCandidate(self::DOC, self::PID, 2, ['test_name' => 'LDL', 'value_text' => '99', 'collection_date' => '2026-09-01']);
+
+        $first = $this->file(0)['body']['procedure_result_id'];
+        $second = $this->file(1)['body']['procedure_result_id'];
+        $third = $this->file(2)['body']['procedure_result_id'];
+
+        self::assertCount(1, $this->store->orders, 'one outside-lab order per document');
+        self::assertCount(2, $this->store->reports, 'one report per distinct collection date');
+        $orderId = array_key_first($this->store->orders);
+        foreach ($this->store->reports as $report) {
+            self::assertSame($orderId, $report['order_id']);
+        }
+
+        $reportOf = fn (int $resultId): array => $this->store->reports[$this->store->results[$resultId]['procedure_report_id']];
+        self::assertSame('2026-09-01 00:00:00', $reportOf($first)['date_collected']);
+        self::assertSame('2026-09-01 00:00:00', $reportOf($first)['date_report']);
+        self::assertSame('2026-08-15 00:00:00', $reportOf($second)['date_collected']);
+        self::assertSame('2026-08-15 00:00:00', $reportOf($second)['date_report']);
+        self::assertSame('2026-08-15 00:00:00', $this->store->results[$second]['date']);
+        self::assertSame(
+            $this->store->results[$first]['procedure_report_id'],
+            $this->store->results[$third]['procedure_report_id'],
+            'a value with an already-filed date reuses that date\'s report'
+        );
+        self::assertNotSame($this->store->results[$first]['procedure_report_id'], $this->store->results[$second]['procedure_report_id']);
+    }
+
+    public function testTheDocumentsOrderIsReusedAfterAValueWasUnfiled(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->store->addCandidate(self::DOC, self::PID, 1, ['test_name' => 'Glucose', 'value_text' => '142', 'collection_date' => '2026-08-15']);
+        $this->file(0);
+        $this->unfile(0);
+
+        self::assertSame(200, $this->file(1)['status']);
+
+        self::assertCount(1, $this->store->orders);
+        self::assertCount(2, $this->store->reports);
+    }
+
     public function testASecondClickReturnsTheExistingResult(): void
     {
         $this->store->addCandidate(self::DOC, self::PID, 0);
@@ -351,14 +396,134 @@ final class ValueFilingTest extends TestCase
         self::assertStringNotContainsString('clinician', array_values($this->store->results)[0]['comments']);
     }
 
-    public function testAClinicianDateCannotOverrideAnExtractedOne(): void
+    /** ADR-009 7c.2 (replaces 7b's "cannot be overridden"): refused without confirmation, both dates returned. */
+    public function testADifferingDateWithoutConfirmationIsRefusedWithBothDates(): void
+    {
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0);
+        foreach ([
+            ['collection_date' => '2026-08-30'],
+            ['collection_date' => '2026-08-30', 'override_reason' => 'Misread'],
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => true],
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => true, 'override_reason' => '   '],
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => false, 'override_reason' => 'Misread'],
+        ] as $body) {
+            $conflict = $this->file(0, $body);
+            self::assertSame(409, $conflict['status'], json_encode($body));
+            $detail = $conflict['body']['detail'];
+            self::assertSame('collection_date_conflict', $detail['code']);
+            self::assertSame('2026-09-01', $detail['extracted_collection_date']);
+            self::assertSame('2026-08-30', $detail['entered_collection_date']);
+        }
+        $this->assertNothingWritten();
+        self::assertSame('candidate', $this->candidate($cid)['status']);
+        foreach ($this->audit->events as $event) {
+            self::assertFalse($event['success']);
+            self::assertStringContainsString('outcome=collection_date_conflict', $event['comment']);
+        }
+        self::assertStringNotContainsString('2026-08-30', $this->logger->dump());
+        self::assertStringNotContainsString('2026-09-01', $this->logger->dump());
+        self::assertStringNotContainsString('Misread', $this->logger->dump());
+    }
+
+    public function testTheSameDateIsNotAnOverride(): void
     {
         $this->store->addCandidate(self::DOC, self::PID, 0);
-        $conflict = $this->file(0, ['collection_date' => '2026-08-30']);
-        self::assertSame(422, $conflict['status']);
-        self::assertSame('collection_date_conflict', $conflict['body']['detail']['code']);
+        $result = $this->file(0, ['collection_date' => '2026-09-01']);
+        self::assertSame(200, $result['status'], 'the same date is not a conflict');
+        self::assertSame('final', $result['body']['result_status']);
+        self::assertStringContainsString('collection_date_source=extracted', $this->audit->events[0]['comment']);
+        self::assertStringNotContainsString('corrected', array_values($this->store->results)[0]['comments']);
+    }
+
+    public function testAConfirmedOverrideWithAReasonFilesTheCorrectedDateAndAuditsBothDates(): void
+    {
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0);
+
+        $result = $this->file(0, [
+            'collection_date' => '2026-08-30',
+            'confirm_date_override' => true,
+            'override_reason' => "  Day and month misread; the requisition says 30 Aug.\n ",
+        ]);
+
+        self::assertSame(200, $result['status'], json_encode($result['body']));
+        self::assertSame('final', $result['body']['result_status'], 'the value itself was not changed');
+        $row = array_values($this->store->results)[0];
+        self::assertSame('2026-08-30 00:00:00', $row['date']);
+        $report = array_values($this->store->reports)[0];
+        self::assertSame('2026-08-30 00:00:00', $report['date_collected']);
+        self::assertSame('2026-08-30 00:00:00', $report['date_report']);
+        self::assertStringContainsString('collection date corrected by clinician', $row['comments']);
+        self::assertStringContainsString('2026-09-01', $row['comments'], 'the comments keep the document\'s date');
+        self::assertSame('2026-09-01', $this->candidate($cid)['collection_date'], 'the extracted date is not rewritten');
+
+        self::assertCount(1, $this->audit->events);
+        $event = $this->audit->events[0];
+        self::assertSame(FilingController::AUDIT_FILED, $event['event']);
+        self::assertTrue($event['success']);
+        self::assertSame('dr_smith', $event['user'], 'the clinician is the session user');
+        self::assertSame(self::PID, $event['pid']);
+        self::assertStringContainsString('collection_date_source=corrected', $event['comment']);
+        self::assertStringContainsString('extracted_collection_date=2026-09-01', $event['comment']);
+        self::assertStringContainsString('entered_collection_date=2026-08-30', $event['comment']);
+        self::assertStringContainsString('override_reason="Day and month misread; the requisition says 30 Aug."', $event['comment']);
+
+        $logs = $this->logger->dump();
+        foreach (['2026-08-30', '2026-09-01', 'misread', 'requisition'] as $needle) {
+            self::assertStringNotContainsString($needle, $logs, 'application logs stay free of dates and reasons');
+        }
+        self::assertStringNotContainsString('2026-08-30', json_encode($result['body'], JSON_THROW_ON_ERROR));
+    }
+
+    public function testTheOverrideReasonIsKeptOnOneAuditLineAndCannotForgeFields(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $result = $this->file(0, [
+            'collection_date' => '2026-08-30',
+            'confirm_date_override' => true,
+            'override_reason' => "wrong\"; outcome=forged\r\nline",
+        ]);
+        self::assertSame(200, $result['status']);
+        $comment = $this->audit->events[0]['comment'];
+        self::assertStringNotContainsString("\n", $comment);
+        self::assertStringNotContainsString("\r", $comment);
+        self::assertSame(1, substr_count($comment, 'outcome=filed'));
+        self::assertStringContainsString('override_reason="wrong\"; outcome=forged line"', $comment);
+    }
+
+    public function testTheOverrideFieldsAreValidated(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        foreach ([
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => 'yes', 'override_reason' => 'Misread'],
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => true, 'override_reason' => 42],
+            ['collection_date' => '2026-08-30', 'confirm_date_override' => true, 'override_reason' => str_repeat('x', 501)],
+        ] as $body) {
+            $result = $this->file(0, $body);
+            self::assertSame(400, $result['status'], json_encode($body));
+            self::assertSame('invalid_request', $result['body']['detail']['code']);
+        }
         $this->assertNothingWritten();
-        self::assertSame(200, $this->file(0, ['collection_date' => '2026-09-01'])['status'], 'the same date is not a conflict');
+        $ok = $this->file(0, ['collection_date' => '2026-08-30', 'confirm_date_override' => true, 'override_reason' => ' ' . str_repeat('x', 500) . ' ']);
+        self::assertSame(200, $ok['status'], 'the limit applies to the trimmed reason');
+    }
+
+    public function testAnOverrideConfirmationWithoutAnExtractedDateIsAPlainClinicianDate(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0, ['collection_date' => null]);
+        $result = $this->file(0, ['collection_date' => '2026-08-30', 'confirm_date_override' => true, 'override_reason' => 'Misread']);
+        self::assertSame(200, $result['status']);
+        self::assertStringContainsString('collection_date_source=clinician', $this->audit->events[0]['comment']);
+        self::assertStringNotContainsString('2026-08-30', $this->audit->events[0]['comment']);
+        self::assertStringContainsString('collection date entered by clinician', array_values($this->store->results)[0]['comments']);
+    }
+
+    public function testAnOverrideWithoutADateStillFilesTheExtractedDate(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $result = $this->file(0, ['confirm_date_override' => true, 'override_reason' => 'Misread']);
+        self::assertSame(200, $result['status']);
+        self::assertSame('2026-09-01 00:00:00', array_values($this->store->results)[0]['date']);
+        self::assertStringContainsString('collection_date_source=extracted', $this->audit->events[0]['comment']);
     }
 
     public function testACollectionDateMustBeAnIsoDateNotInTheFuture(): void
