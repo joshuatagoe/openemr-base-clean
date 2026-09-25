@@ -246,7 +246,13 @@ class RoutingDecision(StrictModel):
     source: Literal["supervisor"]
     target: Literal["intake-extractor", "evidence-retriever", "answer", "finish"]
     reason_code: Literal[
-        "document_pending_extraction", "evidence_required", "evidence_ready", "briefing_complete", "worker_failed"
+        "document_pending_extraction",
+        "evidence_required",
+        "evidence_ready",
+        "briefing_complete",
+        "worker_failed",
+        "budget_exhausted",
+        "iteration_limit",
     ]
     doc_type: Literal["lab_pdf", "intake_form"]
 
