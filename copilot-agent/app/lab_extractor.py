@@ -46,6 +46,7 @@ from pydantic import Field
 
 from app.contracts import StrictModel
 from app.documents import (
+    SUPPORTED_MEDIA_TYPES,
     AbnormalFlag,
     AbnormalFlagSource,
     DocumentCitation,
@@ -73,11 +74,6 @@ from app.providers.stub_provider import StubProvider
 # a malformed document cannot turn into an unbounded generation.
 LAB_MAX_OUTPUT_TOKENS = 4096
 
-# What a vision model can actually read. Sending anything else is a wasted paid
-# call, so it is refused here rather than at the vendor.
-SUPPORTED_MEDIA_TYPES = frozenset(
-    {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"}
-)
 
 
 # --------------------------------------------------------------------------- #
