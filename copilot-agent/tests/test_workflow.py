@@ -47,7 +47,7 @@ def _request(pdf: str = "lab_hba1c_clean.pdf", **over: Any) -> DocumentBriefingR
 
 async def _run(request: DocumentBriefingRequest, provider: Any = None) -> Any:
     return await run_supervised_briefing(
-        request, provider=provider or StubProvider(), reranker=build_reranker("fake", region="us-west-2")
+        request, provider=provider or StubProvider(), reranker=build_reranker("fake", region="us-east-1")
     )
 
 

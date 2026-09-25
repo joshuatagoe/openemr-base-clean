@@ -66,7 +66,9 @@ DEFAULT_TOP_K = 5
 
 #: ADR-002. Pinned, logged per call, and never inferred from configuration.
 BEDROCK_RERANK_MODEL_ID = "cohere.rerank-v3-5:0"
-DEFAULT_BEDROCK_REGION = "us-west-2"
+#: us-east-1: the only region where the AWS organisation's region policy (SCP p-j60ytn63) allows
+#: bedrock:Rerank for this account - us-west-2 is denied by policy, verified 2026-09-25.
+DEFAULT_BEDROCK_REGION = "us-east-1"
 
 #: Honest about being a local heuristic; no reader can mistake it for a model.
 FAKE_RERANKER_MODEL_ID = "fake-lexical-coverage-v1 (local, deterministic)"

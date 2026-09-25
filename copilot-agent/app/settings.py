@@ -73,7 +73,7 @@ class ServiceSettings(BaseSettings):
         description="Week 2 reranker. fake = deterministic, offline; bedrock = Cohere Rerank 3.5 via Amazon Bedrock "
         "(needs AWS credentials). The panel shows which one ran.",
     )
-    bedrock_region: str = Field(default="us-west-2", description="Region where Cohere Rerank 3.5 access is enabled.")
+    bedrock_region: str = Field(default="us-east-1", description="Region where Cohere Rerank 3.5 is allowed (the AWS organisation's region policy permits bedrock:Rerank only in us-east-1).")
     bundle_ttl_seconds: int = Field(default=900, ge=60, le=3600, description="15 minutes by default.")
     signature_max_skew_seconds: int = Field(default=300, ge=10, le=3600)
     # Signed bodies are read in chunks and refused past this size, before the

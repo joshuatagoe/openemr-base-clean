@@ -448,3 +448,14 @@ def test_a_bedrock_failure_logs_its_aws_error_code_but_never_its_message(
     blob = " ".join(json.dumps(r.__dict__, default=str) for r in logged)
     assert "AccessDeniedException" in blob and "AccessDenied" in blob
     assert "secret detail" not in blob
+
+
+def test_the_bedrock_region_default_is_the_one_the_account_may_use() -> None:
+    """The settings default and the adapter default agree, and both are us-east-1: the AWS
+    organisation's region policy denies bedrock:Rerank in us-west-2 (verified 2026-09-25), so a
+    drifted default would silently degrade every briefing to "reranker unavailable"."""
+    from app.reranker import DEFAULT_BEDROCK_REGION
+    from app.settings import ServiceSettings
+
+    assert DEFAULT_BEDROCK_REGION == "us-east-1"
+    assert ServiceSettings.model_fields["bedrock_region"].default == DEFAULT_BEDROCK_REGION

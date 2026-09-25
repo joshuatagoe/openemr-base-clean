@@ -99,7 +99,7 @@ The document is stored by OpenEMR, not by the Co-Pilot: the module reads the pat
 | Variable | Default | Purpose |
 |---|---|---|
 | `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock — **set in production**. The panel's footer names whichever ran; a failed call logs `rerank.bedrock_error` with the AWS error code |
-| `COPILOT_BEDROCK_REGION` | `us-west-2` | Region where Cohere Rerank 3.5 access is enabled |
+| `COPILOT_BEDROCK_REGION` | `us-east-1` | Region for Cohere Rerank 3.5. The AWS organisation's region policy allows `bedrock:Rerank` only in us-east-1 (us-west-2 is denied) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
 | `COPILOT_MAX_SIGNED_BODY_BYTES` | `15728640` (15 MiB) | Signed request bodies over this are refused with 413 while being read, before the signature is checked. Fits the 10 MiB document cap after base64 |
 | `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Per model call. Set `40` in production: the briefing makes two sequential calls (~18 s total), and 2 × 40 s stays inside the module's 90 s round-trip timeout |
