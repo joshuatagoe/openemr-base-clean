@@ -15,6 +15,9 @@
  *    patient; a `pid` in the body is only checked for staleness.
  *  - `GET /api/copilot/document-file/:did` - the source file for the preview
  *    (ADR-008 §3), same authorizer; see Controller\DocumentFileController.
+ *  - `POST /api/copilot/documents/:did/values/:idx/file` and `.../reject` -
+ *    Verify and file / reject one extracted value (ADR-009); see
+ *    Controller\FilingController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
  *      copilot_admin_relationship_override (bool, default off) - allow
  *        admin/super users without a care relationship, audited as such
@@ -49,12 +52,15 @@ use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
 use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
+use OpenEMR\Modules\Copilot\Controller\FilingController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Data\SqlSchemaStatus;
 use OpenEMR\Modules\Copilot\Documents\DocumentProcessor;
 use OpenEMR\Modules\Copilot\Documents\SqlProcessingRepository;
+use OpenEMR\Modules\Copilot\Filing\SqlFilingStore;
+use OpenEMR\Modules\Copilot\Filing\ValueFiler;
 use OpenEMR\Modules\Copilot\Observability\LangfuseTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Observability\NullTicketOutcomeReporter;
 use OpenEMR\Modules\Copilot\Panel\PanelRenderer;
@@ -72,6 +78,8 @@ final class Bootstrap
     public const ROUTE_DOCUMENTS_PROCESS = 'POST /api/copilot/documents/process';
     public const ROUTE_DOCUMENTS_LIST = 'GET /api/copilot/documents';
     public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
+    public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
+    public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -143,6 +151,14 @@ final class Bootstrap
             self::ROUTE_DOCUMENT_FILE,
             static fn(string $did, HttpRestRequest $request) => self::createDocumentFileController()->handleRest($did, $request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_FILE,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleFileRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_REJECT,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleRejectRest($did, $idx, $request)
+        );
         return $event;
     }
 
@@ -205,6 +221,21 @@ final class Bootstrap
         return new DocumentFileController(
             new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
             new SqlDocumentReader(),
+        );
+    }
+
+    /** Verify and file / reject (ADR-009): read authorizer plus lab-write and sign checks. */
+    public static function createFilingController(): FilingController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        $acl = new AclMainChecker();
+        return new FilingController(
+            new CopilotAuthorizer($acl, new SqlRelationshipRepository(), $override),
+            $acl,
+            $acl,
+            new SqlSchemaStatus(),
+            new SqlDocumentReader(),
+            new ValueFiler(new SqlFilingStore()),
         );
     }
 
