@@ -72,6 +72,12 @@ interface FilingStoreInterface
 
     public function markRejected(int $candidateId): void;
 
+    /** Un-file (ADR-009 section 7): the chart result is kept, marked `entered-in-error`. */
+    public function markResultEnteredInError(int $resultId): void;
+
+    /** Un-file (ADR-009 7b): `filed` -> `unfiled`; `procedure_result_id` and `filed_*` stay as history. */
+    public function markUnfiled(int $candidateId): void;
+
     /**
      * The candidate row a filed chart result came from (ADR-009 7b: the only
      * result -> source-document link), or null. Read-only; no transaction needed.

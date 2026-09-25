@@ -184,6 +184,22 @@ final class SqlFilingStore implements FilingStoreInterface
         );
     }
 
+    public function markResultEnteredInError(int $resultId): void
+    {
+        QueryUtils::sqlStatementThrowException(
+            "UPDATE procedure_result SET result_status = 'entered-in-error' WHERE procedure_result_id = ?",
+            [$resultId]
+        );
+    }
+
+    public function markUnfiled(int $candidateId): void
+    {
+        QueryUtils::sqlStatementThrowException(
+            "UPDATE copilot_extracted_value SET status = 'unfiled' WHERE id = ? AND status = 'filed'",
+            [$candidateId]
+        );
+    }
+
     public function sameResultInChart(int $pid, string $testName, string $code, string $collectionDate, string $value): bool
     {
         $rows = QueryUtils::fetchRecords(

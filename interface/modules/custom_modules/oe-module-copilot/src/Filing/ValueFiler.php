@@ -36,12 +36,16 @@ final class ValueFiler
     public const OUTCOME_ALREADY_FILED = 'already_filed';
     public const OUTCOME_REJECTED = 'rejected';
     public const OUTCOME_ALREADY_REJECTED = 'already_rejected';
+    public const OUTCOME_UNFILED = 'unfiled';
+    public const OUTCOME_ALREADY_UNFILED = 'already_unfiled';
 
     public const ERROR_NOT_FOUND = 'value_not_found';
     public const ERROR_NOT_EXTRACTED = 'document_not_extracted';
     public const ERROR_NOT_FILEABLE = 'not_fileable';
     public const ERROR_REJECTED = 'value_rejected';
     public const ERROR_ALREADY_FILED = 'value_already_filed';
+    public const ERROR_UNFILED = 'value_unfiled';
+    public const ERROR_NOT_FILED = 'value_not_filed';
     public const ERROR_CONFIRMATION_REQUIRED = 'confirmation_required';
     public const ERROR_VALUE_REQUIRED = 'value_required';
     public const ERROR_NO_COLLECTION_DATE = 'collection_date_missing';
@@ -74,6 +78,9 @@ final class ValueFiler
 
             if ($candidate['status'] === 'filed') {
                 return self::result(self::OUTCOME_ALREADY_FILED, $candidate['procedure_result_id'], null, null, $verification);
+            }
+            if ($candidate['status'] === 'unfiled') {
+                return self::result(self::ERROR_UNFILED, verification: $verification);
             }
             if ($candidate['status'] !== 'candidate') {
                 return self::result(self::ERROR_REJECTED, verification: $verification);
@@ -150,11 +157,44 @@ final class ValueFiler
             if ($candidate['status'] === 'rejected') {
                 return self::result(self::OUTCOME_ALREADY_REJECTED);
             }
+            if ($candidate['status'] === 'unfiled') {
+                return self::result(self::ERROR_UNFILED);
+            }
             if ($candidate['status'] !== 'candidate') {
                 return self::result(self::ERROR_ALREADY_FILED);
             }
             $this->store->markRejected($candidate['id']);
             return self::result(self::OUTCOME_REJECTED);
+        });
+    }
+
+    /**
+     * Withdraw a filed value (ADR-009 section 7, 7b): the chart result becomes
+     * `entered-in-error` (kept, never deleted) and the candidate `unfiled`,
+     * keeping its result link and filing history. It is then neither a pending
+     * fact nor fileable again. Idempotent.
+     *
+     * @return array{outcome:string, procedure_result_id:?int, result_status:?string, warning:?string, verification_status:?string}
+     *   `outcome` is unfiled / already_unfiled or one of the ERROR_* codes
+     */
+    public function unfile(int $pid, int $documentId, int $resultIndex): array
+    {
+        return $this->store->transaction(function () use ($pid, $documentId, $resultIndex): array {
+            $found = $this->lock($pid, $documentId, $resultIndex);
+            if (is_string($found)) {
+                return self::result($found);
+            }
+            $candidate = $found[1];
+            $resultId = $candidate['procedure_result_id'];
+            if ($candidate['status'] === 'unfiled') {
+                return self::result(self::OUTCOME_ALREADY_UNFILED, $resultId, 'entered-in-error');
+            }
+            if ($candidate['status'] !== 'filed' || $resultId === null) {
+                return self::result(self::ERROR_NOT_FILED);
+            }
+            $this->store->markResultEnteredInError($resultId);
+            $this->store->markUnfiled($candidate['id']);
+            return self::result(self::OUTCOME_UNFILED, $resultId, 'entered-in-error');
         });
     }
 

@@ -113,7 +113,7 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
             return true;
         }
         foreach ($this->values[$documentId] ?? [] as $v) {
-            if ($v['status'] === 'filed') {
+            if (in_array($v['status'], ProcessingRepositoryInterface::FILED_STATUSES, true)) {
                 return false;
             }
         }

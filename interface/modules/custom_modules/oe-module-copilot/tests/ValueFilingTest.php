@@ -484,6 +484,110 @@ final class ValueFilingTest extends TestCase
     }
 
     // ------------------------------------------------------------------ //
+    // Un-file (ADR-009 §7, 7b)
+    // ------------------------------------------------------------------ //
+
+    private function unfile(int $index = 0, int $doc = self::DOC, ?FilingController $c = null): array
+    {
+        return ($c ?? $this->controller())->unfileForSession(self::session(), $doc, $index);
+    }
+
+    public function testUnfileMarksTheChartResultEnteredInErrorAndKeepsHistory(): void
+    {
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0);
+        $resultId = $this->file()['body']['procedure_result_id'];
+
+        $result = $this->unfile();
+
+        self::assertSame(200, $result['status'], json_encode($result['body']));
+        self::assertSame('unfiled', $result['body']['status']);
+        self::assertSame($resultId, $result['body']['procedure_result_id']);
+        self::assertCount(1, $this->store->results, 'nothing is deleted');
+        self::assertSame('entered-in-error', $this->store->results[$resultId]['result_status']);
+        self::assertSame('7.1', $this->store->results[$resultId]['result']);
+        $c = $this->candidate($cid);
+        self::assertSame('unfiled', $c['status']);
+        self::assertSame($resultId, $c['procedure_result_id'], 'the link to the withdrawn result stays');
+        self::assertSame('7.1', $c['filed_value']);
+        self::assertSame(self::USER, $c['filed_by']);
+
+        $event = $this->audit->events[1];
+        self::assertSame(FilingController::AUDIT_UNFILED, $event['event']);
+        self::assertTrue($event['success']);
+        self::assertStringContainsString('outcome=unfiled', $event['comment']);
+        self::assertStringContainsString('procedure_result_id=' . $resultId, $event['comment']);
+        $this->assertNoPhi();
+    }
+
+    public function testUnfileIsIdempotentAndReFilingIsRefused(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->file();
+        $this->unfile();
+
+        $again = $this->unfile();
+        self::assertSame(200, $again['status']);
+        self::assertTrue($again['body']['already_unfiled']);
+
+        $refile = $this->file();
+        self::assertSame(409, $refile['status']);
+        self::assertSame('value_unfiled', $refile['body']['detail']['code']);
+        self::assertCount(1, $this->store->results);
+
+        $reject = $this->controller()->rejectForSession(self::session(), self::DOC, 0);
+        self::assertSame(409, $reject['status']);
+        self::assertSame('value_unfiled', $reject['body']['detail']['code']);
+    }
+
+    public function testOnlyAFiledValueCanBeUnfiled(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->store->addCandidate(self::DOC, self::PID, 1, ['status' => 'rejected']);
+        foreach ([0, 1] as $index) {
+            $r = $this->unfile($index);
+            self::assertSame(409, $r['status']);
+            self::assertSame('value_not_filed', $r['body']['detail']['code']);
+        }
+        self::assertSame(404, $this->unfile(7)['status']);
+    }
+
+    public function testUnfileIsOneTransaction(): void
+    {
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0);
+        $resultId = $this->file()['body']['procedure_result_id'];
+        $this->store->failAt = 'markUnfiled';
+
+        self::assertSame(500, $this->unfile()['status']);
+
+        self::assertSame('final', $this->store->results[$resultId]['result_status']);
+        self::assertSame('filed', $this->candidate($cid)['status']);
+    }
+
+    public function testUnfileNeedsTheSamePermissionsAndOwnership(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->file();
+        self::assertSame(403, $this->unfile(c: $this->controller(write: []))['status']);
+        self::assertSame(403, $this->unfile(c: $this->controller(acl: self::READ_ACL))['status']);
+        $this->store->addCandidate(self::OTHER_DOC, self::OTHER_PID, 0, ['status' => 'filed', 'procedure_result_id' => 5]);
+        self::assertSame(404, $this->unfile(0, self::OTHER_DOC)['status']);
+        $this->documents->denied = [self::DOC];
+        self::assertSame(403, $this->unfile()['status']);
+        self::assertSame('filed', array_values($this->store->candidates)[0]['status']);
+    }
+
+    /** A wrongly filed result must stay withdrawable after its document was deleted or moved away in OpenEMR. */
+    public function testUnfileWorksWhenTheDocumentIsNoLongerFiledToThePatient(): void
+    {
+        $this->store->addCandidate(self::DOC, self::PID, 0);
+        $this->file();
+        unset($this->documents->docs[self::DOC]);
+
+        self::assertSame(200, $this->unfile()['status']);
+        self::assertSame(404, $this->file(0)['status'], 'filing still needs the document');
+    }
+
+    // ------------------------------------------------------------------ //
     // ADR-009 §4 guard
     // ------------------------------------------------------------------ //
 

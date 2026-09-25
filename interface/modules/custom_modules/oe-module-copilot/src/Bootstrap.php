@@ -15,7 +15,7 @@
  *    patient; a `pid` in the body is only checked for staleness.
  *  - `GET /api/copilot/document-file/:did` - the source file for the preview
  *    (ADR-008 §3), same authorizer; see Controller\DocumentFileController.
- *  - `POST /api/copilot/documents/:did/values/:idx/file` and `.../reject` -
+ *  - `POST /api/copilot/documents/:did/values/:idx/file`, `.../reject`, `.../unfile` -
  *    Verify and file / reject one extracted value (ADR-009); see
  *    Controller\FilingController.
  *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
@@ -83,6 +83,7 @@ final class Bootstrap
     public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
     public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
     public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
+    public const ROUTE_VALUE_UNFILE = 'POST /api/copilot/documents/:did/values/:idx/unfile';
     public const ROUTE_RESULT_SOURCE = 'GET /api/copilot/results/:rid/source';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
@@ -162,6 +163,10 @@ final class Bootstrap
         $event->addToRouteMap(
             self::ROUTE_VALUE_REJECT,
             static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleRejectRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_VALUE_UNFILE,
+            static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleUnfileRest($did, $idx, $request)
         );
         $event->addToRouteMap(
             self::ROUTE_RESULT_SOURCE,

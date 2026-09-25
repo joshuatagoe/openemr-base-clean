@@ -196,6 +196,18 @@ final class FakeFilingStore implements FilingStoreInterface
         return false;
     }
 
+    public function markResultEnteredInError(int $resultId): void
+    {
+        $this->write('markResultEnteredInError');
+        $this->results[$resultId]['result_status'] = 'entered-in-error';
+    }
+
+    public function markUnfiled(int $candidateId): void
+    {
+        $this->write('markUnfiled');
+        $this->candidates[$candidateId] = ['status' => 'unfiled'] + $this->candidates[$candidateId];
+    }
+
     public function findResultSource(int $procedureResultId): ?array
     {
         foreach ($this->candidates as $c) {

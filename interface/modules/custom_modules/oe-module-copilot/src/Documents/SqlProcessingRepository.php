@@ -90,7 +90,8 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
                 return true;
             }
             $filed = QueryUtils::fetchRecords(
-                "SELECT 1 AS found FROM copilot_extracted_value WHERE document_id = ? AND status = 'filed' LIMIT 1",
+                "SELECT 1 AS found FROM copilot_extracted_value WHERE document_id = ? AND status IN ('"
+                . implode("','", self::FILED_STATUSES) . "') LIMIT 1",
                 [$documentId]
             );
             if ($filed !== []) {

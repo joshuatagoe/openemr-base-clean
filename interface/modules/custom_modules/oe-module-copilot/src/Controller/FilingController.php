@@ -6,15 +6,17 @@
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/file
  *        body { "filed_value": string|null, "confirm_unverified": bool }
  *   POST /api/copilot/documents/{document_id}/values/{result_index}/reject
+ *   POST /api/copilot/documents/{document_id}/values/{result_index}/unfile
  *
  * Authorization: the briefing routes' CopilotAuthorizer on the session's
  * selected patient (CSRF by the local API bridge), then - filing is signing -
  * `patients/lab` write AND `patients/sign`. The document must still be filed to
  * that patient in OpenEMR (same 404 as a missing value) and pass core
- * `can_access()` (403). Until the module tables exist both routes answer 503
+ * `can_access()` (403); un-filing skips the "still filed" check so a result
+ * from a document later deleted or moved away stays withdrawable. Until the module tables exist both routes answer 503
  * `copilot_tables_not_installed`. The rules and the single transaction are in
  * Filing\ValueFiler. One audit row per authorized call (`copilot-value-filed`
- * / `copilot-value-rejected`) with ids and codes only - never test names or
+ * / `copilot-value-rejected` / `copilot-value-unfiled`) with ids and codes only - never test names or
  * values.
  *
  * @package   OpenEMR
@@ -45,6 +47,7 @@ final class FilingController
 {
     public const AUDIT_FILED = 'copilot-value-filed';
     public const AUDIT_REJECTED = 'copilot-value-rejected';
+    public const AUDIT_UNFILED = 'copilot-value-unfiled';
 
     public const CODE_NOT_PERMITTED = 'filing_not_permitted';
     public const CODE_INVALID_REQUEST = 'invalid_request';
@@ -65,6 +68,8 @@ final class FilingController
         ValueFiler::ERROR_NOT_FILEABLE => [409, 'Values from this kind of document are not filed.'],
         ValueFiler::ERROR_REJECTED => [409, 'This value was rejected and cannot be filed.'],
         ValueFiler::ERROR_ALREADY_FILED => [409, 'This value is already filed.'],
+        ValueFiler::ERROR_UNFILED => [409, 'This value was filed and then withdrawn; it cannot be filed or rejected again.'],
+        ValueFiler::ERROR_NOT_FILED => [409, 'This value is not filed.'],
         ValueFiler::ERROR_CONFIRMATION_REQUIRED => [422, 'This value could not be verified on the page; confirm to file it.'],
         ValueFiler::ERROR_VALUE_REQUIRED => [422, 'This value could not be read; enter the value to file it.'],
         ValueFiler::ERROR_NO_COLLECTION_DATE => [422, 'The document gives no collection date for this value.'],
@@ -112,6 +117,21 @@ final class FilingController
     public function rejectForSession(array $session, int $documentId, int $resultIndex): array
     {
         return $this->handle(self::AUDIT_REJECTED, $session, $documentId, $resultIndex, null);
+    }
+
+    /**
+     * @param array{authUserID?:mixed, authUser?:mixed, pid?:mixed} $session
+     * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
+     */
+    public function unfileForSession(array $session, int $documentId, int $resultIndex): array
+    {
+        return $this->handle(self::AUDIT_UNFILED, $session, $documentId, $resultIndex, null);
+    }
+
+    /** `POST /api/copilot/documents/:did/values/:idx/unfile` under the local API bridge. */
+    public function handleUnfileRest(string $documentId, string $resultIndex, HttpRestRequest $request): JsonResponse
+    {
+        return self::respond($this->unfileForSession(self::session($request), self::id($documentId), self::index($resultIndex)));
     }
 
     /** `POST /api/copilot/documents/:did/values/:idx/file` under the local API bridge. */
@@ -179,7 +199,10 @@ final class FilingController
         }
 
         try {
-            if ($documentId <= 0 || $resultIndex < 0 || $this->documents->findForPatient($documentId, $pid) === null) {
+            // Un-filing skips the "still filed to this patient" check: a result filed from a document later
+            // deleted or moved away in OpenEMR must stay withdrawable. The candidate's own pid still binds it.
+            $mustBeOnFile = $event !== self::AUDIT_UNFILED;
+            if ($documentId <= 0 || $resultIndex < 0 || ($mustBeOnFile && $this->documents->findForPatient($documentId, $pid) === null)) {
                 $audit(false, ValueFiler::ERROR_NOT_FOUND);
                 return $this->error(ValueFiler::ERROR_NOT_FOUND, $correlationId, $headers);
             }
@@ -194,9 +217,11 @@ final class FilingController
         }
 
         try {
-            $result = $event === self::AUDIT_FILED
-                ? $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm)
-                : $this->filer->reject($pid, $documentId, $resultIndex);
+            $result = match ($event) {
+                self::AUDIT_FILED => $this->filer->file($pid, $userId, $documentId, $resultIndex, $filedValue, $confirm),
+                self::AUDIT_UNFILED => $this->filer->unfile($pid, $documentId, $resultIndex),
+                default => $this->filer->reject($pid, $documentId, $resultIndex),
+            };
         } catch (Throwable $e) {
             $this->logger->error('copilot filing failed', ['cid' => $correlationId, 'type' => $e::class]);
             $audit(false, self::CODE_FAILED);
@@ -204,7 +229,7 @@ final class FilingController
         }
 
         $outcome = $result['outcome'];
-        $success = in_array($outcome, [ValueFiler::OUTCOME_FILED, ValueFiler::OUTCOME_ALREADY_FILED, ValueFiler::OUTCOME_REJECTED, ValueFiler::OUTCOME_ALREADY_REJECTED], true);
+        $success = in_array($outcome, [ValueFiler::OUTCOME_FILED, ValueFiler::OUTCOME_ALREADY_FILED, ValueFiler::OUTCOME_REJECTED, ValueFiler::OUTCOME_ALREADY_REJECTED, ValueFiler::OUTCOME_UNFILED, ValueFiler::OUTCOME_ALREADY_UNFILED], true);
         $extra = ($result['verification_status'] !== null ? '; verification=' . $result['verification_status'] : '')
             . ($result['procedure_result_id'] !== null ? '; procedure_result_id=' . $result['procedure_result_id'] : '')
             . ($result['result_status'] !== null ? '; result_status=' . $result['result_status'] : '')
@@ -214,17 +239,21 @@ final class FilingController
             return $this->error($outcome, $correlationId, $headers);
         }
 
-        $filed = $event === self::AUDIT_FILED;
         return [
             'status' => 200,
             'body' => [
                 'correlation_id' => $correlationId,
-                'status' => $filed ? 'filed' : 'rejected',
+                'status' => match ($event) {
+                    self::AUDIT_FILED => 'filed',
+                    self::AUDIT_UNFILED => 'unfiled',
+                    default => 'rejected',
+                },
                 'document_id' => $documentId,
                 'result_index' => $resultIndex,
                 'procedure_result_id' => $result['procedure_result_id'],
                 'already_filed' => $outcome === ValueFiler::OUTCOME_ALREADY_FILED,
                 'already_rejected' => $outcome === ValueFiler::OUTCOME_ALREADY_REJECTED,
+                'already_unfiled' => $outcome === ValueFiler::OUTCOME_ALREADY_UNFILED,
                 'result_status' => $result['result_status'],
                 'warning' => $result['warning'],
             ],
