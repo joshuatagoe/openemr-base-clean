@@ -1234,8 +1234,336 @@
         return String(v.value_text) + (v.unit ? ' ' + String(v.unit) : '');
     }
 
+    // pdf.js 6.3.289, vendored next to this script (module README records version and integrity).
+    const SCRIPT_SRC = document.currentScript && document.currentScript.src ? document.currentScript.src : '';
+    const PDFJS_VERSION = '6.3.289';
+    let pdfjsPromise = null;
+
+    function loadPdfjs() {
+        if (!pdfjsPromise) {
+            const base = new URL('vendor/pdfjs/', SCRIPT_SRC || window.location.href);
+            pdfjsPromise = import(new URL('pdf.min.mjs?v=' + PDFJS_VERSION, base).href).then((pdfjs) => {
+                pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs?v=' + PDFJS_VERSION, base).href;
+                return pdfjs;
+            });
+            pdfjsPromise.catch(() => {
+                pdfjsPromise = null;
+            });
+        }
+        return pdfjsPromise;
+    }
+
+    const FILE_ERRORS = {
+        404: 'The document was not found in this chart.',
+        403: 'You do not have permission to view this document.',
+        413: 'The document is over 10 MB, the largest the Co-Pilot shows.',
+        503: 'The document store could not be read.'
+    };
+    const NOT_LOCATED = 'Could not locate this value on the page (unverified)';
+
+    /**
+     * One document at a time: pdf.js on a canvas (scripting and XFA off, no
+     * annotation or form layer) or a photo in an <img> from a blob: URL, with
+     * one overlay box from the stored bbox on the cited page. `side` is an
+     * optional node shown beside the page (the value and its filing controls).
+     */
+    class SourceViewer {
+        constructor(host, api, options) {
+            this.host = host;
+            this.api = api;
+            this.loadPdfjs = options && options.loadPdfjs ? options.loadPdfjs : loadPdfjs;
+            this.token = 0;
+            this.pdf = null;
+            this.task = null;
+            this.blobUrl = null;
+            this.onResize = null;
+        }
+
+        close() {
+            this.token += 1;
+            if (this.task) {
+                try {
+                    this.task.destroy();
+                } catch {
+                    // already gone
+                }
+            }
+            this.task = null;
+            this.pdf = null;
+            if (this.blobUrl) {
+                URL.revokeObjectURL(this.blobUrl);
+                this.blobUrl = null;
+            }
+            if (this.onResize) {
+                window.removeEventListener('resize', this.onResize);
+                this.onResize = null;
+            }
+            while (this.host.firstChild) {
+                this.host.removeChild(this.host.firstChild);
+            }
+        }
+
+        /**
+         * @param {{documentId:number, page?:number|null, bbox?:number[]|null, located?:boolean, title?:string, side?:Node}} target
+         *   `located: false` (a value with no box) shows the "could not locate" notice.
+         */
+        async open(target) {
+            this.close();
+            const token = this.token;
+            this.target = target;
+            const frame = el('div', 'border rounded p-2 bg-white');
+            frame.dataset.role = 'viewer';
+            frame.setAttribute('role', 'region');
+            frame.setAttribute('aria-label', 'Source document viewer');
+            const bar = el('div', 'd-flex flex-wrap align-items-center mb-2');
+            bar.appendChild(el('strong', 'mr-2', target.title || ('Document ' + String(target.documentId))));
+            this.pageLabel = el('span', 'text-muted small mr-2');
+            this.pageLabel.dataset.role = 'page-label';
+            bar.appendChild(this.pageLabel);
+            this.prev = el('button', 'btn btn-outline-secondary btn-sm py-0 mr-1', 'Previous page');
+            this.next = el('button', 'btn btn-outline-secondary btn-sm py-0 mr-2', 'Next page');
+            [this.prev, this.next].forEach((b) => {
+                b.type = 'button';
+                b.hidden = true;
+                bar.appendChild(b);
+            });
+            this.prev.addEventListener('click', () => this.showPage(this.page - 1));
+            this.next.addEventListener('click', () => this.showPage(this.page + 1));
+            const full = el('a', 'small mr-2', 'Open full document');
+            full.dataset.role = 'open-full';
+            full.href = this.api.webroot + '/controller.php?document&retrieve&patient_id=' + encodeURIComponent(String(this.api.pid))
+                + '&document_id=' + encodeURIComponent(String(target.documentId)) + '&as_file=false';
+            full.target = '_blank';
+            full.rel = 'noopener';
+            bar.appendChild(full);
+            const closeBtn = el('button', 'btn btn-outline-secondary btn-sm py-0 ml-auto', 'Close');
+            closeBtn.type = 'button';
+            closeBtn.addEventListener('click', () => this.close());
+            bar.appendChild(closeBtn);
+            frame.appendChild(bar);
+
+            this.notice = el('p', 'small text-warning mb-1');
+            this.notice.dataset.role = 'viewer-notice';
+            this.notice.setAttribute('role', 'status');
+            frame.appendChild(this.notice);
+            const row = el('div', 'd-flex flex-wrap align-items-start');
+            this.stage = el('div', 'mr-2 mb-2');
+            this.stage.dataset.role = 'viewer-stage';
+            this.stage.style.position = 'relative';
+            this.stage.style.display = 'inline-block';
+            this.stage.style.lineHeight = '0';
+            row.appendChild(this.stage);
+            if (target.side) {
+                const side = el('div', 'flex-grow-1');
+                side.style.minWidth = '240px';
+                side.style.maxWidth = '420px';
+                side.appendChild(target.side);
+                row.appendChild(side);
+            }
+            frame.appendChild(row);
+            this.host.appendChild(frame);
+            this.stage.appendChild(el('p', 'small text-muted', 'Loading the document…'));
+
+            let resp;
+            try {
+                resp = await this.api.file(target.documentId);
+            } catch {
+                resp = null;
+            }
+            if (token !== this.token) {
+                return;
+            }
+            if (!resp || !resp.ok) {
+                this.fail(resp && FILE_ERRORS[resp.status] ? FILE_ERRORS[resp.status] : 'The document could not be loaded' + (resp ? ' (http_' + resp.status + ').' : '.'));
+                return;
+            }
+            const type = String(resp.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+            let bytes;
+            try {
+                bytes = await resp.arrayBuffer();
+            } catch {
+                this.fail('The document could not be loaded.');
+                return;
+            }
+            if (token !== this.token) {
+                return;
+            }
+            if (type === 'application/pdf') {
+                await this.openPdf(bytes, token);
+            } else if (type === 'image/png' || type === 'image/jpeg') {
+                await this.openImage(bytes, type, token);
+            } else {
+                this.fail('This kind of file cannot be shown here.');
+            }
+        }
+
+        fail(message) {
+            while (this.stage.firstChild) {
+                this.stage.removeChild(this.stage.firstChild);
+            }
+            this.stage.style.lineHeight = '';
+            this.stage.appendChild(el('p', 'small text-danger mb-0', message));
+        }
+
+        stageWidth() {
+            const avail = this.host.clientWidth || 700;
+            const width = this.target && this.target.side ? avail - 300 : avail - 24;
+            return Math.max(280, Math.min(900, width));
+        }
+
+        async openPdf(bytes, token) {
+            let pdfjs;
+            try {
+                pdfjs = await this.loadPdfjs();
+                this.task = pdfjs.getDocument({ data: new Uint8Array(bytes), enableScripting: false, enableXfa: false });
+                this.pdf = await this.task.promise;
+            } catch {
+                if (token === this.token) {
+                    this.fail('The PDF could not be displayed here. Use “Open full document”.');
+                }
+                return;
+            }
+            if (token !== this.token) {
+                return;
+            }
+            const cited = Number(this.target.page) || 0;
+            const first = cited >= 1 && cited <= this.pdf.numPages ? cited : 1;
+            await this.showPage(first);
+        }
+
+        async showPage(n) {
+            if (!this.pdf || n < 1 || n > this.pdf.numPages) {
+                return;
+            }
+            const token = this.token;
+            this.page = n;
+            this.pageLabel.textContent = 'page ' + n + ' of ' + this.pdf.numPages;
+            this.prev.hidden = this.pdf.numPages < 2;
+            this.next.hidden = this.pdf.numPages < 2;
+            this.prev.disabled = n <= 1;
+            this.next.disabled = n >= this.pdf.numPages;
+            let page;
+            try {
+                page = await this.pdf.getPage(n);
+            } catch {
+                this.fail('This page could not be displayed.');
+                return;
+            }
+            if (token !== this.token) {
+                return;
+            }
+            const unscaled = page.getViewport({ scale: 1 });
+            const viewport = page.getViewport({ scale: this.stageWidth() / unscaled.width });
+            const dpr = window.devicePixelRatio || 1;
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width * dpr);
+            canvas.height = Math.floor(viewport.height * dpr);
+            canvas.style.width = viewport.width + 'px';
+            canvas.style.height = viewport.height + 'px';
+            canvas.setAttribute('aria-label', 'Page ' + n + ' of the document');
+            canvas.setAttribute('role', 'img');
+            try {
+                await page.render({
+                    canvasContext: canvas.getContext('2d'),
+                    canvas: canvas,
+                    viewport: viewport,
+                    transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
+                }).promise;
+            } catch {
+                if (token === this.token) {
+                    this.fail('This page could not be displayed.');
+                }
+                return;
+            }
+            if (token !== this.token) {
+                return;
+            }
+            while (this.stage.firstChild) {
+                this.stage.removeChild(this.stage.firstChild);
+            }
+            this.stage.style.lineHeight = '0';
+            this.stage.appendChild(canvas);
+            this.drawBox(n, pdfFrame(viewport, page.rotate));
+        }
+
+        async openImage(bytes, type, token) {
+            this.blobUrl = URL.createObjectURL(new Blob([bytes], { type: type }));
+            const img = document.createElement('img');
+            img.alt = 'The uploaded document';
+            img.style.maxWidth = this.stageWidth() + 'px';
+            img.style.height = 'auto';
+            img.style.imageOrientation = 'from-image';
+            const loaded = new Promise((resolve) => {
+                img.addEventListener('load', () => resolve(true), { once: true });
+                img.addEventListener('error', () => resolve(false), { once: true });
+            });
+            while (this.stage.firstChild) {
+                this.stage.removeChild(this.stage.firstChild);
+            }
+            this.stage.appendChild(img);
+            img.src = this.blobUrl;
+            const ok = await loaded;
+            if (token !== this.token) {
+                return;
+            }
+            if (!ok) {
+                this.fail('The image could not be displayed.');
+                return;
+            }
+            this.page = 1;
+            this.pageLabel.textContent = 'photo';
+            this.drawBox(1, imageFrame(img));
+            this.onResize = () => this.drawBox(1, imageFrame(img));
+            window.addEventListener('resize', this.onResize);
+        }
+
+        /** The one overlay: only on the cited page, only from a valid stored box. */
+        drawBox(pageNumber, frame) {
+            const old = this.stage.querySelector('[data-role="bbox-overlay"]');
+            if (old) {
+                old.remove();
+            }
+            const t = this.target;
+            this.notice.textContent = '';
+            if (t.located === false) {
+                this.notice.textContent = NOT_LOCATED;
+                explain(this.notice, 'bbox_missing');
+                return;
+            }
+            if (!Array.isArray(t.bbox) || pageNumber !== (Number(t.page) || 1)) {
+                return;
+            }
+            const rect = overlayRect(t.bbox, frame);
+            if (!rect) {
+                this.notice.textContent = NOT_LOCATED;
+                explain(this.notice, 'bbox_missing');
+                return;
+            }
+            const box = el('div');
+            box.dataset.role = 'bbox-overlay';
+            box.setAttribute('role', 'img');
+            box.setAttribute('aria-label', 'Where the value was found on the page');
+            explain(box, 'bbox_overlay');
+            box.style.position = 'absolute';
+            // Exactly the stored rectangle; the outline is drawn outside it so it never covers the ink.
+            box.style.left = rect.left + 'px';
+            box.style.top = rect.top + 'px';
+            box.style.width = rect.width + 'px';
+            box.style.height = rect.height + 'px';
+            box.style.outline = '3px solid #d9480f';
+            box.style.outlineOffset = '2px';
+            box.style.background = 'rgba(255, 193, 7, 0.18)';
+            box.style.pointerEvents = 'none';
+            this.stage.appendChild(box);
+            if (typeof box.scrollIntoView === 'function') {
+                box.scrollIntoView({ block: 'center', inline: 'nearest' });
+            }
+        }
+    }
+
     class DocumentsSection {
-        constructor(container) {
+        /** @param {{loadPdfjs?: function}} [options] test seam for the viewer */
+        constructor(container, options) {
             this.api = new CopilotApi(container);
             this.docs = [];
             this.values = {}; // document_id -> values response
@@ -1256,7 +1584,11 @@
             this.root.appendChild(this.list);
             this.root.appendChild(this.viewerHost);
             container.appendChild(this.root);
-            const onLeave = () => this.api.abort.abort();
+            this.viewer = new SourceViewer(this.viewerHost, this.api, options);
+            const onLeave = () => {
+                this.api.abort.abort();
+                this.viewer.close();
+            };
             window.addEventListener('pagehide', onLeave);
         }
 
@@ -1453,9 +1785,61 @@
             return row;
         }
 
-        // Replaced by the source viewer and filing controls (below).
-        openSource() {
-            return undefined;
+        docFor(documentId) {
+            return this.docs.find((d) => Number(d.document_id) === Number(documentId)) || { document_id: documentId };
+        }
+
+        /**
+         * Open the viewer on a document: at a candidate's page and box (with its
+         * details and actions beside it), at a given source {page, bbox}, or at page 1.
+         */
+        openSource(documentId, resultIndex, source) {
+            const doc = this.docFor(documentId);
+            const value = resultIndex === null || resultIndex === undefined ? null : this.valueFor(documentId, resultIndex);
+            const target = { documentId: Number(documentId), title: describeDocument(doc).typeLabel + ' · document ' + String(documentId) };
+            if (value) {
+                target.page = value.page;
+                target.bbox = value.bbox;
+                target.located = Array.isArray(value.bbox);
+                target.side = this.valuePanel(doc, value);
+            } else if (source) {
+                target.page = source.page;
+                target.bbox = source.bbox;
+                if (source.located !== undefined) {
+                    target.located = source.located;
+                }
+            }
+            return this.viewer.open(target);
+        }
+
+        /** The value beside the page: what was read, how it was verified, where it stands. */
+        valuePanel(doc, value) {
+            const panel = el('div', 'small');
+            panel.dataset.role = 'value-panel';
+            panel.dataset.documentId = String(doc.document_id);
+            panel.dataset.resultIndex = String(value.result_index);
+            panel.appendChild(el('h6', 'mb-1', String(value.test_name || 'unnamed test')));
+            const read = el('div', 'mb-1');
+            read.appendChild(el('span', 'text-muted', 'As read: '));
+            read.appendChild(el('strong', 'mr-1', valueText(value)));
+            const ver = VERIFICATION_LABELS[value.verification_status] || [String(value.verification_status || 'unknown'), 'badge-secondary'];
+            read.appendChild(explain(el('span', 'badge ' + ver[1], ver[0]), 'verification_' + String(value.verification_status)));
+            panel.appendChild(read);
+            if (value.reference_range) {
+                panel.appendChild(el('div', 'text-muted', 'Reference range as printed: ' + String(value.reference_range)));
+            }
+            if (value.flag_source === 'extracted' && value.abnormal_flag) {
+                panel.appendChild(explain(el('span', 'badge badge-warning', 'flag printed on the report: ' + String(value.abnormal_flag)), 'flag_printed'));
+            }
+            panel.appendChild(el('div', 'text-muted', value.collection_date
+                ? 'Collected ' + String(value.collection_date) + ' (as read from the document)'
+                : 'No collection date could be read from the document.'));
+            const st = VALUE_STATUS[value.status] || [String(value.status || 'unknown'), 'badge-secondary'];
+            const status = el('div', 'mt-1');
+            status.appendChild(explain(el('span', 'badge ' + st[1], st[0]), 'value_' + String(value.status)));
+            status.dataset.role = 'value-status';
+            panel.appendChild(status);
+            return panel;
         }
 
         unfileButton() {
@@ -1496,7 +1880,8 @@
             pdfFrame: pdfFrame,
             imageFrame: imageFrame,
             describeDocument: describeDocument,
-            DocumentsSection: DocumentsSection
+            DocumentsSection: DocumentsSection,
+            SourceViewer: SourceViewer
         };
     }
 })();
