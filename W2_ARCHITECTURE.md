@@ -21,7 +21,7 @@ a file in this repo, it is marked as planned.
 | Document schemas, citation with bbox field | **Built (schema only)** | `copilot-agent/app/documents.py`. No box is produced yet and values are marked verified without a check — see §1.4; ADR-007 fixes both |
 | Box and verification source: text layer first, Textract for scans and photos | **Planned** (ADR-007) | pdfplumber word boxes; Textract `DetectDocumentText` one page per call; one matcher; fake OCR in CI |
 | Source preview with highlight box | **Planned** (ADR-008) | module route `GET /api/copilot/document-file/{id}`; pdf.js for PDFs, `<img>` for photos, one overlay |
-| Per-document processing record and analysis trigger | **Planned** (ADR-012) | replaces "newest document"; `doc_type` from the document category; trigger open: on chart open vs hybrid |
+| Per-document processing record and analysis trigger | **Planned** (ADR-012) | replaces "newest document"; `doc_type` from the document category; documents are analysed **when the chart is opened** |
 | Eval gate: 5 boolean rubrics, exact arithmetic, floors | **Built** | `copilot-agent/scripts/eval_gate.py`, `app/rubrics.py` |
 | CI job that runs the gate | **Built** | `.gitlab-ci.yml` (one job, `eval-gate`) |
 | Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; today the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) — to be replaced by per-document selection (ADR-012) |
@@ -543,26 +543,28 @@ masking entirely and must stay off in deployed environments.
 
 ---
 
-## 7. Where the reasoning lives
+## 7. Decision log
 
-This document states decisions and their consequences. The arguments, the rejected alternatives and
-the vendor-documentation citations are in the planning record and are not restated here.
+This section is the tracked record of every Week 2 decision. The longer working notes (alternatives,
+vendor citations, check transcripts) live in a local planning folder that is deliberately not in the
+repository; everything needed to understand a decision and its status is here.
 
-| Decision | Record |
+| ADR | Decision | Status (2026-09-25) |
+|---|---|---|
+| 001 | **Orchestration: LangGraph, LangSmith off.** One in-process graph; LangSmith cannot be switched on (the graph refuses to run); no checkpointer, so document state is never persisted. | Built (`app/workflow.py`) |
+| 002 | **Reranking: Cohere Rerank 3.5 via Amazon Bedrock.** Local deterministic reranker in CI so the gate stays offline. | Live in production |
+| 003 | **A clinician verifies each value before it is filed.** No auto-filing; extracted values are "not yet in the chart" until then. | Accepted; not built |
+| 004–006 | **Guideline corpus: NDEP + CDC.** General US adults, licence-clear; ADA (text-mining prohibition) and VA/DoD (veteran population) rejected. Tier B passages can never be the sole support for a threshold. | Built |
+| 007 | **Boxes and verification come from the page, not the model.** Text layer first (pdfplumber); image-only pages and photos read by AWS Textract, one page per call; OCR also runs on a page whose text layer misses a value (handwriting on printed forms); photos rotated upright first; one matcher decides verified / unverified; one PDF/PNG/JPEG allow-list; fake OCR in CI. (§1.6) | Accepted; live Textract evidence pending; not built |
+| 008 | **Source preview: pdf.js for PDFs, an image element for photos, one overlay.** Opens by document id and page; no box is ever guessed; server-side rendering rejected (no Ghostscript, PDF disabled in the image). (§1.7) | Renderer decision accepted; implementation details awaiting confirmation |
+| 009 | **Filing writes OpenEMR's own lab tables.** One outside-lab order with its required order-code row and a report per document, one result per value linked to the source document. Filing is the physician sign-off in OpenEMR's terms, so it needs `patients/lab` write **and** `patients/sign`. Dedup by our own per-patient SHA-256 (OpenEMR accepts duplicate uploads and does not index its hash). A wrongly filed result is marked `entered-in-error`: verified on the dev stack to leave the active Co-Pilot bundle while the row, the native lab view and FHIR (status `entered-in-error`) keep its history. Never call FHIR or `ProcedureService` inside the filing transaction — it commits the transaction early. | Accepted; not built. Deployment of the new tables awaiting confirmation |
+| 010 | **Intake forms are shown as evidence, not filed, this week.** Filing allergies/medications/family history is reconciliation against existing lists, a separate feature. | Accepted |
+| 011 | **Follow-ups on documents use the Week 1 follow-up path**, seeing the chart plus pending (unfiled) document facts, always labelled "not yet verified or filed". | Decision accepted; implementation details awaiting confirmation |
+| 012 | **Each document is processed on its own.** "Newest document" removed; a processing record per document; `doc_type` from the OpenEMR document category (by name); the module compares the printed name and date of birth with the chart and holds back a mismatch. **Documents are analysed when the chart is opened** — chosen over a background worker because OpenEMR has no post-save upload event and nothing runs on a schedule on Railway; a rate-capped background worker is the production path. | Accepted; not built |
+
+| Also recorded | Where |
 |---|---|
-| ADR-001 — LangGraph OSS, LangSmith disabled | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
-| ADR-002 — Cohere Rerank 3.5 via Bedrock | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
-| Design principles (SOLID), and the one violation that was fixed | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
-| ADR-003 — clinician verification before filing | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| ADR-004/005/006 — the corpus, three times | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| ADR-007 — boxes and verification: text layer first, Textract for scans and photos | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
-| ADR-008 — source preview: pdf.js, image element, one overlay | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` |
-| ADR-009 — filing into OpenEMR's lab tables with an outside-lab order | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| ADR-010 — intake forms shown as evidence, not filed, in Week 2 | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| ADR-011 — document follow-ups through the Week 1 follow-up path | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| ADR-012 — per-document selection, processing record, analysis trigger | `W2_PLANNING/W2_AMBIGUITIES_AND_DECISIONS.md` |
-| Status of every ADR in one table | `W2_PLANNING/W2_ARCHITECTURE_DECISIONS.md` → Decision index |
-| Gate mechanics, thresholds, the blocked MR | [`EVAL_GATE.md`](EVAL_GATE.md) |
+| Gate mechanics, thresholds, the blocked merge requests | [`EVAL_GATE.md`](EVAL_GATE.md) |
 | Week 1 architecture as submitted | [`ARCHITECTURE.md`](ARCHITECTURE.md) — frozen record; corrections in §6.1 above |
 
 **Week 2 is a demonstration of an architecture, not a claim of hospital readiness.** Synthetic data
