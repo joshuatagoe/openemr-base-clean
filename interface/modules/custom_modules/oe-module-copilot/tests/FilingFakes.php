@@ -196,6 +196,16 @@ final class FakeFilingStore implements FilingStoreInterface
         return false;
     }
 
+    public function findResultSource(int $procedureResultId): ?array
+    {
+        foreach ($this->candidates as $c) {
+            if ($c['procedure_result_id'] === $procedureResultId) {
+                return ['pid' => $c['pid'], 'document_id' => $c['document_id'], 'result_index' => $c['result_index'], 'page' => $c['page'], 'bbox' => $c['bbox'], 'status' => $c['status']];
+            }
+        }
+        return null;
+    }
+
     /** @param array<string,mixed> $overrides */
     public function addCandidate(int $documentId, int $pid, int $resultIndex, array $overrides = []): int
     {
@@ -205,6 +215,7 @@ final class FakeFilingStore implements FilingStoreInterface
             'test_name' => 'Hemoglobin A1c', 'value_text' => '7.1', 'unit' => '%', 'reference_range' => '4.0-5.6',
             'abnormal_flag' => 'H', 'flag_source' => 'extracted', 'collection_date' => '2026-09-01',
             'verification_status' => 'verified_exact', 'status' => 'candidate', 'filed_value' => null, 'procedure_result_id' => null,
+            'page' => 1, 'bbox' => '0.1,0.2,0.3,0.25',
         ];
         return $id;
     }

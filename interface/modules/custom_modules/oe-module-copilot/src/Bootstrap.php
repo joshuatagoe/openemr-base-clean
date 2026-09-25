@@ -18,6 +18,8 @@
  *  - `POST /api/copilot/documents/:did/values/:idx/file` and `.../reject` -
  *    Verify and file / reject one extracted value (ADR-009); see
  *    Controller\FilingController.
+ *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
+ *    chart result (ADR-009 7b); see Controller\ResultSourceController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
  *      copilot_admin_relationship_override (bool, default off) - allow
  *        admin/super users without a care relationship, audited as such
@@ -53,6 +55,7 @@ use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
 use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
 use OpenEMR\Modules\Copilot\Controller\FilingController;
+use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
@@ -80,6 +83,7 @@ final class Bootstrap
     public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
     public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
     public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
+    public const ROUTE_RESULT_SOURCE = 'GET /api/copilot/results/:rid/source';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -159,6 +163,10 @@ final class Bootstrap
             self::ROUTE_VALUE_REJECT,
             static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleRejectRest($did, $idx, $request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_RESULT_SOURCE,
+            static fn(string $rid, HttpRestRequest $request) => self::createResultSourceController()->handleRest($rid, $request)
+        );
         return $event;
     }
 
@@ -236,6 +244,17 @@ final class Bootstrap
             new SqlSchemaStatus(),
             new SqlDocumentReader(),
             new ValueFiler(new SqlFilingStore()),
+        );
+    }
+
+    /** Filed chart result -> its source document (ADR-009 7b), same authorizer wiring. */
+    public static function createResultSourceController(): ResultSourceController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new ResultSourceController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlFilingStore(),
+            new SqlDocumentReader(),
         );
     }
 

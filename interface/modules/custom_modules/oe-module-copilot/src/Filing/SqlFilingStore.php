@@ -202,6 +202,28 @@ final class SqlFilingStore implements FilingStoreInterface
         return $rows !== [];
     }
 
+    public function findResultSource(int $procedureResultId): ?array
+    {
+        $rows = QueryUtils::fetchRecords(
+            "SELECT pid, document_id, result_index, page, bbox, status FROM copilot_extracted_value
+              WHERE procedure_result_id = ? ORDER BY id ASC LIMIT 1",
+            [$procedureResultId]
+        );
+        $r = $rows[0] ?? null;
+        if (!is_array($r)) {
+            return null;
+        }
+        $page = Scalar::int($r['page'] ?? null);
+        return [
+            'pid' => Scalar::int($r['pid'] ?? null),
+            'document_id' => Scalar::int($r['document_id'] ?? null),
+            'result_index' => Scalar::int($r['result_index'] ?? null),
+            'page' => $page > 0 ? $page : null,
+            'bbox' => self::nullable($r['bbox'] ?? null),
+            'status' => Scalar::str($r['status'] ?? null),
+        ];
+    }
+
     private static function nullable(mixed $value): ?string
     {
         return $value === null ? null : Scalar::str($value);

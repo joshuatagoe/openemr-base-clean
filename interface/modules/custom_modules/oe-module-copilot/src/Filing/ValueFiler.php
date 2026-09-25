@@ -124,7 +124,9 @@ final class ValueFiler
                 'range' => $candidate['reference_range'] ?? '',
                 'abnormal' => self::ABNORMAL_OPTIONS[$flag] ?? '',
                 'comments' => 'Extracted value: ' . ($extracted ?? 'unreadable'),
-                'document_id' => $documentId,
+                // ADR-009 7b: 0, not the document id - a core document link replaces the value, range and
+                // units with the file name in the order-results screen. The source link is our candidate row.
+                'document_id' => 0,
                 'result_status' => $resultStatus,
             ]);
             $this->store->markFiled($candidate['id'], $userId, $value, $resultId);

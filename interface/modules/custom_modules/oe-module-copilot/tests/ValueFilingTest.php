@@ -133,7 +133,7 @@ final class ValueFilingTest extends TestCase
         self::assertSame('4.0-5.6', $row['range']);
         self::assertSame('high', $row['abnormal']);
         self::assertStringContainsString('7.1', $row['comments']);
-        self::assertSame(self::DOC, $row['document_id']);
+        self::assertSame(0, $row['document_id'], 'ADR-009 7b: no core document link, it hides the value in the order-results screen');
         self::assertSame('final', $row['result_status']);
 
         $c = $this->candidate($cid);

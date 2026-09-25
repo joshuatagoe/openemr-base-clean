@@ -73,6 +73,14 @@ interface FilingStoreInterface
     public function markRejected(int $candidateId): void;
 
     /**
+     * The candidate row a filed chart result came from (ADR-009 7b: the only
+     * result -> source-document link), or null. Read-only; no transaction needed.
+     *
+     * @return array{pid:int, document_id:int, result_index:int, page:?int, bbox:?string, status:string}|null
+     */
+    public function findResultSource(int $procedureResultId): ?array;
+
+    /**
      * ADR-009 dedup layer (c): a result for this patient with the same test
      * (name, or code when known), collection date and value is already in the
      * chart and not entered-in-error.
