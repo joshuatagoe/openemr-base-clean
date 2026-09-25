@@ -29,6 +29,9 @@ final class GuzzleAgentClient implements AgentClientInterface
     /** The agent reads a whole document and calls a model; far longer than a bundle hand-off. */
     public const DOCUMENT_BRIEFING_TIMEOUT_SECONDS = 90.0;
 
+    /** One document's extraction (text layer, OCR, one model call): same bound as a briefing. */
+    public const DOCUMENT_EXTRACT_TIMEOUT_SECONDS = 90.0;
+
     private readonly ClientInterface $http;
 
     /** @var callable(): int */
@@ -85,6 +88,29 @@ final class GuzzleAgentClient implements AgentClientInterface
 
     public function postDocumentBriefing(array $request, string $correlationId): array
     {
+        return $this->postSignedJson('/v1/documents/briefing', $request, $correlationId, self::DOCUMENT_BRIEFING_TIMEOUT_SECONDS);
+    }
+
+    public function postDocumentExtraction(array $request, string $correlationId): array
+    {
+        $decoded = $this->postSignedJson('/v1/documents/extract', $request, $correlationId, self::DOCUMENT_EXTRACT_TIMEOUT_SECONDS);
+        // The extraction must be for the document that was sent.
+        if (Scalar::int($decoded['document_id'] ?? null) !== Scalar::int($request['document_id'] ?? null)) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_BAD_RESPONSE, 200);
+        }
+        return $decoded;
+    }
+
+    /**
+     * Sign and POST a JSON request, require 200, decode, and check the agent
+     * echoes this request's correlation id and patient uuid.
+     *
+     * @param array<string,mixed> $request
+     * @return array<string,mixed>
+     * @throws AgentUnavailableException
+     */
+    private function postSignedJson(string $path, array $request, string $correlationId, float $timeoutSeconds): array
+    {
         $baseUrl = $this->config->agentBaseUrl();
         $secret = $this->config->ticketSecret;
         if (!$this->config->isConfigured() || $baseUrl === null || $secret === null) {
@@ -104,11 +130,11 @@ final class GuzzleAgentClient implements AgentClientInterface
         ];
 
         try {
-            $response = $this->http->request('POST', $baseUrl . '/v1/documents/briefing', [
+            $response = $this->http->request('POST', $baseUrl . $path, [
                 RequestOptions::HEADERS => $headers,
                 RequestOptions::BODY => $body,
                 RequestOptions::HTTP_ERRORS => false,
-                RequestOptions::TIMEOUT => self::DOCUMENT_BRIEFING_TIMEOUT_SECONDS,
+                RequestOptions::TIMEOUT => $timeoutSeconds,
             ]);
         } catch (ConnectException $e) {
             $reason = str_contains(strtolower($e->getMessage()), 'timed out')

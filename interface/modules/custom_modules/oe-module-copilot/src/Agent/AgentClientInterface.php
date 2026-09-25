@@ -32,4 +32,16 @@ interface AgentClientInterface
      * @throws AgentUnavailableException
      */
     public function postDocumentBriefing(array $request, string $correlationId): array;
+
+    /**
+     * Week 2 Final: `POST /v1/documents/extract` (contract C4). Returns the
+     * decoded response after checking it echoes this request's correlation id,
+     * patient uuid and document id. `printed_identity` in the response is for
+     * the module's identity comparison only and must never be logged or stored.
+     *
+     * @param array<string,mixed> $request  correlation_id, patient_uuid, document_id, doc_type, media_type, document_base64
+     * @return array<string,mixed>
+     * @throws AgentUnavailableException
+     */
+    public function postDocumentExtraction(array $request, string $correlationId): array;
 }

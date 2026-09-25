@@ -24,4 +24,13 @@ RUN mkdir -p /couchdb/data \
 # Skip the inherited Flex build steps on container start; everything is prebuilt above.
 ENV FORCE_NO_BUILD_MODE=yes
 
+# Start through the Co-Pilot start script (ADR-009 section 6): openemr.sh runs its
+# setup with FLEX_SKIP_APACHE_EXEC=yes and returns, the module's migration runner
+# applies the module schema as the web user (never blocking), then Apache is exec'd.
+# CRs are stripped in case the build context came from a Windows checkout.
+RUN sed 's/\r$//' /openemr/interface/modules/custom_modules/oe-module-copilot/bin/copilot-start.sh \
+        > /usr/local/bin/copilot-start.sh \
+    && chmod 755 /usr/local/bin/copilot-start.sh
+CMD ["/bin/sh", "/usr/local/bin/copilot-start.sh"]
+
 EXPOSE 80
