@@ -1,0 +1,239 @@
+"""Contract smoke test: the Wave 1 module <-> agent payloads, end to end (contracts C4, C5).
+
+One chart open, as the module will drive it, through the real app:
+
+1. ``POST /v1/documents/extract`` per unprocessed document; the module stores
+   ``extraction`` and turns its results into candidate rows.
+2. ``POST /v1/documents/briefing`` with every stored extraction + the chart's
+   lab history as ``prior_facts`` - no re-extraction.
+3. ``POST /v1/bundles`` with ``pending_document_facts`` built from the
+   candidates, then a follow-up turn answered from them.
+
+Then the same flow with tracing on, asserting that no new field - printed
+identity, extracted values, test names, fact ids, document bytes - reaches an
+exported span. Offline: StubProvider for extraction and the answer model, a
+scripted turn for the follow-up.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from datetime import date
+from typing import Any
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+from app import observability
+from app.main import app, get_provider_factory, get_settings
+from app.observability import trace_id_for
+from app.providers.stub_provider import StubProvider
+from tests.conftest import configured_settings
+from tests.fakes import FakeProvider, answer, calls, statement
+from tests.test_document_extract import extract_body, signed
+from tests.test_followup import turn
+from tests.test_handoff import post_bundle, ticket_for
+
+PRINTED_NAME = "Evelyn Whitfield-Synthetic"
+PRINTED_DOB = date(1961, 4, 3)
+LABEL = "not yet verified or filed"
+
+
+class _ChartOpenProvider(StubProvider):
+    """Stub extraction and answer model; a scripted follow-up turn."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._turns = FakeProvider(
+            turn_script=[
+                calls(("find_results", {"test_query": "glucose"}), ("find_pending_document_facts", {"test_query": "glucose"})),
+                answer(
+                    statement("Glucose, Fasting 164 mg/dL on 2026-09-12 from document 201 is not yet verified or filed.", "fact", "copilot_extracted_value:2"),
+                    statement("No glucose result was found.", "no_record_found"),  # hides the pending value: rejected
+                ),
+            ]
+        )
+
+    async def turn_step(self, *args: Any, **kwargs: Any) -> Any:
+        return await self._turns.turn_step(*args, **kwargs)
+
+
+@pytest.fixture
+def with_printed_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in for Lane 1's LabDocument.printed_identity until it lands."""
+    import app.document_briefing as db
+
+    real = db.extract_lab_document
+
+    class _Identity:
+        name = PRINTED_NAME
+        dob = PRINTED_DOB
+
+    async def _with_identity(**kwargs: Any) -> Any:
+        document = await real(**kwargs)
+        if getattr(document, "printed_identity", None) is None:
+            object.__setattr__(document, "printed_identity", _Identity())
+        return document
+
+    monkeypatch.setattr(db, "extract_lab_document", _with_identity)
+
+
+def candidates_from(document_id: int, extraction: dict[str, Any], first_id: int) -> list[dict[str, Any]]:
+    """What the module's ContextBundleBuilder sends for one stored extraction (C5)."""
+    rows = []
+    for n, r in enumerate(extraction["results"], start=first_id):
+        rows.append(
+            {
+                "fact_id": f"copilot_extracted_value:{n}",
+                "document_id": document_id,
+                "test_name": r["test_name"],
+                "value_text": None if r["value"] is None else str(r["value"]),
+                "unit": r["unit"],
+                "reference_range": r["reference_range"],
+                "abnormal_flag": r["abnormal_flag"],
+                "flag_source": r["abnormal_flag_source"],
+                "collection_date": r["collection_date"] or extraction["collection_date"],
+                "verification_status": r["verification_status"],
+                "page": r["citation"]["page"],
+                "bbox": r["citation"]["bbox"],
+                "status": "candidate",
+            }
+        )
+    return rows
+
+
+def chart_open(client: TestClient, fixture_payload: dict) -> dict[str, Any]:
+    """Drive the three Wave 1 routes the way the module does on chart open."""
+    body = extract_body("lab_hba1c_clean.pdf", document_id=201)
+    extracted = client.post("/v1/documents/extract", content=body, headers=signed(body))
+    assert extracted.status_code == 200, extracted.text
+    ex = extracted.json()
+    assert ex["status"] == "ok" and ex["doc_type"] == "lab_pdf"
+
+    context = fixture_payload["context"]
+    stored = [{"document_id": 201, "doc_type": "lab_pdf", "extraction": ex["extraction"]}]
+    briefing_payload = {
+        "correlation_id": context["correlation_id"],
+        "patient_uuid": ex["patient_uuid"],
+        "documents": stored,
+        "prior_facts": context["lab_results"],
+        "question": None,
+    }
+    body = json.dumps(briefing_payload).encode()
+    briefed = client.post("/v1/documents/briefing", content=body, headers=signed(body))
+    assert briefed.status_code == 200, briefed.text
+
+    pending = candidates_from(201, ex["extraction"], first_id=1)
+    accepted = post_bundle(client, fixture_payload, pending_document_facts=pending)
+    answered = turn(client, accepted["bundle_id"], ticket_for(accepted), "What did the new report say about glucose?")
+    assert answered.status_code == 200, answered.text
+    return {"extract": ex, "briefing": briefed.json(), "accepted": accepted, "turn": answered.json(), "pending": pending}
+
+
+def _client_with(provider: Any) -> Iterator[TestClient]:
+    app.dependency_overrides[get_provider_factory] = lambda: (lambda: provider)
+    app.dependency_overrides[get_settings] = lambda: configured_settings()
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_provider_factory, None)
+        app.dependency_overrides.pop(get_settings, None)
+
+
+# --------------------------------------------------------------------------- #
+# The contract, end to end
+# --------------------------------------------------------------------------- #
+
+
+def test_chart_open_extract_brief_and_follow_up_over_the_wave_1_contracts(fixture_payload: dict, with_printed_identity: None) -> None:
+    for client in _client_with(_ChartOpenProvider()):
+        out = chart_open(client, fixture_payload)
+
+    ex = out["extract"]
+    assert ex["printed_identity"] == {"name": PRINTED_NAME, "dob": PRINTED_DOB.isoformat()}
+    assert ex["extraction"]["document_id"] == 201 and ex["prompt_version"] and ex["extraction_model"]
+
+    b = out["briefing"]
+    assert b["status"] == "ok" and b["document_ids"] == [201]
+    assert [s["target"] for s in b["routing"]] == ["evidence-retriever", "answer", "finish"]  # no re-extraction
+    cited = {line["document_citation"]["source_id"] for line in b["briefing"]["what_changed"] + b["briefing"]["needs_attention"]}
+    assert cited == {"201"}
+    # The printed identity is for the module's comparison only; it never reaches the briefing.
+    assert PRINTED_NAME not in json.dumps(b) and PRINTED_DOB.isoformat() not in json.dumps(b)
+
+    t = out["turn"]
+    assert t["degraded"] is None
+    assert [s["text"] for s in t["statements"]] == ["Glucose, Fasting 164 mg/dL on 2026-09-12 from document 201 is not yet verified or filed."]
+    assert t["statements"][0]["citations"][0]["record_type"] == "pending_document_fact"
+    assert t["rejected_count"] == 1  # "No glucose result was found." beside a pending value
+    assert [c["tool"] for c in t["tool_calls"]] == ["find_results", "find_pending_document_facts"]
+
+
+def test_an_intake_form_is_recorded_as_not_supported_yet_without_blocking_the_chart(fixture_payload: dict) -> None:
+    for client in _client_with(_ChartOpenProvider()):
+        body = extract_body("lab_hba1c_clean.pdf", document_id=301, doc_type="intake_form")
+        r = client.post("/v1/documents/extract", content=body, headers=signed(body)).json()
+        out = chart_open(client, fixture_payload)
+    assert r["status"] == "degraded" and r["degraded_reason"] == "doc_type_not_supported_yet"
+    assert out["briefing"]["status"] == "ok"
+
+
+# --------------------------------------------------------------------------- #
+# Tracing: no new field leaks into a span
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def exporter() -> Iterator[InMemorySpanExporter]:
+    exp = InMemorySpanExporter()
+    yield exp
+    observability.shutdown_tracing()
+
+
+@pytest.fixture
+def traced(exporter: InMemorySpanExporter, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    original = observability.configure_tracing
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    public_key = f"pk-lf-test-{uuid4().hex}"
+
+    def configure_with_memory_exporter(**kwargs: Any) -> bool:
+        kwargs.update(enabled=True, public_key=public_key, secret_key="sk-lf-test", base_url="http://127.0.0.1:9", span_exporter=exporter)
+        return original(**kwargs)
+
+    monkeypatch.setattr("app.main.configure_tracing", configure_with_memory_exporter)
+    yield from _client_with(_ChartOpenProvider())
+
+
+def test_no_new_contract_field_reaches_an_exported_span(
+    traced: TestClient, exporter: InMemorySpanExporter, fixture_payload: dict, with_printed_identity: None
+) -> None:
+    out = chart_open(traced, fixture_payload)
+    observability._langfuse.flush()  # type: ignore[union-attr]
+    spans = list(exporter.get_finished_spans())
+    names = {s.name for s in spans}
+    assert {"document_extract", "document_briefing", "evidence-retriever", "answer", "turn", "tool"} <= names
+    assert "intake-extractor" not in names  # stored extractions are never re-read
+
+    # The extract route is one trace per correlation id, with codes and counts only.
+    extract_span = next(s for s in spans if s.name == "document_extract")
+    extract_cid = out["extract"]["correlation_id"]
+    assert format(extract_span.context.trace_id, "032x") == trace_id_for(extract_cid)
+    meta = {k.rsplit(".", 1)[-1]: v for k, v in extract_span.attributes.items() if "metadata" in k}
+    assert meta.get("outcome") == "ok" and meta.get("stage") == "lab_pdf" and meta.get("records") == 3
+
+    needles = {PRINTED_NAME, PRINTED_DOB.isoformat(), "Evelyn", out["extract"]["patient_uuid"]}
+    # Values are covered by test_tracing's document test ("8.9"); bare short numbers here
+    # would collide with timings and token counts, so the identifying strings are checked.
+    for fact in out["pending"]:
+        needles |= {fact["fact_id"], fact["test_name"]}
+    for prior in fixture_payload["context"]["lab_results"]:
+        needles |= {prior["result_id"], prior["test_name"]}
+    needles |= {"Hemoglobin A1c", "Glucose", LABEL, "JVBERi0"}
+    for s in spans:
+        blob = json.dumps(dict(s.attributes), default=str)
+        for needle in needles:
+            assert needle not in blob, (s.name, needle)

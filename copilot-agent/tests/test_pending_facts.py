@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -120,9 +121,9 @@ def test_the_agent_accepts_a_signed_bundle_with_pending_facts(client: Any, fixtu
     """Agent deploys first (ADR-011 §3): the new bundle must be accepted, not 422."""
     from tests.test_handoff import post_bundle
 
-    fixture_payload["pending_document_facts"] = [pending_row()]
-    accepted = post_bundle(client, fixture_payload)  # asserts 201
-    assert accepted["bundle_id"]
+    accepted = post_bundle(client, fixture_payload, pending_document_facts=[pending_row()])  # asserts 201
+    stored = client.app.state.store._bundles[UUID(accepted["bundle_id"])]
+    assert [f.fact_id for f in stored.bundle.pending_document_facts] == [A1C_PENDING]
 
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +175,18 @@ def test_chart_results_never_include_pending_rows_but_count_them() -> None:
 def test_a_chart_search_with_no_pending_facts_serialises_as_before() -> None:
     out = run_tool(rich_bundle(), [], "find_results", {"test_query": "hba1c"})
     assert "pending_count" not in json.loads(serialize_output(out))
+
+
+def test_a_lab_printed_name_the_synonym_table_does_not_know_still_matches_its_test() -> None:
+    """"Glucose, Fasting" does not resolve to the glucose key; a pending value must not vanish because of it.
+
+    Counting too many pending values only costs a label; counting too few lets
+    "no result found" hide an unfiled value, so pending matching is generous.
+    """
+    bundle = pending_bundle(pending_row(test_name="Glucose, Fasting", value_text="164", unit="mg/dL", reference_range="70-99"))
+    assert [r["record_id"] for r in run_tool(bundle, [], "find_pending_document_facts", {"test_query": "glucose"}).records] == [A1C_PENDING]
+    assert run_tool(bundle, [], "find_results", {"test_query": "glucose"}).pending_count == 1
+    assert run_tool(bundle, [], "find_results", {"test_query": "potassium"}).pending_count == 0
 
 
 def test_a_pending_value_that_disagrees_with_a_filed_value_on_the_same_day_names_the_conflict() -> None:

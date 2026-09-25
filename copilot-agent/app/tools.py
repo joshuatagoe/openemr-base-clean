@@ -193,7 +193,7 @@ def find_results(bundle: ContextBundle, _: list[EvidenceMatch], args: FindResult
         return ToolOutput(tool="find_results", error="unresolvable_query")
     rows = [r for r in bundle.lab_results if _record_key(r.test_name, r.code) in keys and _since_ok(r.observed_at, args.since)]
     rows.sort(key=lambda r: (r.observed_at, r.result_id), reverse=True)
-    pending = sum(1 for f in bundle.pending_document_facts if _record_key(f.test_name, None) in keys)
+    pending = sum(1 for f in bundle.pending_document_facts if _pending_matches(f.test_name, keys, args.test_query))
     limit = args.limit or MAX_RECORDS
     records = [
         {
@@ -291,6 +291,20 @@ def list_allergies(bundle: ContextBundle, _: list[EvidenceMatch], __: NoArgs) ->
     return ToolOutput(tool="list_allergies", records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
 
 
+def _pending_matches(test_name: str, keys: frozenset[str], query: str) -> bool:
+    """Whether a pending value belongs to the queried test - generously.
+
+    Lab reports print names the synonym table may not know ("Glucose, Fasting").
+    Over-matching only adds a labelled value; under-matching would let "no
+    result found" hide an unfiled one, so every query word appearing in the
+    printed name also counts as a match.
+    """
+    if _record_key(test_name, None) in keys:
+        return True
+    words = set(normalize(query).split())
+    return bool(words) and words <= set(normalize(test_name).split())
+
+
 # Printed flags in the Week 1 vocabulary the verifier checks interpretation words against.
 _PRINTED_FLAG = {"H": "high", "HH": "high", "L": "low", "LL": "low", "A": "yes", "N": "no"}
 
@@ -325,7 +339,7 @@ def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], a
         keys = _test_keys(args.test_query)
         if keys is None:
             return ToolOutput(tool=PENDING_TOOL, error="unresolvable_query")
-        facts = [f for f in facts if _record_key(f.test_name, None) in keys]
+        facts = [f for f in facts if _pending_matches(f.test_name, keys, args.test_query)]
     records = [
         {
             "record_id": f.fact_id,
