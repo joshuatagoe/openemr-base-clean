@@ -24,7 +24,7 @@ a file in this repo, it is marked as planned.
 | Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) |
 | Signed module → agent document route | **Built** | `POST /api/copilot/document-briefing` (module) → `POST /v1/documents/briefing` (agent, `app/document_briefing.py`) |
 | Sparse + dense retrieval, RRF (k = 60) | **Built** | `copilot-agent/app/retrieval.py` — BM25 and a hashed-n-gram dense index, both local and deterministic |
-| Reranking | **Built** | `copilot-agent/app/reranker.py` — `FakeReranker` (default) and a Bedrock Cohere Rerank 3.5 adapter selected by `COPILOT_RERANKER` |
+| Reranking | **Built; Cohere live in production** (2026-09-24) | `copilot-agent/app/reranker.py` — Cohere Rerank 3.5 via Amazon Bedrock in production (`COPILOT_RERANKER=bedrock`); the local deterministic `FakeReranker` is the default and what the offline CI gate uses |
 | Answer model: considerations from the top evidence only | **Built** | `app/document_briefing.py` — flat draft schema; citations built in code, never by the model |
 | Grounded briefing: three headings, tiers, admissibility screening | **Built** | `copilot-agent/app/briefing.py` |
 | Panel: *Brief from latest lab document* | **Built** | `oe-module-copilot/public/copilot-panel.js` |
@@ -37,11 +37,12 @@ a file in this repo, it is marked as planned.
 | Intake-form extraction | **Planned** | no schema, no fixture |
 | Derived-fact persistence + clinician verify-before-file | **Planned** | ADR-003. Extracted values are displayed as *not yet in the chart* and are never filed |
 
-One runtime dependency was added: `langgraph` (MIT, in-process), for the supervisor graph (ADR-001).
-Otherwise `copilot-agent/pyproject.toml` depends only on the Week 1 set (`anthropic`, `fastapi`,
+Two runtime dependencies were added: `langgraph` (MIT, in-process) for the supervisor graph
+(ADR-001), and `boto3` for the Bedrock reranker (ADR-002). Otherwise `copilot-agent/pyproject.toml` depends only on the Week 1 set (`anthropic`, `fastapi`,
 `langfuse`, `pydantic`, `pydantic-settings`, `uvicorn`): BM25 and the dense index are written
-directly, the PDF fixtures are raw PDF structure, and `boto3` is imported lazily inside the Bedrock
-adapter only.
+directly, and the PDF fixtures are raw PDF structure. `boto3` is imported only inside the Bedrock
+adapter, when a call is made — a test asserts importing the app never loads it, so the CI gate needs
+no AWS SDK or credentials.
 
 **Correction, 2026-09-23 evening.** An earlier revision of this section said the corpus had no
 retriever and that upload and retrieval were Planned. Both were true when written and stopped being
@@ -232,7 +233,7 @@ clinical data is PHI at rest and is treated as such.
 
 ---
 
-## 3. Retrieval and RAG design — built (Bedrock rerank deferred to Final)
+## 3. Retrieval and RAG design — built
 
 ### 3.1 Pipeline
 
@@ -242,7 +243,7 @@ clinical data is PHI at rest and is treated as such.
 | Dense | IDF-weighted hashed character 4-grams, 16,384 buckets, cosine similarity | Local and deterministic — no model, no API, no key. Reported as `hashed-ngram-v1`, never as an embedding model |
 | Candidates | Top 20 from each retriever | |
 | Fusion | Reciprocal Rank Fusion, `k = 60`, → up to 30 unique candidates | RRF needs no score calibration between two incomparable scorers |
-| Rerank | **Early Submission: the local `FakeReranker`** (lexical coverage, deterministic). Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) via the Amazon Bedrock `Rerank` API is built behind the same protocol and **deferred to Final** | ADR-002. Selected by `COPILOT_RERANKER`; the panel footer names whichever ran. Observed cost of the lexical one: on the demo report it did not surface NDEP Principle 7 on individualised targets |
+| Rerank | **Production: Cohere Rerank 3.5** (`cohere.rerank-v3-5:0`) via the Amazon Bedrock `Rerank` API, live since 2026-09-24. **CI and local default: the `FakeReranker`** (lexical coverage, deterministic), behind the same protocol so the gate stays offline. The Early Submission ran on the `FakeReranker` | ADR-002. Selected by `COPILOT_RERANKER`; the panel footer names whichever ran. Observed cost of the lexical one: on the demo report it did not surface NDEP Principle 7 on individualised targets |
 | Final k | 5 chunks to the answer model | |
 
 RRF discards score magnitude, so one overwhelmingly relevant chunk does not dominate a consistently

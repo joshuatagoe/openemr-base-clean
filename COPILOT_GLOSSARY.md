@@ -95,7 +95,7 @@ The panel shows the same definitions on hover (`HELP` in
 |---|---|
 | Route | The supervisor's handoffs in order, each with its reason code (below). |
 | Extraction model / Answer model | The models that read the document and proposed considerations. |
-| Reranker | `fake-lexical-coverage-v1` = local deterministic ranking, not a learned model. Cohere Rerank via Bedrock is built and off. |
+| Reranker | `cohere.rerank-v3-5:0` = Cohere Rerank 3.5 via Amazon Bedrock (production). `fake-lexical-coverage-v1` = local deterministic ranking, not a learned model (CI and local runs). |
 | Corpus | The exact guideline corpus version the evidence came from. |
 | Evidence retrieval | `ok`, or a stated reason guideline evidence is missing — never a silent skip. |
 

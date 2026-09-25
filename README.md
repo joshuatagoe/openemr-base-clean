@@ -98,7 +98,7 @@ The document is stored by OpenEMR, not by the Co-Pilot: the module reads the pat
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock. The panel's footer names whichever ran |
+| `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock — **set in production**. The panel's footer names whichever ran; a failed call logs `rerank.bedrock_error` with the AWS error code |
 | `COPILOT_BEDROCK_REGION` | `us-west-2` | Region where Cohere Rerank 3.5 access is enabled |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
 | `COPILOT_MAX_SIGNED_BODY_BYTES` | `15728640` (15 MiB) | Signed request bodies over this are refused with 413 while being read, before the signature is checked. Fits the 10 MiB document cap after base64 |

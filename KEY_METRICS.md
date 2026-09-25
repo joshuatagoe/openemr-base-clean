@@ -213,6 +213,6 @@ Three live runs of the full pipeline against the synthetic lab report, `claude-o
 
 ### 12.5 What is not yet measured
 
-- **The reranker's contribution.** Production uses the local lexical reranker; Cohere Rerank via Bedrock is built but deferred to Final. On the demo report the lexical reranker did not surface NDEP Principle 7 on individualised targets — retrieval precision is the metric that would show whether Cohere fixes that, and it is not yet computed.
+- **The reranker's contribution.** Production runs Cohere Rerank 3.5 via Bedrock since 2026-09-24; the Early Submission and the CI gate use the local lexical reranker. On the demo report the lexical reranker did not surface NDEP Principle 7 on individualised targets — retrieval precision is the metric that would show whether Cohere fixes that, and it is not yet computed.
 - **Intake forms.** Not built; no metric.
 - **Real-world accuracy.** Every document is synthetic and self-authored. A 1.00 here says the system is internally consistent and does not invent; it does not say it reads real clinic scans well.
