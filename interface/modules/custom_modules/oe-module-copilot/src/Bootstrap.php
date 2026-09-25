@@ -13,6 +13,8 @@
  *    hands it to the agent and returns a patient-bound ticket plus the
  *    deterministic sections. The patient binding is the session's selected
  *    patient; a `pid` in the body is only checked for staleness.
+ *  - `GET /api/copilot/document-file/:did` - the source file for the preview
+ *    (ADR-008 §3), same authorizer; see Controller\DocumentFileController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
  *      copilot_admin_relationship_override (bool, default off) - allow
  *        admin/super users without a care relationship, audited as such
@@ -46,6 +48,7 @@ use OpenEMR\Modules\Copilot\Authorization\SqlRelationshipRepository;
 use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
+use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
@@ -68,6 +71,7 @@ final class Bootstrap
     public const ROUTE_DOCUMENT_BRIEFING = 'POST /api/copilot/document-briefing';
     public const ROUTE_DOCUMENTS_PROCESS = 'POST /api/copilot/documents/process';
     public const ROUTE_DOCUMENTS_LIST = 'GET /api/copilot/documents';
+    public const ROUTE_DOCUMENT_FILE = 'GET /api/copilot/document-file/:did';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
 
@@ -135,6 +139,10 @@ final class Bootstrap
             self::ROUTE_DOCUMENTS_LIST,
             static fn(HttpRestRequest $request) => self::createDocumentsController()->handleListRest($request)
         );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENT_FILE,
+            static fn(string $did, HttpRestRequest $request) => self::createDocumentFileController()->handleRest($did, $request)
+        );
         return $event;
     }
 
@@ -187,6 +195,16 @@ final class Bootstrap
             new SqlSchemaStatus(),
             new DocumentProcessor(new SqlDocumentReader(), new SqlProcessingRepository(), new GuzzleAgentClient(CopilotConfig::fromEnvironment()), $logger),
             $logger,
+        );
+    }
+
+    /** The source-file route for the preview (ADR-008), same authorizer wiring. */
+    public static function createDocumentFileController(): DocumentFileController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        return new DocumentFileController(
+            new CopilotAuthorizer(new AclMainChecker(), new SqlRelationshipRepository(), $override),
+            new SqlDocumentReader(),
         );
     }
 

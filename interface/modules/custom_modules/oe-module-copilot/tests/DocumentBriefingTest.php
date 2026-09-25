@@ -300,12 +300,26 @@ final class FakeDocumentReader extends SqlDocumentReader
     {
     }
 
-    public function findLatestDocument(int $pid): ?array
+    /** @var list<string> usernames the access checks ran for */
+    public array $checkedFor = [];
+
+    /** @var list<int> documents core can_access() refuses */
+    public array $denied = [];
+
+    public function findLatestDocument(int $pid, string $username): ?array
     {
         $this->requested[] = $pid;
+        $this->checkedFor[] = $username;
         if ($this->failure !== null) {
             throw $this->failure;
         }
-        return $this->byPid[$pid] ?? null;
+        $doc = $this->byPid[$pid] ?? null;
+        return $doc !== null && in_array($doc['document_id'], $this->denied, true) ? null : $doc;
+    }
+
+    public function canAccess(int $documentId, string $username): bool
+    {
+        $this->checkedFor[] = $username;
+        return !in_array($documentId, $this->denied, true);
     }
 }

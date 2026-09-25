@@ -4,8 +4,10 @@
  * Reads the selected patient's documents from OpenEMR's own Documents feature
  * (core `documents` table, `foreign_id = pid`). No upload code of our own: the
  * file is whatever the clinic filed through core. listForPatient()/readBytes()
- * serve per-document processing (ADR-012) and apply core `can_access()`;
- * findLatestDocument() is the legacy single-document path.
+ * serve per-document processing (ADR-012); findForPatient()/canAccess() serve
+ * the source-file route and filing (ADR-008/009); findLatestDocument() is the
+ * legacy single-document path. Every path applies core `can_access()` for the
+ * session user before a document's bytes are read.
  *
  * The row is chosen here (newest `date`, then highest `id`; PDF/PNG/JPEG only;
  * not deleted, no expiry set); the bytes are read through core `Document::get_data()`
@@ -26,11 +28,12 @@ namespace OpenEMR\Modules\Copilot\Data;
 
 use Document;
 use OpenEMR\Common\Database\QueryUtils;
+use OpenEMR\Modules\Copilot\Documents\DocumentFileSourceInterface;
 use OpenEMR\Modules\Copilot\Documents\PatientDocumentSourceInterface;
 use OpenEMR\Modules\Copilot\Support\Scalar;
 use Throwable;
 
-class SqlDocumentReader implements PatientDocumentSourceInterface
+class SqlDocumentReader implements PatientDocumentSourceInterface, DocumentFileSourceInterface
 {
     /** Matches the agent's MAX_DOCUMENT_BYTES (app/document_briefing.py). */
     public const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -44,11 +47,17 @@ class SqlDocumentReader implements PatientDocumentSourceInterface
         'image/pjpeg' => 'image/jpeg',
     ];
 
+    /** Documents looked at for the newest one `$username` may access (legacy path). */
+    public const LATEST_CANDIDATES = 20;
+
     /**
+     * The newest supported document of the patient that `$username` may access
+     * (core `can_access()`); documents it may not are skipped, never read.
+     *
      * @return array{document_id:int, media_type:string, bytes:string}|null  null when nothing is on file
      * @throws SourceUnavailableException
      */
-    public function findLatestDocument(int $pid): ?array
+    public function findLatestDocument(int $pid, string $username): ?array
     {
         $types = array_keys(self::MEDIA_TYPES);
         try {
@@ -57,8 +66,38 @@ class SqlDocumentReader implements PatientDocumentSourceInterface
                 . " WHERE foreign_id = ? AND deleted = 0"
                 . " AND date_expires IS NULL"
                 . " AND LOWER(mimetype) IN (" . implode(',', array_fill(0, count($types), '?')) . ")"
-                . " ORDER BY `date` DESC, id DESC LIMIT 1",
+                . " ORDER BY `date` DESC, id DESC LIMIT " . self::LATEST_CANDIDATES,
                 array_merge([$pid], $types)
+            );
+        } catch (Throwable $e) {
+            throw new SourceUnavailableException('documents', $e);
+        }
+        foreach ($rows as $row) {
+            $id = Scalar::int($row['id'] ?? null);
+            $mediaType = self::MEDIA_TYPES[strtolower(Scalar::str($row['mimetype'] ?? null))] ?? null;
+            if ($id <= 0 || $mediaType === null || !$this->canAccess($id, $username)) {
+                continue;
+            }
+            // Checked before reading so an oversized file is never loaded; `size` can be
+            // NULL on older rows, so the byte length is checked again after reading.
+            if (Scalar::int($row['size'] ?? null) > self::MAX_DOCUMENT_BYTES) {
+                throw new DocumentTooLargeException($id);
+            }
+            return ['document_id' => $id, 'media_type' => $mediaType, 'bytes' => $this->readBytes($id, $pid)];
+        }
+        return null;
+    }
+
+    public function findForPatient(int $documentId, int $pid): ?array
+    {
+        $types = array_keys(self::MEDIA_TYPES);
+        try {
+            $rows = QueryUtils::fetchRecords(
+                "SELECT id, mimetype, size FROM documents"
+                . " WHERE id = ? AND foreign_id = ? AND deleted = 0 AND date_expires IS NULL"
+                . " AND LOWER(mimetype) IN (" . implode(',', array_fill(0, count($types), '?')) . ")"
+                . " LIMIT 1",
+                array_merge([$documentId, $pid], $types)
             );
         } catch (Throwable $e) {
             throw new SourceUnavailableException('documents', $e);
@@ -67,28 +106,20 @@ class SqlDocumentReader implements PatientDocumentSourceInterface
         if (!is_array($row)) {
             return null;
         }
-        $id = Scalar::int($row['id'] ?? null);
         $mediaType = self::MEDIA_TYPES[strtolower(Scalar::str($row['mimetype'] ?? null))] ?? null;
-        if ($id <= 0 || $mediaType === null) {
+        if ($mediaType === null) {
             return null;
         }
-        // Checked before reading so an oversized file is never loaded; `size` can be
-        // NULL on older rows, so the byte length is checked again after reading.
-        if (Scalar::int($row['size'] ?? null) > self::MAX_DOCUMENT_BYTES) {
-            throw new DocumentTooLargeException($id);
-        }
+        return ['document_id' => $documentId, 'media_type' => $mediaType, 'size' => Scalar::int($row['size'] ?? null)];
+    }
+
+    public function canAccess(int $documentId, string $username): bool
+    {
         try {
-            $bytes = (new Document((string) $id))->get_data();
+            return (new Document((string) $documentId))->can_access($username);
         } catch (Throwable $e) {
             throw new SourceUnavailableException('documents', $e);
         }
-        if (!is_string($bytes) || $bytes === '') {
-            throw new SourceUnavailableException('documents');
-        }
-        if (strlen($bytes) > self::MAX_DOCUMENT_BYTES) {
-            throw new DocumentTooLargeException($id);
-        }
-        return ['document_id' => $id, 'media_type' => $mediaType, 'bytes' => $bytes];
     }
 
     public function listForPatient(int $pid, string $username, int $limit): array
@@ -115,12 +146,8 @@ class SqlDocumentReader implements PatientDocumentSourceInterface
             if ($id <= 0) {
                 continue;
             }
-            try {
-                if (!(new Document((string) $id))->can_access($username)) {
-                    continue;
-                }
-            } catch (Throwable $e) {
-                throw new SourceUnavailableException('documents', $e);
+            if (!$this->canAccess($id, $username)) {
+                continue;
             }
             $names = Scalar::str($row['category_names'] ?? null);
             $out[] = [
