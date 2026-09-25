@@ -134,6 +134,68 @@
         return value + units;
     }
 
+    // ------------------------------------------------------------------ //
+    // Source viewer geometry (ADR-008). The agent's box is [x0, y0, x1, y1],
+    // 0-1, top-left origin, relative to the page CROPBOX in the displayed
+    // (rotation-applied) frame - for photos, the EXIF-oriented image. pdf.js
+    // viewports are built from the cropbox at the page's own rotation, and
+    // browsers show photos EXIF-oriented, so normally only scaling applies;
+    // `rotation` is any extra clockwise rotation the renderer adds on top.
+    // A missing or malformed box gives null: the viewer then shows a notice,
+    // never a guessed box.
+    // ------------------------------------------------------------------ //
+    function validBox(bbox) {
+        if (!Array.isArray(bbox) || bbox.length !== 4) {
+            return false;
+        }
+        if (!bbox.every((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1)) {
+            return false;
+        }
+        return bbox[0] < bbox[2] && bbox[1] < bbox[3];
+    }
+
+    function rotatePoint(x, y, rotation) {
+        switch (rotation) {
+            case 90: return [1 - y, x];
+            case 180: return [1 - x, 1 - y];
+            case 270: return [y, 1 - x];
+            default: return [x, y];
+        }
+    }
+
+    /**
+     * @param {number[]|null} bbox  [x0, y0, x1, y1], 0-1, top-left, displayed frame
+     * @param {{width:number, height:number, rotation?:number}|null} frame  rendered size in CSS px
+     * @returns {{left:number, top:number, width:number, height:number}|null}
+     */
+    function overlayRect(bbox, frame) {
+        if (!validBox(bbox) || !frame || !(frame.width > 0) || !(frame.height > 0)) {
+            return null;
+        }
+        const rotation = frame.rotation || 0;
+        if ([0, 90, 180, 270].indexOf(rotation) < 0) {
+            return null;
+        }
+        const a = rotatePoint(bbox[0], bbox[1], rotation);
+        const b = rotatePoint(bbox[2], bbox[3], rotation);
+        const x0 = Math.min(a[0], b[0]);
+        const x1 = Math.max(a[0], b[0]);
+        const y0 = Math.min(a[1], b[1]);
+        const y1 = Math.max(a[1], b[1]);
+        return { left: x0 * frame.width, top: y0 * frame.height, width: (x1 - x0) * frame.width, height: (y1 - y0) * frame.height };
+    }
+
+    /** Frame of a pdf.js viewport; extra rotation = viewport rotation minus the page's own /Rotate. */
+    function pdfFrame(viewport, pageRotate) {
+        const extra = ((((viewport.rotation || 0) - (pageRotate || 0)) % 360) + 360) % 360;
+        return { width: viewport.width, height: viewport.height, rotation: extra };
+    }
+
+    /** Frame of a displayed <img>: its rendered size (the browser has already applied EXIF orientation). */
+    function imageFrame(img) {
+        return { width: img.clientWidth, height: img.clientHeight, rotation: 0 };
+    }
+
     class CopilotPanel {
         constructor(container) {
             this.container = container;
@@ -997,5 +1059,10 @@
         document.addEventListener('DOMContentLoaded', boot);
     } else {
         boot();
+    }
+
+    // Pure helpers, exported for the jest tests only (browsers have no `module`).
+    if (typeof module === 'object' && module && module.exports) {
+        module.exports = { overlayRect: overlayRect, pdfFrame: pdfFrame, imageFrame: imageFrame };
     }
 })();
