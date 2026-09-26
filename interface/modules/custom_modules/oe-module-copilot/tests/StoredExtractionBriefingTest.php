@@ -68,6 +68,7 @@ final class StoredExtractionBriefingTest extends TestCase
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[{"test_name":"Hemoglobin A1c"}]}');
         $repo->records[6] = self::record(6, 'extracted', '{"document_id":6,"results":[]}');
         $repo->records[7] = self::record(7, 'held_identity', '{"document_id":7,"results":[]}');
+        $repo->waiting(5, 6, 7);
         $labs = [
             ['result_id' => 1, 'order_id' => 3, 'test_name' => 'Hemoglobin A1c', 'code' => '4548-4', 'value' => '8.4', 'units' => '%', 'range' => '4.0-5.6', 'abnormal' => 'high', 'result_status' => 'final', 'observed_at' => '2026-06-01 08:00:00'],
             ['result_id' => 2, 'order_id' => 3, 'test_name' => 'Glucose', 'code' => '', 'value' => '142', 'units' => 'mg/dL', 'range' => '', 'abnormal' => '', 'result_status' => 'entered-in-error', 'observed_at' => '2026-06-01 08:00:00'],
@@ -115,6 +116,53 @@ final class StoredExtractionBriefingTest extends TestCase
         $sent = $agent->documentPosts[0]['request']['documents'];
         self::assertSame([5], array_column($sent, 'document_id'), 'a document whose values were all reviewed is not sent');
         self::assertSame([['test_name' => 'A']], $sent[0]['extraction']['results'], 'only the value still waiting for review is sent');
+    }
+
+    /**
+     * The 20 briefing slots go to the newest documents that still have work: a value waiting for
+     * review (a `candidate` row - an unreadable lab value is still fileable or rejectable, and an
+     * intake item is never reviewable, so both stay waiting). Fully reviewed documents, however new,
+     * no longer push older unreviewed ones out.
+     */
+    public function testFullyReviewedDocumentsDoNotTakeBriefingSlots(): void
+    {
+        $repo = new FakeProcessingRepository();
+        for ($id = 1; $id <= 21; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+            $repo->values[$id] = [['id' => $id, 'document_id' => $id, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate', 'verification_status' => $id === 21 ? 'unreadable' : 'verified_exact']];
+        }
+        for ($id = 30; $id <= 34; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+            $repo->values[$id] = [['id' => $id, 'document_id' => $id, 'pid' => self::PID, 'result_index' => 0, 'status' => $id % 2 === 0 ? 'filed' : 'rejected']];
+        }
+        $repo->records[40] = ['doc_type' => 'intake_form'] + self::record(40, 'extracted', '{"document_id":40,"doc_type":"intake_form","current_medications":[]}');
+        $repo->values[40] = [['id' => 40, 'document_id' => 40, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        $sent = array_column($agent->documentPosts[0]['request']['documents'], 'document_id');
+        self::assertSame(array_merge(range(3, 21), [40]), $sent, 'the newest 20 documents with a value waiting, oldest first');
+    }
+
+    public function testTheRepositoryListsOnlyDocumentsWithAValueWaiting(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[1] = self::record(1, 'extracted', '{"document_id":1,"results":[{"test_name":"A"}]}');
+        $repo->values[1] = [['id' => 1, 'document_id' => 1, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $repo->records[2] = self::record(2, 'extracted', '{"document_id":2,"results":[{"test_name":"A"}]}');
+        $repo->values[2] = [['id' => 2, 'document_id' => 2, 'pid' => self::PID, 'result_index' => 0, 'status' => 'unfiled']];
+        $repo->records[3] = self::record(3, 'extracted', '{"document_id":3,"results":[]}'); // read, nothing to review
+        $repo->records[4] = self::record(4, 'extracted', '{"document_id":4,"results":[{"test_name":"A"},{"test_name":"B"}]}');
+        $repo->values[4] = [
+            ['id' => 3, 'document_id' => 4, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed'],
+            ['id' => 4, 'document_id' => 4, 'pid' => self::PID, 'result_index' => 1, 'status' => 'candidate'],
+        ];
+
+        self::assertSame([1, 4], array_column($repo->listExtractions(self::PID, 20), 'document_id'));
+        self::assertSame([4], array_column($repo->listExtractions(self::PID, 1), 'document_id'), 'the newest when capped');
+        self::assertSame([0], $repo->listExtractions(self::PID, 20)[1]['reviewed_indices']);
+        self::assertSame(['extracted' => 4, 'waiting' => 2], $repo->countExtractions(self::PID));
     }
 
     /**
@@ -173,6 +221,7 @@ final class StoredExtractionBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $agent = new FakeAgentClient();
         $this->controller($repo, $agent, new SourceUnavailableException('lab_results'))->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID]);
         self::assertSame([], $agent->documentPosts[0]['request']['prior_facts']);
@@ -189,6 +238,7 @@ final class StoredExtractionBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $agent = new FakeAgentClient(new AgentUnavailableException(AgentUnavailableException::REASON_REJECTED, 422));
         $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID]);
         self::assertSame('agent_unavailable', $result['body']['degraded_reason']);

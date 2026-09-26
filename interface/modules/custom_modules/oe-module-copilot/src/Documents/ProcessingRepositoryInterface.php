@@ -87,7 +87,9 @@ interface ProcessingRepositoryInterface
 
     /**
      * Stored lab and intake extractions of this patient's `extracted` documents (not
-     * held, not deleted in OpenEMR): the newest `$limit`, returned oldest first.
+     * held, not deleted in OpenEMR) that still have a value waiting for review (at least one
+     * `candidate` value, see countExtractions): the newest `$limit`, returned oldest first.
+     * A fully reviewed document takes no slot.
      *
      * `reviewed_indices`: result positions whose value was filed, rejected or un-filed - the briefing
      * leaves them out (filed values reach it as chart history instead).
