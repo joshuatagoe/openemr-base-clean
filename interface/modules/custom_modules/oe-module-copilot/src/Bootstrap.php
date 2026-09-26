@@ -21,6 +21,9 @@
  *  - `GET /api/copilot/documents/:did/values` - one document's candidate values
  *    for the panel's value list and viewer (read-only); see
  *    Controller\DocumentValuesController.
+ *  - `POST /api/copilot/documents/:did/confirm-patient` - "This is the right
+ *    patient" for a document held for an identity check (ADR-012 §4a); see
+ *    Controller\DocumentPatientConfirmController.
  *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
  *    chart result (ADR-009 7b); see Controller\ResultSourceController.
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
@@ -57,6 +60,7 @@ use OpenEMR\Modules\Copilot\Config\CopilotConfig;
 use OpenEMR\Modules\Copilot\Controller\BriefingTicketController;
 use OpenEMR\Modules\Copilot\Controller\DocumentBriefingController;
 use OpenEMR\Modules\Copilot\Controller\DocumentFileController;
+use OpenEMR\Modules\Copilot\Controller\DocumentPatientConfirmController;
 use OpenEMR\Modules\Copilot\Controller\DocumentValuesController;
 use OpenEMR\Modules\Copilot\Controller\FilingController;
 use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
@@ -90,6 +94,7 @@ final class Bootstrap
     public const ROUTE_VALUE_FILE = 'POST /api/copilot/documents/:did/values/:idx/file';
     public const ROUTE_VALUE_REJECT = 'POST /api/copilot/documents/:did/values/:idx/reject';
     public const ROUTE_VALUE_UNFILE = 'POST /api/copilot/documents/:did/values/:idx/unfile';
+    public const ROUTE_DOCUMENT_CONFIRM_PATIENT = 'POST /api/copilot/documents/:did/confirm-patient';
     public const ROUTE_RESULT_SOURCE = 'GET /api/copilot/results/:rid/source';
     public const MODULE_PATH = '/interface/modules/custom_modules/oe-module-copilot';
     public const PANEL_SCRIPT = '/public/copilot-panel.js';
@@ -177,6 +182,10 @@ final class Bootstrap
         $event->addToRouteMap(
             self::ROUTE_VALUE_UNFILE,
             static fn(string $did, string $idx, HttpRestRequest $request) => self::createFilingController()->handleUnfileRest($did, $idx, $request)
+        );
+        $event->addToRouteMap(
+            self::ROUTE_DOCUMENT_CONFIRM_PATIENT,
+            static fn(string $did, HttpRestRequest $request) => self::createDocumentPatientConfirmController()->handleRest($did, $request)
         );
         $event->addToRouteMap(
             self::ROUTE_RESULT_SOURCE,
@@ -272,6 +281,21 @@ final class Bootstrap
             new SqlSchemaStatus(),
             new SqlDocumentReader(),
             new ValueFiler(new SqlFilingStore()),
+        );
+    }
+
+    /** "This is the right patient" (ADR-012 §4a): read authorizer plus the filing permissions. */
+    public static function createDocumentPatientConfirmController(): DocumentPatientConfirmController
+    {
+        $override = OEGlobalsBag::getInstance()->getBoolean(self::GLOBAL_ADMIN_OVERRIDE);
+        $acl = new AclMainChecker();
+        return new DocumentPatientConfirmController(
+            new CopilotAuthorizer($acl, new SqlRelationshipRepository(), $override),
+            $acl,
+            $acl,
+            new SqlSchemaStatus(),
+            new SqlDocumentReader(),
+            new SqlProcessingRepository(),
         );
     }
 

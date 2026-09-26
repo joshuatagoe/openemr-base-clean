@@ -161,6 +161,19 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
         );
     }
 
+    public function confirmHeldPatient(int $documentId, int $pid, string $resolutionCode): bool
+    {
+        // One conditional statement plus ROW_COUNT(), like claim(): two clicks cannot both resolve it.
+        QueryUtils::sqlStatementThrowException(
+            "UPDATE copilot_document
+                SET status = 'extracted', last_error_code = ?, updated_at = NOW()
+              WHERE document_id = ? AND pid = ? AND status = 'held_identity'",
+            [$resolutionCode, $documentId, $pid],
+            true
+        );
+        return $this->rowCount() === 1;
+    }
+
     public function listExtractions(int $pid, int $limit): array
     {
         // The newest documents when there are more than the limit, returned oldest first.
