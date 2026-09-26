@@ -106,6 +106,7 @@
         doc_status_skipped_duplicate: 'The same file was already read in this chart; its values are listed under that document. Nothing is read twice.',
         doc_status_unsupported: 'Not read: it needs a Co-Pilot category (Lab Report), or it is a kind of file the Co-Pilot does not read.',
         doc_status_held_identity: 'Held: the patient printed on the document may not be this patient. Its values are not shown or used until a clinician confirms the patient.',
+        confirm_patient: 'For a held document you have viewed: confirms it belongs to this patient. Its values then become reviewable, waiting to be verified and filed or rejected; the identity check result is kept, and your confirmation is recorded in the EHR audit log. Needs lab-write and sign permissions, like filing. If the document is another patient\u2019s, move it in Documents instead.',
         pending_count: 'Values read from this document that are waiting for a clinician to verify and file or reject.',
         verification_verified_exact: 'The system found this exact value on the page; the box shows where. Found is not the same as correct - check it.',
         verification_verified_fuzzy: 'The system found a close match on the page (for example different spacing); the box shows where. Check it.',
@@ -1126,6 +1127,14 @@
         agent_degraded: 'The Co-Pilot agent could not read it this time. It will be tried again the next time the chart is opened.'
     };
     const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    // Held for another reason (the same file live in another chart, no matching printed identity here): no mismatch was found.
+    const HELD_OTHER_TEXT = 'This document is held for an identity check. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const CONFIRMED_CODE = 'identity_confirmed_by_clinician';
+    const CONFIRMED_IDENTITY_TEXT = {
+        mismatch: 'the name or date of birth printed on it did not match this chart',
+        missing: 'the name and date of birth printed on it could not be compared with this chart',
+        match: 'the same file is also in another patient\u2019s chart'
+    };
     const VERIFICATION_LABELS = {
         verified_exact: ['Found on the page', 'badge-success'],
         verified_fuzzy: ['Found on the page (close match)', 'badge-success'],
@@ -1155,16 +1164,20 @@
             badge = 'badge-warning';
         }
         const notes = [];
+        const confirmed = status === 'extracted' && code === CONFIRMED_CODE;
         if (status === 'held_identity') {
-            notes.push(HELD_TEXT);
+            notes.push(doc.identity_check === 'mismatch' ? HELD_TEXT : HELD_OTHER_TEXT);
         }
-        if (code) {
+        if (confirmed) {
+            const why = CONFIRMED_IDENTITY_TEXT[doc.identity_check];
+            notes.push('Held for an identity check' + (why ? ' (' + why + ')' : '') + '; a clinician confirmed this is the right patient. The confirmation is in the EHR audit log.');
+        } else if (code) {
             notes.push(DOC_CODE_TEXT[code] || ('Reason code: ' + code + '.'));
         }
         if (status === 'extracted') {
             const n = Number(doc.pending_count) || 0;
             notes.push(n === 0 ? 'No values waiting for review.' : (n === 1 ? '1 value waiting for review.' : n + ' values waiting for review.'));
-            if (doc.identity_check === 'missing') {
+            if (doc.identity_check === 'missing' && !confirmed) {
                 notes.push('The name and date of birth printed on it could not be compared with this chart; check the document is this patient’s before filing.');
             }
         }
@@ -1174,8 +1187,24 @@
             badge: badge,
             helpKey: 'doc_status_' + status,
             notes: notes,
-            showValues: status === 'extracted'
+            showValues: status === 'extracted',
+            canConfirm: status === 'held_identity'
         };
+    }
+
+    /** How the panel reads an answer of POST .../confirm-patient (ADR-012 section 4a). Pure. */
+    function classifyConfirmResponse(status, data) {
+        if (status === 200 && data) {
+            return { kind: 'confirmed', message: 'Confirmed as this patient\u2019s document. Its values are listed for review.' };
+        }
+        const detail = data && data.detail ? data.detail : {};
+        const code = String(detail.code || '');
+        const message = detail.message ? String(detail.message) + ' (' + code + ')' : 'The confirmation could not be sent (' + (status ? 'http_' + status : 'network') + ').';
+        // Resolved already (another click or another user) or no longer in this chart: show the current list.
+        if (code === 'not_held' || code === 'document_not_found') {
+            return { kind: 'closed', message: message };
+        }
+        return { kind: 'error', message: message };
     }
 
     /** Module routes under the local API bridge, bound to the session's patient. */
@@ -1660,6 +1689,7 @@
             this.docs = [];
             this.values = {}; // document_id -> values response
             this.filedResults = {}; // procedure_result_id -> true
+            this.viewedDocs = {}; // document_id -> true once a held document was opened in the viewer
             this.root = el('div', 'card-body border-top');
             this.root.dataset.role = 'documents';
             this.root.setAttribute('aria-label', 'Documents in this chart');
@@ -1761,11 +1791,14 @@
                 view.type = 'button';
                 view.dataset.action = 'view-document';
                 view.addEventListener('click', () => this.openSource(doc.document_id, null, null));
-                if (!doc.error_code || ['unsupported_media_type', 'document_too_large'].indexOf(String(doc.error_code)) < 0) {
+                if (!d.canConfirm && (!doc.error_code || ['unsupported_media_type', 'document_too_large'].indexOf(String(doc.error_code)) < 0)) {
                     head.appendChild(view);
                 }
                 item.appendChild(head);
                 d.notes.forEach((n) => item.appendChild(el('div', doc.status === 'held_identity' || doc.status === 'failed' ? 'text-warning' : 'text-muted', n)));
+                if (d.canConfirm) {
+                    this.heldActions(doc, item);
+                }
                 const holder = el('div', 'mt-1');
                 holder.dataset.role = 'value-list';
                 item.appendChild(holder);
@@ -1774,6 +1807,78 @@
                 }
                 this.list.appendChild(item);
             });
+        }
+
+        /**
+         * A held document (ADR-012 section 4a): after the explanation, "View document", then
+         * "This is the right patient" - enabled once the document was viewed here, and
+         * sent only after an explicit second click. The list is refreshed afterwards.
+         */
+        heldActions(doc, item) {
+            const documentId = Number(doc.document_id);
+            const actions = el('div', 'd-flex flex-wrap align-items-center mt-1');
+            actions.dataset.role = 'held-actions';
+            const view = el('button', 'btn btn-outline-secondary btn-sm py-0 mr-2', 'View document');
+            view.type = 'button';
+            view.dataset.action = 'view-document';
+            const confirm = el('button', 'btn btn-outline-warning btn-sm py-0 mr-1', 'This is the right patient');
+            confirm.type = 'button';
+            confirm.dataset.action = 'confirm-patient';
+            explain(confirm, 'confirm_patient');
+            confirm.disabled = !this.viewedDocs[documentId];
+            const cancel = el('button', 'btn btn-link btn-sm py-0', 'Cancel');
+            cancel.type = 'button';
+            cancel.dataset.action = 'cancel-confirm-patient';
+            cancel.hidden = true;
+            const message = el('div', 'mt-1 text-muted', confirm.disabled ? 'View the document first; then you can confirm it is this patient\u2019s.' : '');
+            message.dataset.role = 'held-message';
+            message.setAttribute('role', 'status');
+            message.setAttribute('aria-live', 'polite');
+            const say = (text, cls) => {
+                message.textContent = text;
+                message.className = 'mt-1 ' + (cls || 'text-muted');
+            };
+            const disarm = () => {
+                delete confirm.dataset.armed;
+                confirm.textContent = 'This is the right patient';
+                cancel.hidden = true;
+            };
+            view.addEventListener('click', () => {
+                this.viewedDocs[documentId] = true;
+                confirm.disabled = false;
+                say('');
+                this.openSource(documentId, null, null);
+            });
+            cancel.addEventListener('click', () => {
+                disarm();
+                say('');
+            });
+            confirm.addEventListener('click', async () => {
+                if (confirm.dataset.armed !== '1') {
+                    confirm.dataset.armed = '1';
+                    confirm.textContent = 'Confirm: this is the right patient';
+                    cancel.hidden = false;
+                    say('Confirm only if you checked that the document belongs to this patient. Its values become reviewable here (nothing is filed automatically); the identity check result is kept and your confirmation is recorded in the EHR audit log. If it is another patient\u2019s, move it to the right chart in Documents instead.', 'text-warning');
+                    return;
+                }
+                confirm.disabled = true;
+                cancel.hidden = true;
+                const result = await this.api.json('POST', '/documents/' + encodeURIComponent(String(documentId)) + '/confirm-patient', { confirm: true });
+                const r = classifyConfirmResponse(result.status, result.data);
+                if (r.kind === 'error') {
+                    disarm();
+                    confirm.disabled = false;
+                    say(r.message, 'text-danger');
+                    return;
+                }
+                say(r.message, r.kind === 'confirmed' ? 'text-success' : 'text-warning');
+                await this.refreshList();
+            });
+            actions.appendChild(view);
+            actions.appendChild(confirm);
+            actions.appendChild(cancel);
+            item.appendChild(actions);
+            item.appendChild(message);
         }
 
         async loadAllValues() {
@@ -2272,6 +2377,7 @@
             pdfFrame: pdfFrame,
             imageFrame: imageFrame,
             describeDocument: describeDocument,
+            classifyConfirmResponse: classifyConfirmResponse,
             DocumentsSection: DocumentsSection,
             SourceViewer: SourceViewer,
             DocumentBriefingSection: DocumentBriefingSection,
