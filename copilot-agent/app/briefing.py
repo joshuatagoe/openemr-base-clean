@@ -65,6 +65,7 @@ from app.documents import (
     VerificationStatus,
 )
 from app.evidence import EvidencePackage, EvidenceSnippet, GuidelineCitation, RetrievalStatus
+from app.intake import IntakeForm, intake_items
 from app.lab_extractor import derive_abnormal_flag, parse_reference_range
 from app.observability import log_event
 
@@ -670,6 +671,62 @@ def _needs_attention(
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# Intake forms: what the patient reported (ADR-010)
+# --------------------------------------------------------------------------- #
+
+#: Chart medications are not part of the document-briefing contract (C4), so a
+#: reported medication cannot be compared with them here. Said, not implied.
+_VERIFIED_STATUSES = (VerificationStatus.VERIFIED_EXACT, VerificationStatus.VERIFIED_FUZZY)
+
+REPORTED_MEDICATIONS_NOT_COMPARED = (
+    "Patient-reported medications were not compared with the chart's medication list in this briefing; "
+    "check them against the chart before relying on either."
+)
+
+
+def blank_section_limitation(section: str, document_id: int) -> str:
+    return (
+        f"The intake form (document {document_id}) lists no {section} and no written \"none\"; "
+        f"a blank section is not a statement of no known {section}."
+    )
+
+
+def _intake_lines(forms: Sequence[IntakeForm]) -> tuple[list[BriefingLine], list[BriefingLine], list[str]]:
+    """Every reported item as a patient-reported line (readable: What changed; unreadable: Needs attention)."""
+    changed: list[BriefingLine] = []
+    attention: list[BriefingLine] = []
+    limitations: list[str] = []
+    for form in forms:
+        for item in intake_items(form):
+            line_id = f"intake-{form.document_id}-{item.index}"
+            label = item.label[0].lower() + item.label[1:]
+            if item.text is None or item.verification_status is VerificationStatus.UNREADABLE:
+                attention.append(BriefingLine(
+                    line_id=line_id,
+                    tier=AssertionTier.PATIENT_REPORTED,
+                    text=f"An intake-form entry ({label}) could not be read and is reported here as unreadable.",
+                    document_citation=item.citation,
+                    not_yet_in_chart=True,
+                ))
+                continue
+            located = "" if item.verification_status in _VERIFIED_STATUSES else " (not located on the page; unverified)"
+            changed.append(BriefingLine(
+                line_id=line_id,
+                tier=AssertionTier.PATIENT_REPORTED,
+                text=f"The patient reported on the intake form ({label}): {item.text}{located}.",
+                document_citation=item.citation,
+                not_yet_in_chart=True,
+            ))
+        if not form.allergies and form.allergies_none_stated is None:
+            limitations.append(blank_section_limitation("allergies", form.document_id))
+        if not form.current_medications and form.medications_none_stated is None:
+            limitations.append(blank_section_limitation("medications", form.document_id))
+        if form.current_medications:
+            limitations.append(REPORTED_MEDICATIONS_NOT_COMPARED)
+    return changed, attention, limitations
+
+
 def build_briefing(
     *,
     document: LabDocument | None,
@@ -677,6 +734,7 @@ def build_briefing(
     prior_facts: Sequence[ChartFact] = (),
     considerations: Sequence[ConsiderationCandidate] = (),
     patient_reports: Sequence[PatientReport] = (),
+    intake_forms: Sequence[IntakeForm] = (),
     question: str | None = None,
     document_reviewed: bool = False,
 ) -> Briefing:
@@ -696,8 +754,11 @@ def build_briefing(
 
     what_changed = _what_changed(document, prior_facts, not_yet_in_chart=not_yet_in_chart)
     needs_attention = _needs_attention(document, patient_reports, not_yet_in_chart=not_yet_in_chart)
+    reported, reported_attention, intake_limitations = _intake_lines(intake_forms)
+    what_changed += reported
+    needs_attention += reported_attention
 
-    limitations: list[str] = []
+    limitations: list[str] = list(intake_limitations)
     dropped: list[DroppedAssertion] = []
     kept: list[Consideration] = []
 

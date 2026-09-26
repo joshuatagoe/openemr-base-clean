@@ -83,19 +83,28 @@ MAX_PRIOR_FACTS = 500
 class StoredDocument(StrictModel):
     """One document's stored extraction, as the module saved it from ``/v1/documents/extract``.
 
-    Fails closed on attribution: the extraction and every citation in it must
-    name the listed ``document_id``, or the briefing would cite the wrong file.
+    A lab report (``LabDocument``) or, since Wave 2, an intake form
+    (``IntakeForm``, ADR-010). Fails closed on type and attribution: the
+    extraction must be of the listed ``doc_type``, and it and every citation in
+    it must name the listed ``document_id``, or the briefing would cite the
+    wrong file.
     """
 
     document_id: int = Field(ge=1)
-    doc_type: Literal["lab_pdf"]
-    extraction: LabDocument
+    doc_type: Literal["lab_pdf", "intake_form"]
+    extraction: LabDocument | IntakeForm
 
     @model_validator(mode="after")
     def _attributed_to_this_document(self) -> StoredDocument:
+        if self.extraction.doc_type != self.doc_type:
+            raise ValueError("the stored extraction is not of the listed doc_type")
         if self.extraction.document_id != self.document_id:
             raise ValueError("the stored extraction belongs to a different document_id")
-        if any(r.citation.source_id != str(self.document_id) for r in self.extraction.results):
+        citations = (
+            all_citations(self.extraction) if isinstance(self.extraction, IntakeForm)
+            else [r.citation for r in self.extraction.results]
+        )
+        if any(c.source_id != str(self.document_id) for c in citations):
             raise ValueError("a stored citation names a different document")
         return self
 
@@ -382,6 +391,24 @@ def combine_documents(documents: list[LabDocument]) -> LabDocument:
             verified_fraction=(verified / len(results)) if results else 0.0,
             unreadable_count=sum(1 for r in results if r.verification_status is VerificationStatus.UNREADABLE),
             unverified_count=sum(1 for r in results if r.verification_status is VerificationStatus.UNVERIFIED),
+        ),
+    )
+
+
+def empty_lab_document(document_id: int, forms: list[IntakeForm]) -> LabDocument:
+    """The lab reading of a briefing that holds intake forms only: no results, the forms' provenance."""
+    metas = [f.extraction_metadata for f in forms]
+    return LabDocument(
+        document_id=document_id,
+        results=[],
+        extraction_metadata=ExtractionMetadata(
+            model_id=",".join(dict.fromkeys(m.model_id for m in metas)) or "none",
+            prompt_version=",".join(dict.fromkeys(m.prompt_version for m in metas)) or "none",
+            extracted_at=max(m.extracted_at for m in metas),
+            page_count=max(1, sum(m.page_count for m in metas)),
+            verified_fraction=0.0,
+            unreadable_count=0,
+            unverified_count=0,
         ),
     )
 
@@ -770,6 +797,7 @@ __all__ = [
     "build_reranker",
     "chart_facts",
     "combine_documents",
+    "empty_lab_document",
     "drafts_to_candidates",
     "get_retriever",
     "printed_identity_of",
