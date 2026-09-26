@@ -142,3 +142,12 @@ async def test_nothing_the_form_says_reaches_a_log(caplog: pytest.LogCaptureFixt
 async def test_an_unsupported_media_type_is_refused() -> None:
     with pytest.raises(ValueError):
         await extract_intake_document(document_id=1, document_bytes=b"x", media_type="image/gif", ocr=FakeOcr())
+
+
+async def test_a_us_written_dob_is_read_month_first_when_the_model_leaves_it_unconverted() -> None:
+    draft = IntakeDraft(patient_name="Demo, Evelyn", patient_dob_as_written="04/12/1958", patient_dob="")
+    form = await _extract(EVELYN, provider=FakeProvider(draft))
+    assert form.printed_identity is not None and form.printed_identity.dob == date(1958, 4, 12)
+    impossible = IntakeDraft(patient_name="Demo, Evelyn", patient_dob_as_written="31/12/1958")
+    form = await _extract(EVELYN, provider=FakeProvider(impossible))
+    assert form.printed_identity is not None and form.printed_identity.dob is None

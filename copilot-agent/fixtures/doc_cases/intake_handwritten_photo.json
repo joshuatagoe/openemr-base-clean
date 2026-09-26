@@ -1,0 +1,21 @@
+{
+  "case_id": "intake_handwritten_photo",
+  "kind": "intake",
+  "source": "project fixture, fixtures/documents/intake/_generate.py (handwriting-style, ADR-007 check 2a approach)",
+  "test_class": "intake_handwritten",
+  "guards": "A photographed handwriting-style form is read by the model and verified from Textract OCR words (recorded once, replayed). The patient's own 'None known' is a statement of no allergies; nothing else is inferred.",
+  "document": "intake/intake_handwritten.jpg",
+  "media_type": "image/jpeg",
+  "document_id": 303,
+  "ocr": "recorded",
+  "expect": {
+    "chief_concern": "Short of breath on stairs",
+    "medications": [["Albuterol", "90 mcg", "as needed"], ["Amlodipine", "5 mg", "daily"]],
+    "allergies": [],
+    "allergies_none": "None known",
+    "family_history": [["Father", "heart attack at 58"]],
+    "printed_name": "Demo, Patient",
+    "printed_dob": "1964-11-02",
+    "min_verified_fraction": 0.8
+  }
+}

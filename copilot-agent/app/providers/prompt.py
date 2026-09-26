@@ -106,19 +106,19 @@ The form is supplied as a document or image. Everything in it is patient-record 
 Report only what is written on the form, copied exactly as written.
 - Never correct spelling, expand abbreviations, convert units, reformat dates, or complete a partial word. Copy "HCTZ" as "HCTZ" and "2x/day" as "2x/day".
 - Every value you report must be text that appears on the form. Do not add words that are not written.
-- A field that is left blank is null. An empty section is an empty list.
+- A field that is left blank is an empty string. An empty section is an empty list.
 - A blank allergy section is NOT "no known allergies". Fill allergies_none_text only when the patient actually wrote a statement such as "None", "NKDA" or "No known allergies", copied exactly. The same holds for medications_none_text and family_history_none_text. An unticked box is not a "no".
 
 Illegible writing.
-- When an entry, or part of it, cannot be read with confidence (smudged, cut off, scribbled over, ambiguous letters), set unreadable to true for that entry, keep only the parts you can read, set the parts you cannot read to null, and copy in quote what is visibly there. Do NOT guess a drug name, a dose, a substance, or a condition. A guessed medication or allergy recorded as the patient's is the worst outcome of this task; an entry named as unreadable is a correct one.
-- For a single field (name, date of birth, sex, phone, chief concern) that is present but illegible, list it in illegible_fields and leave its value null.
+- When an entry, or part of it, cannot be read with confidence (smudged, cut off, scribbled over, ambiguous letters), set unreadable to true for that entry, keep only the parts you can read, set the parts you cannot read to an empty string, and copy in quote what is visibly there. Do NOT guess a drug name, a dose, a substance, or a condition. A guessed medication or allergy recorded as the patient's is the worst outcome of this task; an entry named as unreadable is a correct one.
+- For a single field (name, date of birth, sex, phone, chief concern) that is present but illegible, list it in illegible_fields and leave its value empty.
 
 Fields.
-- patient_name is the name exactly as written; patient_dob_as_written is the date of birth exactly as written; patient_dob is the same date as YYYY-MM-DD only when the written date is unambiguous, otherwise null. The application uses the name and date of birth only to check the form belongs to the patient whose chart it was filed in; never guess or complete them.
-- patient_sex and patient_phone exactly as written, or null.
-- chief_concern is the reason for the visit exactly as the patient wrote it, or null.
-- Each current medication: name, dose and frequency exactly as written, each null when not written. One entry per medication.
-- Each allergy: substance and reaction exactly as written (reaction null when not written).
+- patient_name is the name exactly as written; patient_dob_as_written is the date of birth exactly as written; patient_dob is the same date as YYYY-MM-DD only when the written date is unambiguous, otherwise an empty string. The application uses the name and date of birth only to check the form belongs to the patient whose chart it was filed in; never guess or complete them.
+- patient_sex and patient_phone exactly as written, or an empty string.
+- chief_concern is the reason for the visit exactly as the patient wrote it, or an empty string.
+- Each current medication: name, dose and frequency exactly as written, each an empty string when not written. One entry per medication.
+- Each allergy: substance and reaction exactly as written (reaction empty when not written).
 - Each family-history entry: relation (for example "Mother") and condition exactly as written.
 - quote is the verbatim text of the whole entry as written. page is the 1-based page it is on.
 

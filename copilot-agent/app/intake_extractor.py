@@ -30,9 +30,9 @@ import base64
 import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import BeforeValidator, ConfigDict, Field
 
 from app.contracts import StrictModel
 from app.documents import (
@@ -79,50 +79,70 @@ _VERIFIED = (VerificationStatus.VERIFIED_EXACT, VerificationStatus.VERIFIED_FUZZ
 
 IllegibleField = Literal["patient_name", "patient_dob", "patient_sex", "patient_phone", "chief_concern"]
 
+# Every optional value is a plain string, empty when not written. The structured-
+# output API refuses a schema with this many nullable fields ("Schema is too
+# complex"); an empty string carries the same meaning with no union in the schema.
+# ``None`` is still accepted on input and read as empty.
+Text = Annotated[str, BeforeValidator(lambda v: "" if v is None else v)]
 
-class MedicationDraft(StrictModel):
-    name: str | None = Field(default=None, description="As written. Null only when illegible (then unreadable=true).")
-    dose: str | None = None
-    frequency: str | None = None
+
+def _all_required(schema: dict[str, Any]) -> None:
+    # The API also caps optional properties; every property is sent as required
+    # (the model writes "" or false for what is not on the form). Python keeps
+    # the defaults, so tests and the stub can build partial drafts.
+    schema["required"] = list(schema.get("properties", {}))
+
+
+class _Draft(StrictModel):
+    model_config = ConfigDict(json_schema_extra=_all_required)
+
+
+class MedicationDraft(_Draft):
+    name: Text = Field(default="", description="As written. Empty only when illegible (then unreadable=true).")
+    dose: Text = ""
+    frequency: Text = ""
     quote: str = Field(min_length=1, description="The whole entry exactly as written.")
     page: int = Field(default=1, ge=1)
     unreadable: bool = Field(default=False, description="True when any part of the entry cannot be read. Never guess it.")
 
 
-class AllergyDraft(StrictModel):
-    substance: str | None = Field(default=None, description="As written. Null only when illegible.")
-    reaction: str | None = None
+class AllergyDraft(_Draft):
+    substance: Text = Field(default="", description="As written. Empty only when illegible.")
+    reaction: Text = ""
     quote: str = Field(min_length=1)
     page: int = Field(default=1, ge=1)
     unreadable: bool = False
 
 
-class FamilyHistoryDraft(StrictModel):
-    relation: str | None = None
-    condition: str | None = Field(default=None, description="As written. Null only when illegible.")
+class FamilyHistoryDraft(_Draft):
+    relation: Text = ""
+    condition: Text = Field(default="", description="As written. Empty only when illegible.")
     quote: str = Field(min_length=1)
     page: int = Field(default=1, ge=1)
     unreadable: bool = False
 
 
-class IntakeDraft(StrictModel):
-    """Flat reading of the form the model returns."""
+class IntakeDraft(_Draft):
+    """Flat reading of the form the model returns. Empty string = not written."""
 
-    patient_name: str | None = Field(default=None, description="Exactly as written, or null.")
-    patient_dob_as_written: str | None = Field(default=None, description="The date of birth exactly as written.")
-    patient_dob: str | None = Field(default=None, description="The same date as YYYY-MM-DD when unambiguous, else null.")
-    patient_sex: str | None = None
-    patient_phone: str | None = None
-    chief_concern: str | None = Field(default=None, description="The reason for the visit exactly as written.")
-    illegible_fields: list[IllegibleField] = Field(default_factory=list)
+    patient_name: Text = Field(default="", description="Exactly as written.")
+    patient_dob_as_written: Text = Field(default="", description="The date of birth exactly as written.")
+    patient_dob: Text = Field(default="", description="The same date as YYYY-MM-DD when unambiguous, else empty.")
+    patient_sex: Text = ""
+    patient_phone: Text = ""
+    chief_concern: Text = Field(default="", description="The reason for the visit exactly as written.")
+    illegible_fields: list[str] = Field(
+        default_factory=list,
+        description="Names of single fields present but illegible: patient_name, patient_dob, patient_sex, patient_phone, chief_concern.",
+    )
     current_medications: list[MedicationDraft] = Field(default_factory=list)
-    medications_none_text: str | None = Field(default=None, description='Only a written "none"; blank is null.')
+    medications_none_text: Text = Field(default="", description='Only a written "none"; blank is empty.')
     allergies: list[AllergyDraft] = Field(default_factory=list)
-    allergies_none_text: str | None = Field(
-        default=None, description='Only a written "None"/"NKDA"/"No known allergies". A blank section is null.'
+    allergies_none_text: Text = Field(
+        default="", description='Only a written "None"/"NKDA"/"No known allergies". A blank section is empty.'
     )
     family_history: list[FamilyHistoryDraft] = Field(default_factory=list)
-    family_history_none_text: str | None = None
+    family_history_none_text: Text = ""
     page_count: int = Field(default=1, ge=1)
 
 
@@ -249,6 +269,26 @@ def _as_date(raw: str | None) -> date | None:
         return None
     try:
         return date.fromisoformat(raw.strip()[:10])
+    except ValueError:
+        return None
+
+
+_US_WRITTEN_DATE = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s*$")
+
+
+def _us_date(written: str | None) -> date | None:
+    """A written MM/DD/YYYY date read by the US convention (OpenEMR's US date format).
+
+    The model is told to leave a date like 04/12/1958 unconverted because the text
+    alone is ambiguous; the clinic's convention settles it here, deterministically.
+    A form written DD/MM can only fail towards a mismatch (a held document a
+    clinician confirms), never towards a false match.
+    """
+    match = _US_WRITTEN_DATE.match(written or "")
+    if match is None:
+        return None
+    try:
+        return date(int(match.group(3)), int(match.group(1)), int(match.group(2)))
     except ValueError:
         return None
 
@@ -398,7 +438,9 @@ def summarize_form(form: IntakeForm, *, model_id: str, page_count: int) -> Extra
 def _printed_identity(draft: IntakeDraft) -> PrintedIdentity | None:
     """Name and DOB as written, for the module's check (ADR-012). An illegible one is absent, never guessed."""
     name = None if "patient_name" in draft.illegible_fields else _clean(draft.patient_name)
-    dob = None if "patient_dob" in draft.illegible_fields else _as_date(draft.patient_dob)
+    dob = None
+    if "patient_dob" not in draft.illegible_fields:
+        dob = _as_date(draft.patient_dob) or _us_date(draft.patient_dob_as_written)
     if name is None and dob is None:
         return None
     return PrintedIdentity(name=name, dob=dob)

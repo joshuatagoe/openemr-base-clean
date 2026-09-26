@@ -1,0 +1,48 @@
+{
+  "case_id": "intake_typed_blank_allergies",
+  "content_digest": "8c345b6ff78c8237",
+  "model": "claude-opus-5",
+  "output": {
+    "allergies": [],
+    "allergies_none_text": "",
+    "chief_concern": "Follow up blood pressure",
+    "current_medications": [
+      {
+        "dose": "5 mg",
+        "frequency": "daily",
+        "name": "Amlodipine",
+        "page": 1,
+        "quote": "Medication: Amlodipine        5 mg        daily",
+        "unreadable": false
+      }
+    ],
+    "family_history": [
+      {
+        "condition": "asthma",
+        "page": 1,
+        "quote": "Family history: Sister        asthma",
+        "relation": "Sister",
+        "unreadable": false
+      }
+    ],
+    "family_history_none_text": "",
+    "illegible_fields": [],
+    "medications_none_text": "",
+    "page_count": 1,
+    "patient_dob": "1971-09-30",
+    "patient_dob_as_written": "09/30/1971",
+    "patient_name": "Demo, Marisol",
+    "patient_phone": "555-0187",
+    "patient_sex": "F"
+  },
+  "schema": "IntakeDraft",
+  "system_digest": "177a27a0f1fc4d4d",
+  "usage": {
+    "cached_input_tokens": 3285,
+    "input_tokens": 1850,
+    "latency_ms": 3079,
+    "model": "claude-opus-5",
+    "output_tokens": 266,
+    "provider": "anthropic"
+  }
+}

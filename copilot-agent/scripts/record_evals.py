@@ -30,14 +30,67 @@ FIXTURES = REPO / "fixtures" / "documents"
 # Each case pairs an id with the synthetic document it reads. Both exercise a
 # behaviour that scripted output cannot: the clean one that no printed flag is
 # invented, the degraded one that an obscured value is refused rather than guessed.
-def _cases() -> list[tuple[str, Path, int]]:
-    """Every document case in fixtures/doc_cases/ - the case file names its PDF and document id."""
+def _cases() -> list[dict]:
+    """Every document case in fixtures/doc_cases/ - the case file names its document and id."""
     from app.doc_eval import load_doc_cases
 
-    return [(c["case_id"], FIXTURES / c["pdf"], c["document_id"]) for c in load_doc_cases()]
+    return load_doc_cases()
+
+
+def _document(case: dict) -> Path:
+    return FIXTURES / (case.get("document") or case["pdf"])
 
 
 CASES = _cases()
+
+
+class _CapturingOcr:
+    """Wraps the real Textract source and keeps the words it returned, to commit as a fixture."""
+
+    name = "recording-ocr"
+
+    def __init__(self, inner: object) -> None:
+        self._inner = inner
+        self.words: list[dict] = []
+
+    async def read_page(self, png: bytes, *, page: int):  # noqa: ANN201 - OcrSource
+        words = await self._inner.read_page(png, page=page)  # type: ignore[attr-defined]
+        self.words += [{"text": w.text, "page": w.page, "bbox": list(w.bbox)} for w in words]
+        return words
+
+
+async def record_intake(case: dict) -> None:
+    """Intake case: the real model, and for a photo the real Textract words (ADR-007, us-east-2)."""
+    import hashlib
+    import json
+
+    from app.doc_eval import OCR_RECORDINGS_DIR
+    from app.intake import intake_items
+    from app.intake_extractor import extract_intake_document
+    from app.page_text import FakeOcr, TextractOcr
+    from app.settings import ServiceSettings
+
+    data = _document(case).read_bytes()
+    ocr = FakeOcr()
+    if case.get("ocr") == "recorded":
+        ocr = _CapturingOcr(TextractOcr(region=ServiceSettings().textract_region))
+    provider = RecordingProvider(AnthropicProvider(ModelSettings()), case["case_id"])
+    form = await extract_intake_document(
+        document_id=case["document_id"], document_bytes=data, media_type=case["media_type"], provider=provider, ocr=ocr
+    )
+    if isinstance(ocr, _CapturingOcr):
+        OCR_RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        (OCR_RECORDINGS_DIR / f"{case['case_id']}.json").write_text(
+            json.dumps(
+                {"case_id": case["case_id"], "document_sha256": hashlib.sha256(data).hexdigest(), "words": ocr.words},
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    # Synthetic fixtures only, so the items may be printed for the reviewer.
+    items = "; ".join(f"{i.label}={i.text} [{i.verification_status.value}]" for i in intake_items(form))
+    print(f"  {case['case_id']}: {items or '(none)'}")
 
 
 async def record_one(case_id: str, pdf: Path, document_id: int) -> None:
@@ -69,13 +122,17 @@ async def main_async(argv: list[str] | None = None) -> int:
         return 0
 
     done = set(recorded_case_ids()) if args.missing else set()
-    todo = [c for c in CASES if c[0] not in done]
+    todo = [c for c in CASES if c["case_id"] not in done]
     print(f"Recording {len(todo)} case(s) against the live model. This costs tokens.\n")
-    for case_id, pdf, document_id in todo:
-        if not pdf.exists():
-            print(f"  {case_id}: SKIPPED — {pdf.name} not found", file=sys.stderr)
+    for case in todo:
+        path = _document(case)
+        if not path.exists():
+            print(f"  {case['case_id']}: SKIPPED — {path.name} not found", file=sys.stderr)
             continue
-        await record_one(case_id, pdf, document_id)
+        if case.get("kind") == "intake":
+            await record_intake(case)
+        else:
+            await record_one(case["case_id"], path, case["document_id"])
     print(f"\nWritten to {RECORDINGS_DIR.relative_to(REPO)}. Commit them.")
     return 0
 
