@@ -160,6 +160,19 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
         $this->records[$documentId] = ['status' => $status, 'last_error_code' => $errorCode] + $this->records[$documentId];
     }
 
+    /** @var list<int> documents whose record changes between the read and the conditional update */
+    public array $confirmRace = [];
+
+    public function confirmHeldPatient(int $documentId, int $pid, string $resolutionCode): bool
+    {
+        $r = $this->records[$documentId] ?? null;
+        if ($r === null || $r['pid'] !== $pid || $r['status'] !== 'held_identity' || in_array($documentId, $this->confirmRace, true)) {
+            return false;
+        }
+        $this->records[$documentId] = ['status' => 'extracted', 'last_error_code' => $resolutionCode] + $r;
+        return true;
+    }
+
     public function listExtractions(int $pid, int $limit): array
     {
         $out = [];

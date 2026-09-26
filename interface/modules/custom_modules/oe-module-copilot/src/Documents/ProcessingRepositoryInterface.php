@@ -78,6 +78,14 @@ interface ProcessingRepositoryInterface
     public function markStatus(int $documentId, string $status, ?string $errorCode): void;
 
     /**
+     * A clinician confirmed the patient of a held document (ADR-012 §4a): atomically move it from
+     * `held_identity` to `extracted` and record `$resolutionCode` as its code. `identity_check` is
+     * left as it was (history). False, changing nothing, unless the record is this patient's and
+     * still held.
+     */
+    public function confirmHeldPatient(int $documentId, int $pid, string $resolutionCode): bool;
+
+    /**
      * Stored lab extractions of this patient's `extracted` documents (not
      * held, not deleted in OpenEMR): the newest `$limit`, returned oldest first.
      *
