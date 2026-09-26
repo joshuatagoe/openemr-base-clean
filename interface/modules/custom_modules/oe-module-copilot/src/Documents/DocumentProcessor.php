@@ -244,7 +244,7 @@ final class DocumentProcessor
         }
 
         $extraction = $response['extraction'] ?? null;
-        if (!is_array($extraction) || !self::attributedTo($extraction, $documentId)) {
+        if (!is_array($extraction) || !self::attributedTo($extraction, $documentId, $docType)) {
             return $this->fail($documentId, ProcessingRepositoryInterface::STATUS_FAILED, self::CODE_BAD_EXTRACTION);
         }
         // C4 returns the printed identity beside the extraction; C2 also puts it on LabDocument.
@@ -252,7 +252,16 @@ final class DocumentProcessor
         $printed = $response['printed_identity'] ?? $extraction['printed_identity'] ?? null;
         $printed = is_array($printed) ? $printed : [];
         unset($extraction['printed_identity']);
-        $candidates = $docType === DocType::LAB_PDF ? CandidateMapper::fromExtraction($extraction) : [];
+        if ($docType === DocType::INTAKE_FORM && is_array($extraction['demographics'] ?? null)) {
+            // The agent already strips the written name and DOB; never store them even if sent (ADR-012).
+            $extraction['demographics']['name'] = null;
+            $extraction['demographics']['date_of_birth'] = null;
+        }
+        $candidates = match ($docType) {
+            DocType::LAB_PDF => CandidateMapper::fromExtraction($extraction),
+            DocType::INTAKE_FORM => CandidateMapper::fromIntake($extraction),
+            default => [],
+        };
         if ($candidates === null) {
             return $this->fail($documentId, ProcessingRepositoryInterface::STATUS_FAILED, self::CODE_BAD_EXTRACTION);
         }
@@ -302,14 +311,26 @@ final class DocumentProcessor
      *
      * @param array<mixed> $extraction
      */
-    private static function attributedTo(array $extraction, int $documentId): bool
+    private static function attributedTo(array $extraction, int $documentId, string $docType): bool
     {
         if (Scalar::int($extraction['document_id'] ?? null) !== $documentId) {
             return false;
         }
-        foreach (is_array($extraction['results'] ?? null) ? $extraction['results'] : [] as $r) {
-            $citation = is_array($r) && is_array($r['citation'] ?? null) ? $r['citation'] : null;
-            if ($citation !== null && Scalar::str($citation['source_id'] ?? null) !== (string) $documentId) {
+        if ($docType === DocType::INTAKE_FORM) {
+            if (Scalar::str($extraction['doc_type'] ?? null) !== DocType::INTAKE_FORM) {
+                return false;
+            }
+            $citations = CandidateMapper::intakeCitations($extraction);
+        } else {
+            $citations = [];
+            foreach (is_array($extraction['results'] ?? null) ? $extraction['results'] : [] as $r) {
+                if (is_array($r) && is_array($r['citation'] ?? null)) {
+                    $citations[] = $r['citation'];
+                }
+            }
+        }
+        foreach ($citations as $citation) {
+            if (Scalar::str($citation['source_id'] ?? null) !== (string) $documentId) {
                 return false;
             }
         }

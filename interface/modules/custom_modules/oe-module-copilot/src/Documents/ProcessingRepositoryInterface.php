@@ -86,7 +86,7 @@ interface ProcessingRepositoryInterface
     public function confirmHeldPatient(int $documentId, int $pid, string $resolutionCode): bool;
 
     /**
-     * Stored lab extractions of this patient's `extracted` documents (not
+     * Stored lab and intake extractions of this patient's `extracted` documents (not
      * held, not deleted in OpenEMR): the newest `$limit`, returned oldest first.
      *
      * `reviewed_indices`: result positions whose value was filed, rejected or un-filed - the briefing
@@ -97,8 +97,8 @@ interface ProcessingRepositoryInterface
     public function listExtractions(int $pid, int $limit): array;
 
     /**
-     * `candidate` values of this patient's `extracted` documents (held and
-     * filed/rejected values excluded).
+     * `candidate` values of this patient's `extracted` lab documents (held and
+     * filed/rejected values excluded; intake items are patient-reported evidence, not pending lab facts).
      *
      * @return list<PendingFactRow>
      */
