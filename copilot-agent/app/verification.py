@@ -172,14 +172,14 @@ def _name_tokens(text: str) -> set[str]:
     return {t for t in _TOKEN.findall(text.casefold()) if len(t) >= 2 and not t.isdigit()}
 
 
-def _spans(page: PageWords) -> list[_Span]:
+def _spans(page: PageWords, max_words: int = MAX_SPAN_WORDS) -> list[_Span]:
     vertical = _is_vertical(page)
     words = page.words
     out: list[_Span] = []
     for i, first in enumerate(words):
         run = [first]
         out.append(_Span((first,), page))
-        for nxt in words[i + 1 : i + MAX_SPAN_WORDS]:
+        for nxt in words[i + 1 : i + max_words]:
             if not _same_line(first, nxt, vertical=vertical):
                 break
             run.append(nxt)
@@ -228,13 +228,22 @@ def _choose(
 
 
 def find_value(
-    value: str, test_name: str, pages: Sequence[PageWords], *, page_hint: int | None = None
+    value: str,
+    test_name: str,
+    pages: Sequence[PageWords],
+    *,
+    page_hint: int | None = None,
+    max_words: int = MAX_SPAN_WORDS,
 ) -> Match | None:
-    """Locate ``value`` on the row named ``test_name``, or None. See the module rule."""
+    """Locate ``value`` on the row named ``test_name``, or None. See the module rule.
+
+    ``max_words`` widens step 1's run length for longer written phrases (an
+    intake form's chief concern); the rule is otherwise unchanged.
+    """
     if not value.strip():
         return None
     tokens = _name_tokens(test_name)
-    spans = [s for page in pages for s in _spans(page)]
+    spans = [s for page in pages for s in _spans(page, max_words)]
     texts = [(" ".join(w.text for w in s.words), s) for s in spans]
     for kind, accept in ((MatchKind.EXACT, is_exact), (MatchKind.FUZZY, is_fuzzy)):
         chosen = _choose([s for text, s in texts if accept(text, value)], tokens, pages, page_hint)
@@ -256,7 +265,7 @@ def printed_value(result: LabResult) -> str | None:
 
 
 def verify_result(
-    result: LabResult, pages: Sequence[PageWords], *, page_hint: int | None = None
+    result: LabResult, pages: Sequence[PageWords], *, page_hint: int | None = None, max_words: int = MAX_SPAN_WORDS
 ) -> LabResult:
     """The result with its status, page and box set by the matcher - whatever they were before.
 
@@ -266,7 +275,7 @@ def verify_result(
         status, page, bbox = VerificationStatus.UNREADABLE, None, None
     else:
         text = printed_value(result)
-        match = find_value(text, result.test_name, pages, page_hint=page_hint) if text else None
+        match = find_value(text, result.test_name, pages, page_hint=page_hint, max_words=max_words) if text else None
         if match is None:
             status, page, bbox = VerificationStatus.UNVERIFIED, None, None
         else:
@@ -356,6 +365,7 @@ async def verify_document(
     media_type: str,
     ocr: OcrSource,
     dpi: int = DEFAULT_RENDER_DPI,
+    max_words: int = MAX_SPAN_WORDS,
 ) -> tuple[list[LabResult], VerificationStats]:
     """Every result verified against the page words, reading pages by OCR where the policy says.
 
@@ -382,7 +392,10 @@ async def verify_document(
             pages[number] = _merge(pages[number], words)
     ocr_done = set(upfront)
 
-    out = [verify_result(r, list(pages.values()), page_hint=h) for r, h in zip(results, page_hints, strict=True)]
+    out = [
+        verify_result(r, list(pages.values()), page_hint=h, max_words=max_words)
+        for r, h in zip(results, page_hints, strict=True)
+    ]
 
     missed = [i for i, r in enumerate(out) if r.verification_status is VerificationStatus.UNVERIFIED and r.value is not None]
     candidates = {n for n, p in pages.items() if p.has_text_layer and p.has_images and n not in ocr_done}
@@ -398,7 +411,7 @@ async def verify_document(
         for number, words in read.items():
             pages[number] = _merge(pages[number], words)
         for i in missed:
-            out[i] = verify_result(out[i], list(pages.values()), page_hint=page_hints[i])
+            out[i] = verify_result(out[i], list(pages.values()), page_hint=page_hints[i], max_words=max_words)
 
     for r in out:
         if r.verification_status is VerificationStatus.VERIFIED_EXACT:

@@ -161,12 +161,15 @@ def test_chart_open_extract_brief_and_follow_up_over_the_wave_1_contracts(fixtur
     assert [c["tool"] for c in t["tool_calls"]] == ["find_results", "find_pending_document_facts"]
 
 
-def test_an_intake_form_is_recorded_as_not_supported_yet_without_blocking_the_chart(fixture_payload: dict) -> None:
+def test_an_intake_form_is_extracted_without_blocking_the_chart(fixture_payload: dict) -> None:
+    """Wave 2 (ADR-010): an intake form is read, and the chart-open flow is unaffected."""
+    from tests.test_document_extract import intake_body
+
     for client in _client_with(_ChartOpenProvider()):
-        body = extract_body("lab_hba1c_clean.pdf", document_id=301, doc_type="intake_form")
+        body = intake_body()
         r = client.post("/v1/documents/extract", content=body, headers=signed(body)).json()
         out = chart_open(client, fixture_payload)
-    assert r["status"] == "degraded" and r["degraded_reason"] == "doc_type_not_supported_yet"
+    assert r["status"] == "ok" and r["extraction"]["doc_type"] == "intake_form"
     assert out["briefing"]["status"] == "ok"
 
 
