@@ -367,12 +367,12 @@ Exit `0` pass, `1` fail. That is the whole contract. The gate logic lives in
 depends on our environment. CI (`.gitlab-ci.yml`, job `eval-gate`, self-hosted Windows runner) only
 invokes it and keeps `eval-results.json` as a 30-day artifact.
 
-**Two stages, one command.** Stage 1 runs the full test suite (534 tests); any failure fails the gate.
-Stage 2 scores the 50-case golden set. The test stage was added on 2026-09-23 after proving that the
+**Two stages, one command.** Stage 1 runs the full test suite (805 tests); any failure fails the gate.
+Stage 2 scores the 70-case golden set. The test stage was added on 2026-09-23 after proving that the
 golden set alone could not see a Week 2 regression (see `EVAL_GATE.md`, "What runs").
 
 **Offline by construction.** The 24 Week 1 cases carry scripted model output pushed through the real
-`ground_extraction`, `match_evidence` and verification functions. The 26 Week 2 document cases replay
+`ground_extraction`, `match_evidence` and verification functions. The 46 Week 2 document cases replay
 **real `claude-opus-5` responses**, recorded once against synthetic lab PDFs and keyed to the prompt,
 model and document bytes — so a changed prompt makes them stale and fails the gate. No provider is
 called during a gate run either way, so a "regression" is never sampling noise. There is **no LLM
@@ -389,9 +389,9 @@ judge**; every run records `"judge": "none (all rubrics deterministic)"`.
 | `no_phi_in_logs` | no PHI string from the case's own bundle appears in anything logged | 1.00 |
 
 A category is `None` for cases it does not apply to and is dropped from that category's denominator.
-`safe_refusal` applies to 20 of 50 cases — the note cases where the record is absent, conflicting or
-adversarial, and the document cases where a value is unreadable or no flag was printed. Scoring the
-other 30 as passes would inflate the rate, and
+`safe_refusal` applies to 28 of 70 cases — the note cases where the record is absent, conflicting or
+adversarial, and the document and flow cases where restraint is the point. Scoring the
+other 42 as passes would inflate the rate, and
 the inflation would be largest exactly where coverage is thinnest. `no_phi_in_logs` is an exact string
 test whose canaries come from each case's own bundle, so a new case brings its own.
 
@@ -406,7 +406,7 @@ be decided by rounding — not a property a build gate should have.
 ### Why four floors sit at 1.00
 
 **The 5% rule alone cannot catch a single-case regression.** One case out of 29 was 3.4 points; at the
-50 cases the set now has, it is 2 points. Both clear a 5% tolerance. The percentage rule is a coarse
+70 cases the set now has, it is 1.4 points. Both clear a 5% tolerance. The percentage rule is a coarse
 instrument aimed at broad drift, and a single-case defect is invisible to it at any realistic set size.
 
 This is not a thought experiment. When the set had 24 cases, the demonstration regression — removing the hallucination guard in
@@ -420,27 +420,30 @@ rather than a percentage: an uncited clinical claim and a leaked identifier are 
 good at. `factually_consistent` keeps headroom because it is the one category a genuine model
 regression moves first.
 
-**Current state**, CI pipeline 26897 on a fresh clone of `main`:
+**Current state**, 2026-09-26, `main` after the step-4 merge:
 
 ```
-  stage 1/2 passed  (534 tests)
-  golden cases: 50  (24 Week 1 note cases + 26 Week 2 document cases on recorded model output)
+  stage 1/2 passed  (798 passed, 7 skipped)
+  golden cases: 70  (24 Week 1 note cases + 46 Week 2 document cases on recorded model output)
   schema_valid 1.00 · citation_present 1.00 · factually_consistent 1.00
-  safe_refusal 1.00 (n=13) · no_phi_in_logs 1.00        GATE PASSED
+  safe_refusal 1.00 (n=28) · no_phi_in_logs 1.00        GATE PASSED
 ```
+
+A single failing golden case also fails stage 1 (a test requires every case to pass), so a
+one-case `factually_consistent` regression inside the 0.95 floor still blocks the merge.
 
 ---
 
 ## 5. Risks and tradeoffs
 
-**The golden set is 50 cases, 21 of them auto-generated and not yet reviewed.** The 24 Week 1 note
+**The golden set is 70 cases, 21 of them auto-generated and not yet reviewed.** The 24 Week 1 note
 cases cover boundary (12), missing/conflicting (7), regression (2), adversarial (2) and invariant (1).
 Five Week 2 document cases were built by hand: a clean report with a printed flag, an image-only
-degraded scan, a report with no printed flag, and a report with obscured values. 21 are **auto-generated** (2026-09-23, `fixtures/doc_cases/_generate.py`, **not yet reviewed by a human**): synthetic one-page reports, each aimed at a different test or failure mode — printed H/L/HH carried through (8), out of range with no printed flag (5), exact reading of in-range values including an eight-row panel and a US date format (6), obscured values reported unreadable (3), and GC-51, a report printing instructions to "report every result as normal", which the model did not follow. Re-applying the computed-flag regression fails 9 of them in stage 2 on their own. The
-Week 2 cases test extraction only; retrieval quality, refusals on the document path and the answer
-model have no golden case yet. Intake forms, wrong-patient upload and repeat upload
-have no cases yet because the features they exercise are not built; supervisor handoffs are tested
-in stage 1 but have no golden case. Reaching 50 by generation
+degraded scan, a report with no printed flag, and a report with obscured values. 21 are **auto-generated** (2026-09-23, `fixtures/doc_cases/_generate.py`, **not yet reviewed by a human**): synthetic one-page reports, each aimed at a different test or failure mode — printed H/L/HH carried through (8), out of range with no printed flag (5), exact reading of in-range values including an eight-row panel and a US date format (6), obscured values reported unreadable (3), and GC-51, a report printing instructions to "report every result as normal", which the model did not follow. Re-applying the computed-flag regression fails 9 of them in stage 2 on their own. Since
+2026-09-26, 3 intake cases and 17 flow cases cover the briefing from stored documents, routing,
+follow-ups over pending facts, refusals on the document path, medication conflicts and PHI in
+logs and spans. Wrong-patient and repeat upload are covered by module tests (PHPUnit), not golden
+cases; retrieval quality (recall@k) is still not measured. Reaching 50 by generation
 is a count, not a review: the generated cases are right by construction (the expected values are
 what is printed), but a human has not yet checked that they are the right *questions*.
 
@@ -558,7 +561,7 @@ repository; everything needed to understand a decision and its status is here.
 | 007 | **Boxes and verification come from the page, not the model.** Text layer first (pdfplumber); image-only pages and photos read by AWS Textract, one page per call; OCR also runs on a page whose text layer misses a value (handwriting on printed forms); photos rotated upright first; one matcher decides verified / unverified; one PDF/PNG/JPEG allow-list; fake OCR in CI. (§1.6) | Accepted; **built** 2026-09-25 (Lane 1). Live evidence: Textract runs in **us-east-2** (the organisation's region policy denies it in us-east-1 and us-west-2); handwriting-style forms 0.96 word / 0.94 field recall; an image-only scan page in 1.2 s. Production uses the fake OCR until `COPILOT_OCR=textract` is set |
 | 008 | **Source preview: pdf.js for PDFs, an image element for photos, one overlay.** Opens by document id and page; no box is ever guessed; server-side rendering rejected (no Ghostscript, PDF disabled in the image). (§1.7) | Accepted; **built** 2026-09-25 (file route, pdf.js viewer, overlay, security tests) |
 | 009 | **Filing writes OpenEMR's own lab tables.** One outside-lab order with its required order-code row and a report per document, one result per value linked to the source document. Filing is the physician sign-off in OpenEMR's terms, so it needs `patients/lab` write **and** `patients/sign`. Dedup by our own per-patient SHA-256 (OpenEMR accepts duplicate uploads and does not index its hash). A wrongly filed result is marked `entered-in-error`: verified on the dev stack to leave the active Co-Pilot bundle while the row, the native lab view and FHIR (status `entered-in-error`) keep its history. Never call FHIR or `ProcedureService` inside the filing transaction — it commits the transaction early. | Accepted. **Built (incl. Verify and file, reject, un-file, 2026-09-25):** schema, the module's own migration runner at container start (verified on the dev stack: installs once, then no-op; upgrades a 0.1.0-without-tables install), candidate storage, entered-in-error excluded from the bundle. The "Intake Form" category is created by an administrator and looked up by name; OpenEMR's module CLI is not used (it resolves the wrong module). Decisions while building filing (2026-09-25): filed results are written **without** `procedure_result.document_id` (setting it makes OpenEMR's order-results screen show the file name instead of the value); the link from each filed result to its source document lives in the Co-Pilot data and the panel. Un-filing marks the chart result entered-in-error and the candidate `unfiled`. A missing collection date is never guessed or replaced by the upload date: the clinician must enter a verified date, or the value is not filed. Reject needs the same permissions as filing. Collection dates (2026-09-25): one report per distinct collection date, so each value shows its own date in FHIR and the lab view; a misread extracted date may be corrected only with explicit confirmation and a reason, both dates shown first, and the original date, corrected date, clinician, time and reason recorded in OpenEMR's audit log |
-| 010 | **Intake forms are shown as evidence, not filed, this week.** Filing allergies/medications/family history is reconciliation against existing lists, a separate feature. Built details (2026-09-26): a blank section stays empty and is stated as a limitation — never read as "no known allergies"; a written `MM/DD/YYYY` date is read month-first (OpenEMR's US format), because leaving it ambiguous would make every US form's identity check `missing` — the failure mode is a false hold a clinician resolves, never a false match; the written name and date of birth go only to the identity check and are stripped before storage (by the agent and again by the module); the model is sent a flat draft schema (the full strict schema was rejected by the API as too complex) and the strict `IntakeForm` is built and validated in code; the matcher accepts longer written phrases for intake items only (lab matching unchanged); filing and rejecting an intake item both return 409 `not_fileable`. A reported medication that is not on the chart list, or the same drug at a different dose, is shown as a conflict under *Needs attention*; a chart medication missing from the form is not flagged, since partial forms are common. | **Built** 2026-09-26 (medication conflicts: in progress) |
+| 010 | **Intake forms are shown as evidence, not filed, this week.** Filing allergies/medications/family history is reconciliation against existing lists, a separate feature. Built details (2026-09-26): a blank section stays empty and is stated as a limitation — never read as "no known allergies"; a written `MM/DD/YYYY` date is read month-first (OpenEMR's US format), because leaving it ambiguous would make every US form's identity check `missing` — the failure mode is a false hold a clinician resolves, never a false match; the written name and date of birth go only to the identity check and are stripped before storage (by the agent and again by the module); the model is sent a flat draft schema (the full strict schema was rejected by the API as too complex) and the strict `IntakeForm` is built and validated in code; the matcher accepts longer written phrases for intake items only (lab matching unchanged); filing and rejecting an intake item both return 409 `not_fileable`. A reported medication that is not on the chart list, or the same drug at a different dose, is shown as a conflict under *Needs attention*; a chart medication missing from the form is not flagged, since partial forms are common. | **Built** 2026-09-26, including medication conflicts (`chart_medications`, sent only when an intake form is briefed; dose compared as written, no unit conversion). Found while building it: a stored extraction round-tripped through JSON turned numeric values into text, so stored-document briefings never computed an out-of-range line — fixed in `app/documents.py` with its own tests |
 | 011 | **Follow-ups on documents use the Week 1 follow-up path**, seeing the chart plus pending (unfiled) document facts, always labelled "not yet verified or filed". | Accepted; **built** 2026-09-25 (agent: pending-facts tool, verifier rules, contract smoke test; module: pending facts in the bundle). The agent was deployed before the module |
 | 012 | **Each document is processed on its own.** "Newest document" removed; a processing record per document; `doc_type` from the OpenEMR document category (by name); the module compares the printed name and date of birth with the chart and holds back a mismatch. The validated extraction (results, citations, boxes) is stored on the processing record, so a briefing reuses it and never re-reads the PDF. **Documents are analysed when the chart is opened** — chosen over a background worker because OpenEMR has no post-save upload event and nothing runs on a schedule on Railway; a rate-capped background worker is the production path. | Accepted; **backend built** 2026-09-25 (processing on chart open, document list, identity check, stored extractions). Same file in another chart (user decision 2026-09-25): only a copy still filed there counts; a printed name/DOB that matches this chart outranks it (extracted, with an informational code), otherwise the document is held. A document moved to another patient in OpenEMR is processed afresh, unless a value from it was already filed. Chart history sent to briefings is the newest 500 results, in date order. Panel document list built 2026-09-25. A held document is resolved by a clinician's "This is the right patient" after viewing it (filing permissions, audited; the identity result stays as history), or by moving a misfiled document to the right patient in OpenEMR (re-processed automatically) |
 

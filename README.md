@@ -132,7 +132,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
 | [COST_ANALYSIS.md §8](COST_ANALYSIS.md) | Week 2 cost and latency report: measured p50/p95 per step, cost per document, projection to 100K physicians, what binds first |
 
-**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 534 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
+**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 798 passed, 7 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 241 / 241 PHPUnit, up from 57; panel: 97 / 97 jest. Golden set: 70 cases, all five rubrics at 1.00.
 
 ---
 
