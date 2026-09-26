@@ -235,8 +235,8 @@ describe('DocumentsSection - Review source', () => {
 
         expect(files[0].headers.APICSRFTOKEN).toBe('csrf-token');
         expect(pdf.rendered.map((r) => r.page)).toEqual([2]);
-        expect(c.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
-        const side = c.querySelector('[data-role="value-panel"]');
+        expect(document.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
+        const side = document.querySelector('[data-role="value-panel"]');
         expect(side.textContent).toContain('Hemoglobin A1c');
         expect(side.textContent).toContain('8.4 %');
         expect(side.textContent).toContain('Collected 2026-09-01');
@@ -245,8 +245,8 @@ describe('DocumentsSection - Review source', () => {
         await new Promise((r) => setTimeout(r, 0));
         await new Promise((r) => setTimeout(r, 0));
         expect(pdf.rendered.map((r) => r.page)).toEqual([2, 1]);
-        expect(c.querySelector('[data-role="bbox-overlay"]')).toBeNull();
-        expect(c.querySelector('[data-role="viewer-notice"]').textContent).toBe('Could not locate this value on the page (unverified)');
-        expect(c.querySelectorAll('[data-role="viewer"]')).toHaveLength(1);
+        expect(document.querySelector('[data-role="bbox-overlay"]')).toBeNull();
+        expect(document.querySelector('[data-role="viewer-notice"]').textContent).toBe('Could not locate this value on the page (unverified)');
+        expect(document.querySelectorAll('[data-role="viewer"]')).toHaveLength(1);
     });
 });

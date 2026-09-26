@@ -170,7 +170,7 @@ async function openPanel(state) {
 async function review(c, index) {
     c.querySelector('[data-role="value-row"][data-result-index="' + index + '"] [data-action="review"]').click();
     await settle();
-    return c.querySelector('[data-role="value-panel"]');
+    return document.querySelector('[data-role="value-panel"]');
 }
 
 afterEach(() => {
@@ -187,14 +187,14 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
         };
         const { c } = await openPanel(state);
         const panel = await review(c, 0);
-        expect(c.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
+        expect(document.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
         panel.querySelector('[data-action="file"]').click();
         await settle();
 
         expect(state.posts).toHaveLength(1);
         expect(state.posts[0].headers.APICSRFTOKEN).toBe('csrf-token');
         expect(state.posts[0].body).toEqual({ filed_value: null, confirm_unverified: false });
-        const after = c.querySelector('[data-role="value-panel"]');
+        const after = document.querySelector('[data-role="value-panel"]');
         expect(after.textContent).toContain('Filed ✓');
         expect(after.textContent).toMatch(/already in the chart/);
         expect(after.querySelector('[data-action="file"]')).toBeNull();
@@ -208,7 +208,7 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
         state.respond = () => json(200, { status: 'filed', already_filed: false, warning: null, procedure_result_id: 27 });
         const { c } = await openPanel(state);
         const panel = await review(c, 0);
-        expect(c.querySelector('[data-role="viewer-notice"]').textContent).toBe('Could not locate this value on the page (unverified)');
+        expect(document.querySelector('[data-role="viewer-notice"]').textContent).toBe('Could not locate this value on the page (unverified)');
         const file = panel.querySelector('[data-action="file"]');
         expect(file.disabled).toBe(true);
         const confirm = panel.querySelector('[data-role="confirm-unverified"]');
@@ -302,7 +302,7 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
 
         expect(state.posts).toHaveLength(2);
         expect(state.posts[1].body).toEqual(expect.objectContaining({ collection_date: '2026-08-30', confirm_date_override: true, override_reason: 'Report header shows 30 Aug; the extraction read the print date' }));
-        expect(c.querySelector('[data-role="value-panel"]').textContent).toContain('Filed ✓');
+        expect(document.querySelector('[data-role="value-panel"]').textContent).toContain('Filed ✓');
     });
 
     test('already filed (second click elsewhere) reads as filed', async () => {
@@ -315,7 +315,7 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
         const panel = await review(c, 0);
         panel.querySelector('[data-action="file"]').click();
         await settle();
-        const after = c.querySelector('[data-role="value-panel"]');
+        const after = document.querySelector('[data-role="value-panel"]');
         expect(after.textContent).toContain('Filed ✓');
         expect(after.textContent).toMatch(/already filed/);
     });
@@ -330,7 +330,7 @@ describe('Verify and file - in the viewer, beside the outlined value', () => {
         const panel = await review(c, 0);
         panel.querySelector('[data-action="file"]').click();
         await settle();
-        const after = c.querySelector('[data-role="value-panel"]');
+        const after = document.querySelector('[data-role="value-panel"]');
         expect(after.textContent).toContain('This value was rejected and cannot be filed.');
         expect(after.textContent).toContain('Rejected');
         expect(after.querySelector('[data-action="file"]')).toBeNull();
@@ -354,7 +354,7 @@ describe('Reject and Un-file - two-step', () => {
         reject.click();
         await settle();
         expect(state.posts.map((p) => p.action)).toEqual(['reject']);
-        expect(c.querySelector('[data-role="value-panel"]').textContent).toContain('Rejected');
+        expect(document.querySelector('[data-role="value-panel"]').textContent).toContain('Rejected');
     });
 
     test('un-file from the list asks once more, then marks it entered in error', async () => {
@@ -401,6 +401,6 @@ describe('Filed chart results link back to their source', () => {
         links[0].click();
         await settle();
         expect(global.fetch.mock.calls.some((call) => call[0] === '/openemr/apis/default/api/copilot/results/26/source')).toBe(true);
-        expect(c.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
+        expect(document.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
     });
 });

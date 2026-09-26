@@ -11,7 +11,7 @@ The panel shows the same definitions on hover (`HELP` in
   already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
   and shows *What changed*, *Needs attention* and *What to consider*. Intake forms read for the
   patient are included as patient-reported lines. *View source* on a document
-  citation opens the page and box it came from.
+  citation opens the page and box it came from in a popup over the page (Esc or Close returns to the panel).
 
 ---
 
@@ -165,7 +165,7 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | Label | Meaning |
 |---|---|
 | Waiting for review | Read from the document, not in the chart. |
-| Review source | Opens the document at the value's page with the box drawn over it, and the filing controls beside it. |
+| Review source | Opens the document in a popup over the page, at the value's page with the box drawn over it and the filing controls beside it. Esc, Close or a click outside it closes the popup. |
 | Verify and file | Files the value as an outside-lab result after you compared it with the source. Filing is signing: needs lab-write and sign permissions. A changed value is filed as corrected (the value as read is kept). A missing collection date must be entered from the document or another reliable record — never guessed, never the upload date. |
 | The collection dates differ | The date you entered differs from the one read from the document. Both are shown side by side; filing your date needs a confirmation and a reason, recorded in the EHR audit log. |
 | same result already in the chart | Filed, with a warning: a result with the same test, date and value was already in the chart — check for a duplicate. |
