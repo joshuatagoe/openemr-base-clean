@@ -91,7 +91,7 @@ def candidates_from(document_id: int, extraction: dict[str, Any], first_id: int)
     return rows
 
 
-def chart_open(client: TestClient, fixture_payload: dict) -> dict[str, Any]:
+def chart_open(client: TestClient, fixture_payload: dict, **briefing_fields: Any) -> dict[str, Any]:
     """Drive the three Wave 1 routes the way the module does on chart open."""
     body = extract_body("lab_hba1c_clean.pdf", document_id=201)
     extracted = client.post("/v1/documents/extract", content=body, headers=signed(body))
@@ -107,6 +107,7 @@ def chart_open(client: TestClient, fixture_payload: dict) -> dict[str, Any]:
         "documents": stored,
         "prior_facts": context["lab_results"],
         "question": None,
+        **briefing_fields,
     }
     body = json.dumps(briefing_payload).encode()
     briefed = client.post("/v1/documents/briefing", content=body, headers=signed(body))
@@ -171,6 +172,16 @@ def test_an_intake_form_is_extracted_without_blocking_the_chart(fixture_payload:
         out = chart_open(client, fixture_payload)
     assert r["status"] == "ok" and r["extraction"]["doc_type"] == "intake_form"
     assert out["briefing"]["status"] == "ok"
+
+
+def test_documents_left_out_at_the_cap_arrive_as_a_count_and_are_stated(fixture_payload: dict) -> None:
+    """Milestone 3: the module sends how many waiting documents the 20-slot cap left out; a count only."""
+    for client in _client_with(_ChartOpenProvider()):
+        out = chart_open(client, fixture_payload, documents_not_included=4)
+    b = out["briefing"]
+    assert b["status"] == "ok"
+    want = "4 older document(s) with values not yet reviewed were not included in this briefing; review them in the document list."
+    assert want in b["briefing"]["limitations"] and want in b["rendered_text"]
 
 
 # --------------------------------------------------------------------------- #

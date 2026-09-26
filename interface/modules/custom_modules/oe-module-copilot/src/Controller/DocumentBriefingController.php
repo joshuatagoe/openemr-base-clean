@@ -293,6 +293,7 @@ final class DocumentBriefingController
             'documents' => $documents,
             'prior_facts' => $priorFacts,
             'question' => $question === null || $question === '' ? null : mb_substr($question, 0, self::QUESTION_MAX_LENGTH),
+            'documents_not_included' => $this->documentsNotIncluded($pid, count($stored)),
         ];
         // Read only when an intake form is briefed: a lab-only briefing has nothing to compare them with.
         if (in_array('intake_form', array_column($documents, 'doc_type'), true)) {
@@ -309,6 +310,27 @@ final class DocumentBriefingController
             ]);
             return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_AGENT_UNAVAILABLE), $e->getReason()];
         }
+    }
+
+    /**
+     * Documents with a value still waiting for review that the MAX_DOCUMENTS cap left out (the oldest),
+     * so the agent can say so. A count only - no ids, no content. Counted only when the cap was reached:
+     * below it, listExtractions returned every waiting document.
+     *
+     * @throws SourceUnavailableException
+     */
+    private function documentsNotIncluded(int $pid, int $listed): int
+    {
+        assert($this->records !== null);
+        if ($listed < self::MAX_DOCUMENTS) {
+            return 0;
+        }
+        try {
+            $waiting = $this->records->countExtractions($pid)['waiting'];
+        } catch (Throwable $e) {
+            throw new SourceUnavailableException('copilot_document', $e);
+        }
+        return max(0, $waiting - $listed);
     }
 
     /**

@@ -145,6 +145,12 @@ class DocumentBriefingRequest(StrictModel):
     documents: list[StoredDocument] | None = Field(default=None, min_length=1, max_length=MAX_BRIEFING_DOCUMENTS)
     prior_facts: list[ChartLabResult] = Field(default_factory=list, max_length=MAX_PRIOR_FACTS)
     chart_medications: list[MedicationRecord] | None = Field(default=None, max_length=MAX_CHART_MEDICATIONS)
+    documents_not_included: int = Field(
+        default=0,
+        ge=0,
+        description="Documents with a value still waiting for review that the module left out at the "
+        "MAX_BRIEFING_DOCUMENTS cap (the oldest). A count only: no ids, no content.",
+    )
     document_id: int | None = Field(default=None, ge=1)
     media_type: MediaType | None = None
     document_base64: str | None = Field(

@@ -143,6 +143,25 @@ final class StoredExtractionBriefingTest extends TestCase
 
         $sent = array_column($agent->documentPosts[0]['request']['documents'], 'document_id');
         self::assertSame(array_merge(range(3, 21), [40]), $sent, 'the newest 20 documents with a value waiting, oldest first');
+        // Documents 1 and 2 still have a value waiting but no slot: the agent is told how many, never which.
+        self::assertSame(2, $agent->documentPosts[0]['request']['documents_not_included']);
+    }
+
+    public function testNothingLeftOutWhenEveryWaitingDocumentFits(): void
+    {
+        $repo = new FakeProcessingRepository();
+        for ($id = 1; $id <= 20; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+        }
+        $repo->waiting(...range(1, 20));
+        $repo->records[30] = self::record(30, 'extracted', '{"document_id":30,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[30] = [['id' => 30, 'document_id' => 30, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed']];
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertCount(20, $agent->documentPosts[0]['request']['documents']);
+        self::assertSame(0, $agent->documentPosts[0]['request']['documents_not_included'], 'a fully reviewed document is not "left out"');
     }
 
     public function testTheRepositoryListsOnlyDocumentsWithAValueWaiting(): void

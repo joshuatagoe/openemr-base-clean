@@ -694,6 +694,14 @@ REPORTED_MEDICATIONS_COMPARED = (
 )
 
 
+def documents_not_included_limitation(count: int) -> str:
+    """Said when the module's 20-document cap left documents with values still waiting out of the briefing."""
+    return (
+        f"{count} older document(s) with values not yet reviewed were not included in this briefing; "
+        "review them in the document list."
+    )
+
+
 def blank_section_limitation(section: str, document_id: int) -> str:
     return (
         f"The intake form (document {document_id}) lists no {section} and no written \"none\"; "
@@ -853,6 +861,7 @@ def build_briefing(
     chart_medications: Sequence[MedicationRecord] | None = None,
     question: str | None = None,
     document_reviewed: bool = False,
+    documents_not_included: int = 0,
 ) -> Briefing:
     """Assemble the three-heading briefing from record facts and screened evidence.
 
@@ -875,6 +884,8 @@ def build_briefing(
     needs_attention += reported_attention
 
     limitations: list[str] = list(intake_limitations)
+    if documents_not_included > 0:
+        limitations.append(documents_not_included_limitation(documents_not_included))
     dropped: list[DroppedAssertion] = []
     kept: list[Consideration] = []
 

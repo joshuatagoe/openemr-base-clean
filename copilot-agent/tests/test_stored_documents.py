@@ -296,3 +296,37 @@ async def test_a_stored_value_above_its_printed_range_is_still_a_computed_line()
     response = await run_supervised_briefing(request, provider=_AnswerOnly(), reranker=build_reranker("fake", region="us-east-1"))
     computed = [line for line in response.briefing.needs_attention if line.tier is AssertionTier.COMPUTED]
     assert {line.computed.test_name for line in computed} >= {"Hemoglobin A1c"}
+
+
+# --------------------------------------------------------------------------- #
+# The 20-document cap is said out loud (documents_not_included)
+# --------------------------------------------------------------------------- #
+
+NOT_INCLUDED = (
+    "older document(s) with values not yet reviewed were not included in this briefing; "
+    "review them in the document list."
+)
+
+
+@pytest.mark.anyio
+async def test_documents_left_out_by_the_cap_are_stated_as_a_limitation() -> None:
+    response = await _run(_payload([_stored(201, await _extraction(201))], documents_not_included=3))
+    assert response.briefing is not None
+    assert f"3 {NOT_INCLUDED}" in response.briefing.limitations
+    assert f"3 {NOT_INCLUDED}" in response.rendered_text
+
+
+@pytest.mark.anyio
+async def test_nothing_left_out_says_nothing_about_the_cap() -> None:
+    response = await _run(_payload([_stored(201, await _extraction(201))]))
+    assert response.briefing is not None
+    assert not any(NOT_INCLUDED in lim for lim in response.briefing.limitations)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("bad", [-1, 1.5, None, "three"])
+async def test_documents_not_included_is_a_non_negative_count(bad: Any) -> None:
+    payload = _payload([_stored(201, await _extraction(201))], documents_not_included=bad)
+    DocumentBriefingRequest.model_validate({**payload, "documents_not_included": 2})  # the valid shape
+    with pytest.raises(ValidationError, match="documents_not_included"):
+        DocumentBriefingRequest.model_validate(payload)

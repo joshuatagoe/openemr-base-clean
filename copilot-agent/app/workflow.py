@@ -353,6 +353,7 @@ async def run_supervised_briefing(
         intake_forms=intake_forms,
         chart_medications=request.chart_medications,
         question=request.question,
+        documents_not_included=request.documents_not_included,
     )
 
     # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates
