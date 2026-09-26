@@ -7,6 +7,7 @@ exporter, so what is asserted on is exactly what would have been sent.
 from __future__ import annotations
 
 import json
+import re
 import logging
 from collections.abc import Iterator
 from pathlib import Path
@@ -492,6 +493,9 @@ def traced_document_client(exporter: InMemorySpanExporter, monkeypatch: pytest.M
         app.dependency_overrides.pop(get_settings, None)
 
 
+_OPAQUE_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\b[0-9a-f]{16,32}\b", re.IGNORECASE)
+
+
 def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
     traced_document_client: TestClient, exporter: InMemorySpanExporter
 ) -> None:
@@ -547,7 +551,9 @@ def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
             needles.add(line["document_citation"]["quote_or_value"])
     assert "8.9" in needles  # the extracted lab value itself is one of the needles
     for s in spans:
-        blob = json.dumps(dict(s.attributes), default=str)
+        # Opaque ids (uuids, hex trace/span ids) are blanked first: a short value such as "164"
+        # can occur inside a random id by chance, which made this test flaky. Ids are not PHI.
+        blob = _OPAQUE_ID.sub("<id>", json.dumps(dict(s.attributes), default=str))
         for needle in needles:
             assert needle not in blob, (s.name, needle)
 
