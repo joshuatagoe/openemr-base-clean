@@ -37,7 +37,7 @@ afterEach(() => {
 
 test('the button is labelled as a briefing from the read documents, not the latest file', () => {
     const section = new DocumentBriefingSection(container(), null);
-    expect(section.button.textContent).toBe('Brief from all read lab documents');
+    expect(section.button.textContent).toBe('Brief from all read documents');
     expect(section.button.textContent).not.toMatch(/latest/);
 });
 

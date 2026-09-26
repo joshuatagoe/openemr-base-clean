@@ -874,7 +874,7 @@
             this.busy = false;
             this.root = el('div', 'card-body border-top');
             this.root.dataset.role = 'document-briefing';
-            this.button = el('button', 'btn btn-outline-primary btn-sm', 'Brief from all read lab documents');
+            this.button = el('button', 'btn btn-outline-primary btn-sm', 'Brief from all read documents');
             this.button.setAttribute('type', 'button');
             this.button.addEventListener('click', (e) => {
                 if (e && e.preventDefault) {
@@ -901,7 +901,7 @@
             this.busy = true;
             this.button.disabled = true;
             this.clear();
-            this.output.appendChild(el('p', 'text-muted small mb-0', 'Briefing from the lab documents already read\u2026 this can take up to a minute.'));
+            this.output.appendChild(el('p', 'text-muted small mb-0', 'Briefing from the documents already read\u2026 this can take up to a minute.'));
             let data = null;
             let failure = null;
             try {
