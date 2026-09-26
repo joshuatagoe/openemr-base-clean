@@ -89,7 +89,10 @@ interface ProcessingRepositoryInterface
      * Stored lab extractions of this patient's `extracted` documents (not
      * held, not deleted in OpenEMR): the newest `$limit`, returned oldest first.
      *
-     * @return list<array{document_id:int, doc_type:string, extraction_json:string}>
+     * `reviewed_indices`: result positions whose value was filed, rejected or un-filed - the briefing
+     * leaves them out (filed values reach it as chart history instead).
+     *
+     * @return list<array{document_id:int, doc_type:string, extraction_json:string, reviewed_indices:list<int>}>
      */
     public function listExtractions(int $pid, int $limit): array;
 

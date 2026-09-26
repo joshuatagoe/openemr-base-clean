@@ -537,17 +537,10 @@ DOCUMENT_EXTRACT_BUDGET_SECONDS = 75.0
 
 
 def pdf_page_count(raw: bytes) -> int | None:
-    """Pages in a PDF, or None when pdfium cannot open it (the extractor then reports it)."""
-    import pypdfium2 as pdfium  # noqa: PLC0415 - loaded with the page-text stack, only for PDFs
+    """Pages in a PDF (via page_text, under its pdfium lock), or None when it cannot be opened."""
+    from app.page_text import pdf_page_count as locked_page_count  # noqa: PLC0415 - page-text stack loads lazily
 
-    try:
-        document = pdfium.PdfDocument(raw)
-    except Exception:  # noqa: BLE001 - an unreadable PDF is the extractor's to report, with its own code
-        return None
-    try:
-        return len(document)
-    finally:
-        document.close()
+    return locked_page_count(raw)
 
 
 async def read_lab_document(

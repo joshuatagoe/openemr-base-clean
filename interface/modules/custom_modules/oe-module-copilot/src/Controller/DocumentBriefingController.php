@@ -232,9 +232,25 @@ final class DocumentBriefingController
                 continue;
             }
             $extraction = json_decode($row['extraction_json'], true, 64);
-            if (is_array($extraction)) {
-                $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
+            if (!is_array($extraction)) {
+                continue;
             }
+            // Follow the clinician's review: a filed value is chart history (sent as a prior fact),
+            // a rejected or un-filed one is not briefed. Only values still waiting are document facts.
+            $reviewed = $row['reviewed_indices'] ?? [];
+            if ($reviewed !== [] && is_array($extraction['results'] ?? null)) {
+                $kept = [];
+                foreach ($extraction['results'] as $index => $result) {
+                    if (!in_array($index, $reviewed, true)) {
+                        $kept[] = $result;
+                    }
+                }
+                if ($kept === []) {
+                    continue;
+                }
+                $extraction['results'] = $kept;
+            }
+            $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
         }
         if ($documents === []) {
             return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_NO_EXTRACTED_DOCUMENTS), self::DEGRADED_NO_EXTRACTED_DOCUMENTS];

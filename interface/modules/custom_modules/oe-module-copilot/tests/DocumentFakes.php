@@ -178,7 +178,13 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
         $out = [];
         foreach ($this->records as $id => $r) {
             if ($r['pid'] === $pid && $r['status'] === 'extracted' && is_string($r['extraction_json'])) {
-                $out[] = ['document_id' => $id, 'doc_type' => $r['doc_type'], 'extraction_json' => $r['extraction_json']];
+                $reviewed = [];
+                foreach ($this->values[$id] ?? [] as $v) {
+                    if (in_array($v['status'], ['filed', 'rejected', 'unfiled'], true) && isset($v['result_index'])) {
+                        $reviewed[] = (int) $v['result_index'];
+                    }
+                }
+                $out[] = ['document_id' => $id, 'doc_type' => $r['doc_type'], 'extraction_json' => $r['extraction_json'], 'reviewed_indices' => $reviewed];
             }
         }
         return array_slice($out, 0, $limit);

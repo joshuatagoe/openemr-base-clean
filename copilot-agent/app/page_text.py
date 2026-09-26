@@ -30,7 +30,14 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 import pdfplumber
+import threading
+
 import pypdfium2 as pdfium
+
+#: pdfium (under pypdfium2) is not thread-safe, and pages are rendered from worker threads
+#: (asyncio.to_thread) while other requests may be counting pages. Every pdfium call in the
+#: agent goes through this one lock. Found in the 2026-09-25 architecture review.
+PDFIUM_LOCK = threading.Lock()
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.observability import log_event
@@ -155,22 +162,37 @@ def _encode(image: Image.Image, fmt: str) -> bytes:
 
 def render_page_png(pdf_bytes: bytes, page: int, *, dpi: int = DEFAULT_RENDER_DPI) -> bytes:
     """One page as a grayscale PNG: the cropbox with /Rotate applied - the viewer's frame."""
-    document = pdfium.PdfDocument(pdf_bytes)
-    try:
-        image = document[page - 1].render(scale=dpi / 72, grayscale=True).to_pil()
-    finally:
-        document.close()
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument(pdf_bytes)
+        try:
+            image = document[page - 1].render(scale=dpi / 72, grayscale=True).to_pil()
+        finally:
+            document.close()
     return _encode(image, "PNG")
+
+
+def pdf_page_count(pdf_bytes: bytes) -> int | None:
+    """Pages in a PDF, or None when pdfium cannot open it (the extractor then reports it)."""
+    with PDFIUM_LOCK:
+        try:
+            document = pdfium.PdfDocument(pdf_bytes)
+        except Exception:  # noqa: BLE001 - an unreadable PDF is the extractor's to report, with its own code
+            return None
+        try:
+            return len(document)
+        finally:
+            document.close()
 
 
 def warm_renderer() -> None:
     """Pay pdfium's first-render cost (~5 s in a fresh process) at startup, not on a request."""
-    document = pdfium.PdfDocument.new()
-    try:
-        document.new_page(72, 72)
-        document[0].render(scale=1, grayscale=True).to_pil()
-    finally:
-        document.close()
+    with PDFIUM_LOCK:
+        document = pdfium.PdfDocument.new()
+        try:
+            document.new_page(72, 72)
+            document[0].render(scale=1, grayscale=True).to_pil()
+        finally:
+            document.close()
 
 
 def orient_image(data: bytes) -> bytes | None:

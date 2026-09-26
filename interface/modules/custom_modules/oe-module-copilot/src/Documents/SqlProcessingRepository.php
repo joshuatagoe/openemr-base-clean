@@ -187,10 +187,24 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
               LIMIT " . max(1, min($limit, 50)),
             [$pid]
         ));
+        $ids = array_map(static fn(array $r): int => Scalar::int($r['document_id'] ?? null), $rows);
+        $reviewed = [];
+        if ($ids !== []) {
+            $marks = QueryUtils::fetchRecords(
+                "SELECT document_id, result_index FROM copilot_extracted_value
+                  WHERE status IN ('filed', 'rejected', 'unfiled')
+                    AND document_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")",
+                $ids
+            );
+            foreach ($marks as $m) {
+                $reviewed[Scalar::int($m['document_id'] ?? null)][] = Scalar::int($m['result_index'] ?? null);
+            }
+        }
         return array_map(static fn(array $r): array => [
             'document_id' => Scalar::int($r['document_id'] ?? null),
             'doc_type' => Scalar::str($r['doc_type'] ?? null),
             'extraction_json' => Scalar::str($r['extraction_json'] ?? null),
+            'reviewed_indices' => $reviewed[Scalar::int($r['document_id'] ?? null)] ?? [],
         ], $rows);
     }
 

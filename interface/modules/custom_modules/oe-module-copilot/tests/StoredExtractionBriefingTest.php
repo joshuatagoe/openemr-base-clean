@@ -91,6 +91,32 @@ final class StoredExtractionBriefingTest extends TestCase
         self::assertStringNotContainsString(self::PUUID, $everything);
     }
 
+    /**
+     * 2026-09-25 review: the briefing must follow the clinician's review. A value already filed is
+     * chart history (it reaches the agent as a prior fact), and a rejected or un-filed value must not
+     * be briefed at all; only values still waiting for review are sent as document facts.
+     */
+    public function testReviewedValuesAreNotSentAsDocumentFacts(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[{"test_name":"A"},{"test_name":"B"},{"test_name":"C"},{"test_name":"D"}]}');
+        $repo->values[5] = [
+            ['id' => 1, 'document_id' => 5, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate'],
+            ['id' => 2, 'document_id' => 5, 'pid' => self::PID, 'result_index' => 1, 'status' => 'filed'],
+            ['id' => 3, 'document_id' => 5, 'pid' => self::PID, 'result_index' => 2, 'status' => 'rejected'],
+            ['id' => 4, 'document_id' => 5, 'pid' => self::PID, 'result_index' => 3, 'status' => 'unfiled'],
+        ];
+        $repo->records[6] = self::record(6, 'extracted', '{"document_id":6,"results":[{"test_name":"E"}]}');
+        $repo->values[6] = [['id' => 5, 'document_id' => 6, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed']];
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        $sent = $agent->documentPosts[0]['request']['documents'];
+        self::assertSame([5], array_column($sent, 'document_id'), 'a document whose values were all reviewed is not sent');
+        self::assertSame([['test_name' => 'A']], $sent[0]['extraction']['results'], 'only the value still waiting for review is sent');
+    }
+
     public function testNothingExtractedYetIsDegradedWithoutAnAgentCall(): void
     {
         $agent = new FakeAgentClient();
