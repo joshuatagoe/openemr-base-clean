@@ -1,0 +1,12 @@
+{
+  "case_id": "w2_extract_phi_lab",
+  "kind": "extract",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "no_phi_in_logs",
+  "test_class": "phi",
+  "guards": "The extract route for a lab report: printed identity returned top-level only; no quote, test name, printed identity or patient id in logs or exported spans.",
+  "from_case": "lab_clean_hba1c",
+  "expect": {
+    "printed_identity_returned": true
+  }
+}

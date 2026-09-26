@@ -1,0 +1,82 @@
+{
+  "case_id": "w2_brief_phi_stored_documents",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "no_phi_in_logs",
+  "trace": true,
+  "test_class": "phi",
+  "guards": "A stored-document briefing (lab + intake form + chart history + chart medications) leaves no document string, printed name, test or drug name, briefing line or patient id in any log field or exported span.",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c"
+    },
+    {
+      "from_case": "intake_typed_evelyn"
+    }
+  ],
+  "prior_facts": [
+    {
+      "result_id": "procedure_result:9001",
+      "order_id": "procedure_order:12",
+      "test_name": "Hemoglobin A1c",
+      "code": null,
+      "value": "8.1",
+      "units": "%",
+      "abnormal_flag": null,
+      "range": "4.0-5.6",
+      "status": "final",
+      "observed_at": "2026-03-01T09:00:00+00:00"
+    }
+  ],
+  "chart_medications": [
+    {
+      "record_id": "prescriptions:11",
+      "source_table": "prescriptions",
+      "drug_name": "Metformin 500 mg tablet",
+      "rxnorm_code": null,
+      "dosage_text": "1 tab by mouth twice daily",
+      "active": true,
+      "status_field": "active,end_date",
+      "status_value": "active=1,end_date=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    },
+    {
+      "record_id": "lists:12",
+      "source_table": "lists",
+      "drug_name": "Lisinopril 20 mg",
+      "rxnorm_code": null,
+      "dosage_text": "daily",
+      "active": true,
+      "status_field": "activity,enddate",
+      "status_value": "activity=1,enddate=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    },
+    {
+      "record_id": "prescriptions:13",
+      "source_table": "prescriptions",
+      "drug_name": "Amlodipine 5 mg",
+      "rxnorm_code": null,
+      "dosage_text": "daily",
+      "active": true,
+      "status_field": "active,end_date",
+      "status_value": "active=1,end_date=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    }
+  ],
+  "question": "What changed since March?",
+  "expect": {
+    "status": "ok"
+  }
+}

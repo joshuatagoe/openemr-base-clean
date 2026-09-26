@@ -47,6 +47,7 @@ answer, and it is the package that was logged.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from datetime import date
 from enum import StrEnum
@@ -54,7 +55,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from app.contracts import Citation as RecordCitation, StrictModel
+from app.contracts import Citation as RecordCitation, MedicationRecord, RecordType, StrictModel
 from app.corpus import ClaimKind, DropReason as CorpusDropReason, supports
 from app.documents import (
     AbnormalFlag,
@@ -65,8 +66,9 @@ from app.documents import (
     VerificationStatus,
 )
 from app.evidence import EvidencePackage, EvidenceSnippet, GuidelineCitation, RetrievalStatus
-from app.intake import IntakeForm, intake_items
+from app.intake import LABEL_MEDICATION, IntakeForm, ReportedMedication, intake_items, medication_text
 from app.lab_extractor import derive_abnormal_flag, parse_reference_range
+from app.medications import records_named
 from app.observability import log_event
 
 # Week 1's verification spine, reused rather than restated. These three are
@@ -675,13 +677,20 @@ def _needs_attention(
 # Intake forms: what the patient reported (ADR-010)
 # --------------------------------------------------------------------------- #
 
-#: Chart medications are not part of the document-briefing contract (C4), so a
-#: reported medication cannot be compared with them here. Said, not implied.
 _VERIFIED_STATUSES = (VerificationStatus.VERIFIED_EXACT, VerificationStatus.VERIFIED_FUZZY)
 
+#: Said when the module sent no chart medication list (an older module, or the
+#: medications source could not be read): nothing was compared, and that is stated.
 REPORTED_MEDICATIONS_NOT_COMPARED = (
     "Patient-reported medications were not compared with the chart's medication list in this briefing; "
     "check them against the chart before relying on either."
+)
+
+#: Said when they were compared. A chart medication the patient did not list is
+#: deliberately not flagged: partial forms are common (ADR-010).
+REPORTED_MEDICATIONS_COMPARED = (
+    "Patient-reported medications were compared with the chart's current medication list by drug name, "
+    "and by dose and frequency where both state them; a chart medication the patient did not list is not flagged."
 )
 
 
@@ -692,8 +701,110 @@ def blank_section_limitation(section: str, document_id: int) -> str:
     )
 
 
-def _intake_lines(forms: Sequence[IntakeForm]) -> tuple[list[BriefingLine], list[BriefingLine], list[str]]:
-    """Every reported item as a patient-reported line (readable: What changed; unreadable: Needs attention)."""
+# Dose and frequency comparison: deliberately narrow. Numbers are compared as
+# written (no unit conversion), and a frequency only when both sides use one of
+# these phrasings. Anything outside them is not compared rather than guessed.
+_DOSE_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+_FREQUENCIES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("4/day", re.compile(r"\b(qid|four times (a |per )?day|four times daily|4 times (a |per )?day|4x daily)\b")),
+    ("3/day", re.compile(r"\b(tid|three times (a |per )?day|three times daily|3 times (a |per )?day|3x daily)\b")),
+    ("2/day", re.compile(r"\b(bid|twice (a |per )?day|twice daily|two times (a |per )?day|2 times (a |per )?day|2x daily|every 12 hours|q12h)\b")),
+    ("weekly", re.compile(r"\b(weekly|once (a |per )?week|every week)\b")),
+    ("1/day", re.compile(r"\b(daily|once (a |per )?day|once daily|every day|qd|nightly|at bedtime|qhs|every morning|every evening|each morning|each night)\b")),
+)
+
+
+def _dose_numbers(text: str | None) -> set[str]:
+    return {n.rstrip("0").rstrip(".") if "." in n else n for n in _DOSE_NUMBER.findall(text or "")}
+
+
+def _frequency(text: str | None) -> str | None:
+    lowered = (text or "").lower()
+    for code, pattern in _FREQUENCIES:
+        if pattern.search(lowered):
+            return code
+    return None
+
+
+def _chart_text(record: MedicationRecord) -> str:
+    return " ".join(p for p in (record.drug_name, record.dosage_text) if p)
+
+
+def _differs(reported: ReportedMedication, record: MedicationRecord) -> str | None:
+    """What differs between a reported medication and one chart record: "dose", "frequency", or None.
+
+    Only a difference both sides state counts; a side that says nothing is not a disagreement.
+    """
+    reported_dose = _dose_numbers(reported.dose)
+    chart_dose = _dose_numbers(record.drug_name) | _dose_numbers(record.dosage_text)
+    if reported_dose and chart_dose and not reported_dose <= chart_dose:
+        return "dose"
+    reported_freq, chart_freq = _frequency(reported.frequency), _frequency(_chart_text(record))
+    if reported_freq and chart_freq and reported_freq != chart_freq:
+        return "frequency"
+    return None
+
+
+def _medication_conflicts(form: IntakeForm, chart: Sequence[MedicationRecord]) -> list[BriefingLine]:
+    """Reported medications that disagree with the chart's current list (ADR-010).
+
+    Two kinds, both patient-reported lines under Needs attention citing the form item:
+    a drug not on the current list (which says the list was checked), and the same
+    drug at a different dose or frequency (which also cites the chart record).
+    Nothing is written anywhere; the chart is only read.
+    """
+    # Current = not known to be inactive. An entry whose status fields disagree
+    # (active=None) still counts as on the list: flagging it "missing" would be a false alarm.
+    active = [r for r in chart if r.active is not False]
+    items = [i for i in intake_items(form) if i.section == "medication" and i.label == LABEL_MEDICATION]
+    lines: list[BriefingLine] = []
+    for med, item in zip(form.current_medications, items, strict=True):
+        if med.verification_status is VerificationStatus.UNREADABLE or not (med.name or "").strip():
+            continue  # an unreadable entry is already named as unreadable; it names no drug to compare
+        text = medication_text(med)
+        matches = records_named(med.name or "", active)
+        line_id = f"medication-conflict-{form.document_id}-{item.index}"
+        if not matches:
+            if not active:
+                checked = "the chart medication list was checked and holds no current entries"
+            elif len(active) == 1:
+                checked = "the chart's 1 current medication entry was checked"
+            else:
+                checked = f"the chart's {len(active)} current medication entries were checked"
+            lines.append(BriefingLine(
+                line_id=line_id,
+                tier=AssertionTier.PATIENT_REPORTED,
+                text=f"Patient reports {text} on the intake form; not on the chart medication list ({checked}).",
+                document_citation=item.citation,
+                not_yet_in_chart=True,
+            ))
+            continue
+        differing = [(r, what) for r in matches if (what := _differs(med, r)) is not None]
+        if len(differing) < len(matches):
+            continue  # at least one chart record agrees: nothing to flag
+        record, what = min(differing, key=lambda pair: (pair[0].timestamp, pair[0].record_id))
+        lines.append(BriefingLine(
+            line_id=line_id,
+            tier=AssertionTier.PATIENT_REPORTED,
+            text=(
+                f"Patient reports {text} on the intake form; the chart medication list has "
+                f"{_chart_text(record)} - the {what} differs. Shown side by side, not reconciled."
+            ),
+            document_citation=item.citation,
+            record_citation=RecordCitation(record_type=RecordType.MEDICATION, record_id=record.record_id, timestamp=record.timestamp),
+            not_yet_in_chart=True,
+        ))
+    return lines
+
+
+def _intake_lines(
+    forms: Sequence[IntakeForm], chart_medications: Sequence[MedicationRecord] | None = None
+) -> tuple[list[BriefingLine], list[BriefingLine], list[str]]:
+    """Every reported item as a patient-reported line (readable: What changed; unreadable: Needs attention).
+
+    With the chart's medications, reported medications that disagree with them are
+    added under Needs attention; without them, the briefing says nothing was compared.
+    """
     changed: list[BriefingLine] = []
     attention: list[BriefingLine] = []
     limitations: list[str] = []
@@ -723,7 +834,11 @@ def _intake_lines(forms: Sequence[IntakeForm]) -> tuple[list[BriefingLine], list
         if not form.current_medications and form.medications_none_stated is None:
             limitations.append(blank_section_limitation("medications", form.document_id))
         if form.current_medications:
-            limitations.append(REPORTED_MEDICATIONS_NOT_COMPARED)
+            if chart_medications is None:
+                limitations.append(REPORTED_MEDICATIONS_NOT_COMPARED)
+            else:
+                attention.extend(_medication_conflicts(form, chart_medications))
+                limitations.append(REPORTED_MEDICATIONS_COMPARED)
     return changed, attention, limitations
 
 
@@ -735,6 +850,7 @@ def build_briefing(
     considerations: Sequence[ConsiderationCandidate] = (),
     patient_reports: Sequence[PatientReport] = (),
     intake_forms: Sequence[IntakeForm] = (),
+    chart_medications: Sequence[MedicationRecord] | None = None,
     question: str | None = None,
     document_reviewed: bool = False,
 ) -> Briefing:
@@ -754,7 +870,7 @@ def build_briefing(
 
     what_changed = _what_changed(document, prior_facts, not_yet_in_chart=not_yet_in_chart)
     needs_attention = _needs_attention(document, patient_reports, not_yet_in_chart=not_yet_in_chart)
-    reported, reported_attention, intake_limitations = _intake_lines(intake_forms)
+    reported, reported_attention, intake_limitations = _intake_lines(intake_forms, chart_medications)
     what_changed += reported
     needs_attention += reported_attention
 
@@ -792,6 +908,7 @@ def build_briefing(
         attention_count=len(briefing.needs_attention),
         consideration_count=len(briefing.what_to_consider),
         computed_count=sum(1 for line in briefing.needs_attention if line.tier is AssertionTier.COMPUTED),
+        medication_conflict_count=sum(1 for line in briefing.needs_attention if line.line_id.startswith("medication-conflict-")),
         dropped_count=briefing.dropped_count,
         limitation_count=len(briefing.limitations),
         retrieval_status=evidence.status.value,

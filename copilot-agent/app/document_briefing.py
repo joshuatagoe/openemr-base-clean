@@ -46,7 +46,7 @@ from app.briefing import (
     build_briefing,
     render_briefing,
 )
-from app.contracts import Citation, LabResult as ChartLabResult, RecordType, StrictModel
+from app.contracts import Citation, LabResult as ChartLabResult, MedicationRecord, RecordType, StrictModel
 from app.corpus import ClaimKind
 from app.documents import SUPPORTED_MEDIA_TYPES, ExtractionMetadata, LabDocument, LabResult, MediaType, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
@@ -78,6 +78,9 @@ MAX_DOCUMENT_BASE64_CHARS = 4 * -(-MAX_DOCUMENT_BYTES // 3)
 MAX_BRIEFING_DOCUMENTS = 20
 #: Most chart lab results one briefing accepts as prior facts.
 MAX_PRIOR_FACTS = 500
+#: Most chart medication entries one briefing accepts (ADR-010 medication conflicts).
+#: The module sends at most this many (DocumentBriefingController::MAX_CHART_MEDICATIONS).
+MAX_CHART_MEDICATIONS = 200
 
 
 class StoredDocument(StrictModel):
@@ -127,6 +130,13 @@ class DocumentBriefingRequest(StrictModel):
     ``prior_facts`` is the chart's lab history, the same shape as the Week 1
     bundle's ``lab_results``; it turns a new value into a dated change.
 
+    ``chart_medications`` is the chart's medication list, the same shape as the
+    Week 1 bundle's ``medications``, sent when an intake form is briefed. A
+    reported medication missing from its active entries, or at a different dose
+    or frequency, is a patient-reported conflict line (ADR-010). ``None`` (not
+    sent, or the source could not be read) means nothing is compared, and the
+    briefing says so. Read only: nothing is written to the chart.
+
     ``patient_uuid`` never ``pid`` - the same rule as the Week 1 bundle.
     """
 
@@ -134,6 +144,7 @@ class DocumentBriefingRequest(StrictModel):
     patient_uuid: UUID
     documents: list[StoredDocument] | None = Field(default=None, min_length=1, max_length=MAX_BRIEFING_DOCUMENTS)
     prior_facts: list[ChartLabResult] = Field(default_factory=list, max_length=MAX_PRIOR_FACTS)
+    chart_medications: list[MedicationRecord] | None = Field(default=None, max_length=MAX_CHART_MEDICATIONS)
     document_id: int | None = Field(default=None, ge=1)
     media_type: MediaType | None = None
     document_base64: str | None = Field(
@@ -792,6 +803,7 @@ __all__ = [
     "RoutingDecision",
     "MAX_BRIEFING_DOCUMENTS",
     "MAX_PRIOR_FACTS",
+    "MAX_CHART_MEDICATIONS",
     "StoredDocument",
     "build_query",
     "build_reranker",

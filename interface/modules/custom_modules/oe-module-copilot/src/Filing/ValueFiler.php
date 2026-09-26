@@ -13,7 +13,8 @@
  * each value's own date.
  *
  * Rules: the candidate and its processing record must belong to the patient;
- * the document must be an `extracted` lab document; a rejected value is never
+ * the document must be an `extracted` lab document (an intake-form value is
+ * neither filed nor rejected: `not_fileable`, ADR-010); a rejected value is never
  * filed; `unverified` needs `confirm_unverified`; `unreadable` needs a
  * clinician-entered value. The collection date is never guessed and never the
  * upload date (ADR-009 7b): without an extracted one the clinician must enter
@@ -187,7 +188,11 @@ final class ValueFiler
             if (is_string($found)) {
                 return self::result($found);
             }
-            $candidate = $found[1];
+            [$document, $candidate] = $found;
+            // ADR-010: intake-form values are patient-reported evidence, never reviewed into the chart.
+            if ($document['doc_type'] !== self::FILEABLE_DOC_TYPE) {
+                return self::result(self::ERROR_NOT_FILEABLE);
+            }
             if ($candidate['status'] === 'rejected') {
                 return self::result(self::OUTCOME_ALREADY_REJECTED);
             }

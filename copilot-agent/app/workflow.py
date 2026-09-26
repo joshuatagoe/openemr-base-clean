@@ -351,6 +351,7 @@ async def run_supervised_briefing(
         prior_facts=chart_facts(request.prior_facts),
         considerations=candidates,
         intake_forms=intake_forms,
+        chart_medications=request.chart_medications,
         question=request.question,
     )
 
@@ -376,6 +377,7 @@ async def run_supervised_briefing(
         prior_facts=len(request.prior_facts),
         results=len(document.results),
         intake_forms=len(intake_forms),
+        chart_medications=None if request.chart_medications is None else len(request.chart_medications),
         snippets=len(evidence.snippets),
         considerations_proposed=len(candidates),
         considerations_shown=len(briefing.what_to_consider),

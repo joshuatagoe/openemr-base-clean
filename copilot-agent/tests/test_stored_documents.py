@@ -264,3 +264,35 @@ def test_extract_then_brief_over_http_never_re_extracts() -> None:
     assert d["status"] == "ok" and d["document_ids"] == [201, 202]
     assert [step["target"] for step in d["routing"]] == ["evidence-retriever", "answer", "finish"]
     assert "document 201" in d["rendered_text"] and "document 202" in d["rendered_text"]
+
+
+# --------------------------------------------------------------------------- #
+# Round trip: what the module stores is what the briefing reads (found by the
+# w2_brief_computed_vs_printed_flag golden case, 2026-09-26)
+# --------------------------------------------------------------------------- #
+
+
+def test_a_stored_numeric_value_is_still_a_number_after_the_json_round_trip() -> None:
+    from decimal import Decimal
+
+    from app.documents import LabDocument
+
+    import asyncio
+
+    stored = asyncio.run(_extraction(101))  # model_dump(mode="json"): Decimal 8.9 is the JSON string "8.9"
+    assert stored["results"][0]["value"] == "8.9"
+    document = LabDocument.model_validate(stored)
+    assert document.results[0].value == Decimal("8.9") and isinstance(document.results[0].value, Decimal)
+    text = next(r for r in LabDocument.model_validate({**stored, "results": [
+        {**stored["results"][0], "value": "Negative"}]}).results)
+    assert text.value == "Negative"  # a non-numeric result stays text
+
+
+@pytest.mark.anyio
+async def test_a_stored_value_above_its_printed_range_is_still_a_computed_line() -> None:
+    from app.briefing import AssertionTier
+
+    request = DocumentBriefingRequest.model_validate(_payload([_stored(101, await _extraction(101))]))
+    response = await run_supervised_briefing(request, provider=_AnswerOnly(), reranker=build_reranker("fake", region="us-east-1"))
+    computed = [line for line in response.briefing.needs_attention if line.tier is AssertionTier.COMPUTED]
+    assert {line.computed.test_name for line in computed} >= {"Hemoglobin A1c"}

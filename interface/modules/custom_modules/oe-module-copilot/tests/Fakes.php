@@ -138,8 +138,12 @@ final class FakeReader implements ClinicalReaderInterface
     /** @var list<array{source_table:string, id:int, drug:string, rxnorm:string, dosage:string, active:int, begdate:string, enddate:string, date_added:string, date_modified:string}>|SourceUnavailableException */
     public array|SourceUnavailableException $medications = [];
 
+    /** @var list<int> limits passed to listMedications, one per call */
+    public array $medicationLimits = [];
+
     public function listMedications(int $pid, int $limit): array
     {
+        $this->medicationLimits[] = $limit;
         if ($this->medications instanceof SourceUnavailableException) {
             throw $this->medications;
         }

@@ -1,0 +1,31 @@
+{
+  "case_id": "w2_brief_stored_skips_extraction",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "routing",
+  "guards": "CR4/ADR-012: stored extractions (a lab and an intake form) are never re-read - the supervisor routes straight to evidence retrieval, the routing log has no intake-extractor step, and the only model call is the answer model.",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c"
+    },
+    {
+      "from_case": "intake_typed_evelyn"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "routing_targets": [
+      "evidence-retriever",
+      "answer",
+      "finish"
+    ],
+    "routing_excludes": [
+      "intake-extractor"
+    ],
+    "last_reason_code": "briefing_complete",
+    "model_calls": [
+      "ConsiderationDraftSet"
+    ]
+  }
+}

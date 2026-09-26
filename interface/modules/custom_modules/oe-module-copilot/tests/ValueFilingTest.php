@@ -626,6 +626,18 @@ final class ValueFilingTest extends TestCase
         self::assertSame('not_fileable', $result['body']['detail']['code']);
     }
 
+    /** ADR-010: an intake-form value is patient-reported evidence; there is no review to record, so reject refuses like file. */
+    public function testIntakeFormValuesAreNeverRejectedEither(): void
+    {
+        $this->store->documents[self::DOC]['doc_type'] = 'intake_form';
+        $cid = $this->store->addCandidate(self::DOC, self::PID, 0);
+        $result = $this->controller()->rejectForSession(self::session(), self::DOC, 0);
+        self::assertSame(409, $result['status']);
+        self::assertSame('not_fileable', $result['body']['detail']['code']);
+        self::assertSame('candidate', $this->candidate($cid)['status'], 'the value is left as it was');
+        $this->assertNothingWritten();
+    }
+
     public function testARejectedValueCannotBeFiled(): void
     {
         $this->store->addCandidate(self::DOC, self::PID, 0, ['status' => 'rejected']);

@@ -35,6 +35,7 @@ from app.documents import AbnormalFlagSource, LabDocument, LabResult, Verificati
 from app.intake import IntakeForm, intake_items
 from app.intake_extractor import extract_intake_document
 from app.lab_extractor import extract_lab_document
+from app.observability import JsonFormatter, get_logger
 from app.page_text import FakeOcr, Word
 from app.providers.base import ProviderError
 from app.recording import ReplayProvider, StaleRecordingError
@@ -78,8 +79,11 @@ def _target(doc: LabDocument, needle: str) -> LabResult | None:
 
 
 class _Capture(logging.Handler):
+    """Every record with all of its structured fields (JsonFormatter), not only the event name."""
+
     def __init__(self) -> None:
         super().__init__(level=logging.DEBUG)
+        self.setFormatter(JsonFormatter())
         self.buf = io.StringIO()
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -100,7 +104,11 @@ async def _extract(case: dict[str, Any], model: str) -> LabDocument:
 
 
 def score_doc_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
-    """Replay one recorded extraction and score it on the five rubrics."""
+    """Replay one recorded extraction (or run one Week 2 flow case) and score it on the five rubrics."""
+    from app.doc_eval_flows import FLOW_KINDS, score_flow_case
+
+    if case.get("kind") in FLOW_KINDS:
+        return score_flow_case(case, model=model)
     if case.get("kind") == "intake":
         return score_intake_case(case, model=model)
     name = case["case_id"]
@@ -112,6 +120,10 @@ def score_doc_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     level = root.level
     root.addHandler(cap)
     root.setLevel(logging.DEBUG)
+    service = get_logger()  # stops propagating to the root once the service configured logging
+    service_level = service.level
+    service.addHandler(cap)
+    service.setLevel(logging.DEBUG)
     try:
         doc = asyncio.run(_extract(case, model))
     except ProviderError as exc:
@@ -126,6 +138,8 @@ def score_doc_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     finally:
         root.removeHandler(cap)
         root.setLevel(level)
+        service.removeHandler(cap)
+        service.setLevel(service_level)
     log_text = cap.buf.getvalue()
 
     target = _target(doc, expect["test_name_contains"])
@@ -337,6 +351,10 @@ def score_intake_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     level = root.level
     root.addHandler(cap)
     root.setLevel(logging.DEBUG)
+    service = get_logger()  # stops propagating to the root once the service configured logging
+    service_level = service.level
+    service.addHandler(cap)
+    service.setLevel(logging.DEBUG)
     try:
         ocr = recorded_ocr(case, document) if case.get("ocr") == "recorded" else FakeOcr()
         form = asyncio.run(
@@ -358,6 +376,8 @@ def score_intake_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     finally:
         root.removeHandler(cap)
         root.setLevel(level)
+        service.removeHandler(cap)
+        service.setLevel(service_level)
     return score_intake_form(case, form, cap.buf.getvalue(), document)
 
 

@@ -159,26 +159,7 @@ final class ContextBundleBuilder
         if ($medications === null) {
             $sourcesUnavailable[] = self::SOURCE_MEDICATIONS;
         } else {
-            $nowUtc = $nowLocal === null ? gmdate(UtcDate::FORMAT) : UtcDate::toIso($nowLocal, $this->localZone);
-            $byKey = [];
-            foreach ($medications as $row) {
-                $mapped = $this->mapMedication($row, $nowUtc);
-                if ($mapped === null) {
-                    continue;
-                }
-                $key = implode('|', [
-                    Scalar::str($mapped['source_table']),
-                    strtolower(Scalar::str($mapped['drug_name'])),
-                    Scalar::str($mapped['started_at'] ?? ''),
-                    var_export($mapped['active'], true),
-                ]);
-                if (isset($byKey[$key])) {
-                    $duplicatesCollapsed++;
-                    continue; // first row (earliest, lowest id) is kept
-                }
-                $byKey[$key] = count($meds);
-                $meds[] = $mapped;
-            }
+            $meds = $this->mapMedications($medications, $nowLocal, $duplicatesCollapsed);
         }
 
         $allergyRows = [];
@@ -353,6 +334,41 @@ final class ContextBundleBuilder
             'status' => $status,
             'observed_at' => $observedAt,
         ];
+    }
+
+    /**
+     * Medication rows in the bundle's `medications` shape: mapped, status derived, exact
+     * duplicates collapsed (first row kept). Shared by the bundle and the document
+     * briefing's `chart_medications` (ADR-010), so the two can never disagree.
+     *
+     * @param list<array<string,mixed>> $rows
+     * @param string|null $nowLocal  local 'Y-m-d H:i:s' used to derive status; null = now
+     * @return list<array<string,mixed>>
+     */
+    public function mapMedications(array $rows, ?string $nowLocal, int &$duplicatesCollapsed = 0): array
+    {
+        $nowUtc = $nowLocal === null ? gmdate(UtcDate::FORMAT) : UtcDate::toIso($nowLocal, $this->localZone);
+        $meds = [];
+        $byKey = [];
+        foreach ($rows as $row) {
+            $mapped = $this->mapMedication($row, $nowUtc);
+            if ($mapped === null) {
+                continue;
+            }
+            $key = implode('|', [
+                Scalar::str($mapped['source_table']),
+                strtolower(Scalar::str($mapped['drug_name'])),
+                Scalar::str($mapped['started_at'] ?? ''),
+                var_export($mapped['active'], true),
+            ]);
+            if (isset($byKey[$key])) {
+                $duplicatesCollapsed++;
+                continue; // first row (earliest, lowest id) is kept
+            }
+            $byKey[$key] = count($meds);
+            $meds[] = $mapped;
+        }
+        return $meds;
     }
 
     /**

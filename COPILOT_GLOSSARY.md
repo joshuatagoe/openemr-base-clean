@@ -7,7 +7,7 @@ The panel shows the same definitions on hover (`HELP` in
 - **Week 1 (note briefing):** when a patient is opened, the Co-Pilot reads the plan of the last visit
   note, finds its commitments ("recheck A1c", "continue metformin") and shows whether the chart holds
   evidence for each.
-- **Week 2 (document briefing):** *Brief from all read lab documents* briefs from every lab report
+- **Week 2 (document briefing):** *Brief from all read documents* briefs from every lab report
   already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
   and shows *What changed*, *Needs attention* and *What to consider*. Intake forms read for the
   patient are included as patient-reported lines. *View source* on a document

@@ -20,9 +20,9 @@ and never silently dropped (W2-AMB-010).
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 from pydantic import Field, model_validator
 
@@ -105,6 +105,28 @@ class LabResult(StrictModel):
     citation: DocumentCitation
     verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
     loinc_code: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _numeric_value_survives_json(cls, data: Any) -> Any:
+        """A number read back from JSON is a number again.
+
+        JSON serialisation writes a Decimal as a string ("8.9"), and a string
+        is an exact match for ``Decimal | str``, so a stored extraction the
+        module sends back would otherwise arrive as text - and no computed
+        comparison could ever be made from it. The extractor turns every
+        legible number with a unit into a Decimal (``_as_value``), so a numeric
+        string with a unit can only be that Decimal, serialised. Text results
+        ("Negative") and values without a unit are left as they are.
+        """
+        if isinstance(data, dict) and isinstance(data.get("value"), str) and data.get("unit"):
+            try:
+                number = Decimal(data["value"].strip())
+            except InvalidOperation:
+                return data
+            if number.is_finite():
+                return {**data, "value": number}
+        return data
 
     @model_validator(mode="after")
     def _invariants(self) -> LabResult:

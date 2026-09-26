@@ -1,0 +1,56 @@
+{
+  "case_id": "w2_brief_computed_vs_printed_flag",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "stored_briefing",
+  "guards": "W2-AMB-055 at the briefing: a comparison this system computed is labelled computed (inputs + rule, derived source) and never as a lab-printed flag; a flag the lab printed is labelled printed and never as computed.",
+  "documents": [
+    {
+      "from_case": "gen_glucose_high_no_flag"
+    },
+    {
+      "from_case": "gen_ldl_printed_high"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "lines": [
+      {
+        "section": "needs_attention",
+        "tier": "computed",
+        "text_contains": [
+          "182"
+        ],
+        "document_source": "301",
+        "flag_source": "derived",
+        "computed": true,
+        "count": 1,
+        "rendered_with": [
+          "computed by this system",
+          "rule: "
+        ],
+        "rendered_without": [
+          "flag printed on the report"
+        ]
+      },
+      {
+        "section": "needs_attention",
+        "tier": "document_stated",
+        "text_contains": [
+          "168"
+        ],
+        "document_source": "302",
+        "flag_source": "extracted",
+        "computed": false,
+        "count": 1,
+        "rendered_with": [
+          "flag printed on the report"
+        ],
+        "rendered_without": [
+          "computed by this system"
+        ]
+      }
+    ]
+  }
+}
