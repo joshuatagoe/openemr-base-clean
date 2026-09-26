@@ -190,6 +190,31 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
         return array_slice($out, 0, $limit);
     }
 
+    public function countExtractions(int $pid): array
+    {
+        $extracted = 0;
+        $waiting = 0;
+        foreach ($this->records as $id => $r) {
+            if ($r['pid'] === $pid && $r['status'] === 'extracted' && is_string($r['extraction_json']) && in_array($r['doc_type'], ['lab_pdf', 'intake_form'], true)) {
+                $extracted++;
+                if ($this->hasCandidate($id)) {
+                    $waiting++;
+                }
+            }
+        }
+        return ['extracted' => $extracted, 'waiting' => $waiting];
+    }
+
+    private function hasCandidate(int $documentId): bool
+    {
+        foreach ($this->values[$documentId] ?? [] as $v) {
+            if ($v['status'] === 'candidate') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public function listPendingFacts(int $pid, int $limit): array
     {
         $out = [];

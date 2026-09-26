@@ -208,6 +208,23 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
         ], $rows);
     }
 
+    public function countExtractions(int $pid): array
+    {
+        $rows = QueryUtils::fetchRecords(
+            "SELECT COUNT(*) AS extracted,
+                    COALESCE(SUM(EXISTS (SELECT 1 FROM copilot_extracted_value v
+                                          WHERE v.document_id = d.document_id AND v.pid = d.pid AND v.status = 'candidate')), 0) AS waiting
+               FROM copilot_document d
+               JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
+              WHERE d.pid = ? AND d.status = 'extracted' AND d.doc_type IN ('lab_pdf', 'intake_form') AND d.extraction_json IS NOT NULL",
+            [$pid]
+        );
+        return [
+            'extracted' => Scalar::int($rows[0]['extracted'] ?? null),
+            'waiting' => Scalar::int($rows[0]['waiting'] ?? null),
+        ];
+    }
+
     public function listPendingFacts(int $pid, int $limit): array
     {
         $rows = QueryUtils::fetchRecords(

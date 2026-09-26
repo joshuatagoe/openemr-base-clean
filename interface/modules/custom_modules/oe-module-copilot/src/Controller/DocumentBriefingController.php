@@ -9,7 +9,9 @@
  * history (`prior_facts`) are sent (contract C4) and nothing is re-extracted;
  * when an intake form is among them, the chart's current medications go too
  * (`chart_medications`, ADR-010), read only, for the patient-reported conflict lines;
- * nothing extracted yet is `degraded` / `no_extracted_documents`. Until the
+ * nothing extracted yet is `degraded` / `no_extracted_documents`; documents read
+ * whose every value was already filed, rejected or un-filed is `degraded` /
+ * `all_values_reviewed` (nothing new to brief - filed values are chart history). Until the
  * tables exist, the legacy single-document path below still runs (the agent
  * accepts `document_base64` for one more release).
  *
@@ -67,6 +69,8 @@ final class DocumentBriefingController
     public const DEGRADED_AGENT_UNAVAILABLE = 'agent_unavailable';
     public const DEGRADED_DOCUMENT_TOO_LARGE = 'document_too_large';
     public const DEGRADED_NO_EXTRACTED_DOCUMENTS = 'no_extracted_documents';
+    /** Documents were read, and every value read from them was filed, rejected or un-filed: nothing new to brief. */
+    public const DEGRADED_ALL_VALUES_REVIEWED = 'all_values_reviewed';
 
     /** Stored-extraction mode: documents per briefing, and the chart lab history sent as prior_facts. */
     public const MAX_DOCUMENTS = 20;
@@ -262,7 +266,17 @@ final class DocumentBriefingController
             $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
         }
         if ($documents === []) {
-            return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_NO_EXTRACTED_DOCUMENTS), self::DEGRADED_NO_EXTRACTED_DOCUMENTS];
+            // "Nothing read" only when that is true: documents that were read and fully reviewed are a different
+            // answer (2026-09-26 production report: a filed-only chart was told no document had been read).
+            try {
+                $counts = $this->records->countExtractions($pid);
+            } catch (Throwable $e) {
+                throw new SourceUnavailableException('copilot_document', $e);
+            }
+            $reason = $counts['extracted'] > 0 && $counts['waiting'] === 0
+                ? self::DEGRADED_ALL_VALUES_REVIEWED
+                : self::DEGRADED_NO_EXTRACTED_DOCUMENTS;
+            return [self::degraded($correlationId, $patientUuid, null, $reason), $reason];
         }
 
         try {

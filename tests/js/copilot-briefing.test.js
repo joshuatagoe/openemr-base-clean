@@ -49,6 +49,17 @@ test('it posts to the document-briefing route and explains when nothing has been
     expect(section.output.textContent).toMatch(/No lab document has been read yet/);
 });
 
+test('when every value read was reviewed it says so, instead of claiming nothing was read', async () => {
+    global.fetch = jest.fn(async () => json(200, { status: 'degraded', degraded_reason: 'all_values_reviewed', briefing: null }));
+    const section = new DocumentBriefingSection(container(), null);
+    await section.run();
+    expect(section.output.textContent).toContain(
+        'Every value read from this patient\'s documents has been filed, rejected or un-filed. '
+        + 'Filed values are part of the chart\'s lab history; there is nothing new from documents to brief.'
+    );
+    expect(section.output.textContent).not.toMatch(/No lab document has been read yet/);
+});
+
 test('a document citation opens the viewer at its page and box', async () => {
     global.fetch = jest.fn(async () => json(200, {
         status: 'ok',

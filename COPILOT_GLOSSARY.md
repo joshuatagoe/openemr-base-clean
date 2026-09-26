@@ -117,6 +117,7 @@ The panel shows the same definitions on hover (`HELP` in
 | Code | Meaning |
 |---|---|
 | `no_extracted_documents` | No lab document has been read yet for this patient (see the document list). |
+| `all_values_reviewed` | Documents were read, and every value read from them has been filed, rejected or un-filed. Filed values are part of the chart's lab history; there is nothing new from documents to brief. |
 | `no_document_on_file` | No PDF, PNG or JPEG in the patient's Documents. |
 | `document_unavailable` | The newest document could not be read from OpenEMR. |
 | `document_too_large` | The newest document is over 10 MB. |

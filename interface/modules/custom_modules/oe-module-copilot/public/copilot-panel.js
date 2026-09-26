@@ -835,6 +835,7 @@
     // ------------------------------------------------------------------ //
     const DOC_DEGRADED_MESSAGES = {
         no_extracted_documents: 'No lab document has been read yet for this patient. Documents are read when the chart opens; see the list above.',
+        all_values_reviewed: 'Every value read from this patient\'s documents has been filed, rejected or un-filed. Filed values are part of the chart\'s lab history; there is nothing new from documents to brief.',
         no_document_on_file: 'No lab document (PDF, PNG or JPEG) is on file in this patient’s Documents.',
         document_unavailable: 'The latest document on file could not be read.',
         document_too_large: 'The latest document on file is over 10 MB, the largest the Co-Pilot reads.',

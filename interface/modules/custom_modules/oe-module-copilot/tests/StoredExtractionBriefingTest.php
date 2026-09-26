@@ -117,6 +117,48 @@ final class StoredExtractionBriefingTest extends TestCase
         self::assertSame([['test_name' => 'A']], $sent[0]['extraction']['results'], 'only the value still waiting for review is sent');
     }
 
+    /**
+     * 2026-09-26 production report: five documents - one read document whose only value was filed,
+     * two "already read (same file)" duplicates, two held for identity. The briefing said nothing had
+     * been read (`no_extracted_documents`), which was false: everything read had been reviewed.
+     */
+    public function testEveryReadValueReviewedIsItsOwnReasonNotNothingRead(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[10] = self::record(10, 'extracted', '{"document_id":10,"results":[{"test_name":"Hemoglobin A1c"}]}');
+        $repo->values[10] = [['id' => 1, 'document_id' => 10, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed']];
+        $repo->records[11] = ['extraction_json' => null] + self::record(11, 'skipped_duplicate', '');
+        $repo->records[12] = ['extraction_json' => null] + self::record(12, 'skipped_duplicate', '');
+        $repo->records[13] = self::record(13, 'held_identity', '{"document_id":13,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[13] = [['id' => 2, 'document_id' => 13, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $repo->records[14] = self::record(14, 'held_identity', '{"document_id":14,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[14] = [['id' => 3, 'document_id' => 14, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertSame(200, $result['status']);
+        self::assertSame('degraded', $result['body']['status']);
+        self::assertSame('all_values_reviewed', DocumentBriefingController::DEGRADED_ALL_VALUES_REVIEWED);
+        self::assertSame(DocumentBriefingController::DEGRADED_ALL_VALUES_REVIEWED, $result['body']['degraded_reason']);
+        self::assertSame([], $agent->documentPosts, 'nothing is sent when nothing is waiting');
+        self::assertStringContainsString('outcome=all_values_reviewed', $this->audit->events[0]['comment']);
+    }
+
+    public function testOnlyHeldAndDuplicateDocumentsIsStillNothingRead(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[11] = ['extraction_json' => null] + self::record(11, 'skipped_duplicate', '');
+        $repo->records[13] = self::record(13, 'held_identity', '{"document_id":13,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[13] = [['id' => 2, 'document_id' => 13, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertSame('no_extracted_documents', $result['body']['degraded_reason']);
+        self::assertSame([], $agent->documentPosts);
+    }
+
     public function testNothingExtractedYetIsDegradedWithoutAnAgentCall(): void
     {
         $agent = new FakeAgentClient();

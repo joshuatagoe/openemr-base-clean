@@ -97,6 +97,15 @@ interface ProcessingRepositoryInterface
     public function listExtractions(int $pid, int $limit): array;
 
     /**
+     * How many of this patient's documents were read (`extracted` lab or intake extractions, not held,
+     * not deleted in OpenEMR), and how many of those still have a value waiting for review (at least
+     * one `candidate` value). Counts only.
+     *
+     * @return array{extracted:int, waiting:int}
+     */
+    public function countExtractions(int $pid): array;
+
+    /**
      * `candidate` values of this patient's `extracted` lab documents (held and
      * filed/rejected values excluded; intake items are patient-reported evidence, not pending lab facts).
      *
