@@ -9,7 +9,8 @@ The panel shows the same definitions on hover (`HELP` in
   evidence for each.
 - **Week 2 (document briefing):** *Brief from all read lab documents* briefs from every lab report
   already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
-  and shows *What changed*, *Needs attention* and *What to consider*. *View source* on a document
+  and shows *What changed*, *Needs attention* and *What to consider*. Intake forms read for the
+  patient are included as patient-reported lines. *View source* on a document
   citation opens the page and box it came from.
 
 ---
@@ -69,7 +70,7 @@ The panel shows the same definitions on hover (`HELP` in
 | `document_stated` | Printed in the uploaded document, quoted exactly. Not yet confirmed by a clinician. |
 | `chart_fact` | Already recorded in the patient's chart. |
 | `computed` | Worked out by this system with a fixed rule (e.g. value above the printed reference range). The lab did not print it; the inputs and rule are shown. Never displayed as a lab flag. |
-| `patient_reported` | Stated by the patient on an intake form. An observation, not a finding. (Intake forms are not built yet.) |
+| `patient_reported` | Stated by the patient on an intake form, citing the form. An observation, not a finding, and never filed into the chart (ADR-010). |
 | `guideline_supported` | What a published guideline says, quoted and attributed, with why it bears on this patient. Describes the guidance; never a recommendation or order. |
 
 **Other Week 2 labels**

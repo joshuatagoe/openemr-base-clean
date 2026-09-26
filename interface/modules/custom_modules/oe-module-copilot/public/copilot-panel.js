@@ -1192,7 +1192,7 @@
         const intake = isIntake(doc);
         if (status === 'extracted' && intake) {
             const n = Number(doc.pending_count) || 0;
-            notes.push((n === 1 ? '1 patient-reported item. ' : n + ' patient-reported items. ') + INTAKE_NOT_FILED_TEXT);
+            notes.push((n === 1 ? '1 patient-reported item' : n + ' patient-reported items') + ' (evidence only, not filed).');
             if (doc.identity_check === 'missing' && !confirmed) {
                 notes.push('The name and date of birth written on it could not be compared with this chart; check the form is this patient’s before relying on it.');
             }
