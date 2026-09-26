@@ -147,6 +147,9 @@ describe('Source viewer popup', () => {
         expect(dialog.querySelector('canvas')).not.toBeNull();
         expect(dialog.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
         expect(dialog.querySelector('[data-role="value-panel"]').textContent).toContain('Hemoglobin A1c');
+        // The value and its filing controls sit beside the page: the side column starts at the
+        // 240px stageWidth() reserves room for, rather than at its content's width (which wraps it below).
+        expect(dialog.querySelector('[data-role="value-panel"]').parentNode.style.flexBasis).toBe('240px');
         expect(dialog.style.maxHeight).toBe('90vh');
         expect(dialog.style.maxWidth).toBe('90vw');
         expect(c.contains(dialog)).toBe(false);

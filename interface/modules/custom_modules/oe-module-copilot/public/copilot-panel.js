@@ -1505,6 +1505,9 @@
             row.appendChild(this.stage);
             if (target.side) {
                 const side = el('div', 'flex-grow-1');
+                // Start at the 240px stageWidth() leaves free, then grow: a content-sized
+                // basis (up to 420px) would wrap the value and its controls below the page.
+                side.style.flexBasis = '240px';
                 side.style.minWidth = '240px';
                 side.style.maxWidth = '420px';
                 side.appendChild(target.side);
