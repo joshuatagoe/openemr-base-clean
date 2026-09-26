@@ -179,3 +179,93 @@ question is governance and blast radius, not throughput:
 Anthropic enterprise/BAA pricing (list price assumed); Railway egress; Langfuse Cloud (self-hosted assumed
 throughout); engineering and clinical-validation time; the cost of a wrong answer, which the verification
 design treats as unbounded and therefore designs out rather than prices.
+
+## 8. Week 2 — the document path (measured 2026-09-26)
+
+Sections 1–7 are the Week 1 note briefing and are unchanged. This section covers what Week 2 added:
+reading an uploaded document, OCR, retrieval and reranking, and the document briefing.
+
+**How it was measured.** `copilot-agent/loadtest/measure_documents.py` runs the real pipeline — the
+same functions behind `/v1/documents/extract` and the stored-document briefing — over the 34 synthetic
+fixture documents (23 text-layer lab PDFs; 11 scans, photos, rotated/cropped pages and the demo set),
+one at a time, with `claude-opus-5`, AWS Textract (us-east-2) and Cohere Rerank 3.5 on Bedrock
+(us-east-1). Wall-clock per stage and the Textract/rerank call counts are in
+`copilot-agent/loadtest/W2_MEASUREMENT.json`; model tokens and cost are from the Langfuse generations
+of the same run (environment `measurement-w2`). n = 34 is enough for a p50 and a rough p95, not a tail.
+
+### 8.1 Latency by step
+
+| Step | n | p50 | p95 | Notes |
+|---|---|---|---|---|
+| Read a document (extract + verify against the page) | 34 | 3.9 s | 7.0 s | runs at chart open, in the background — the clinician does not wait for it |
+| — of which the extraction model call (`lab_extract`) | 34 | 3.7 s | 6.7 s | |
+| — of which a Textract page | 5 | 0.9 s | 1.5 s | only pages with no text layer, photos, and form fields drawn as images |
+| — documents that needed OCR, whole read | 5 | 5.1 s | 7.8 s | |
+| Briefing (retrieve, rerank, answer, verify) | 31 | 11.6 s | 15.8 s | what the clinician waits for after clicking *Brief* |
+| — of which the answer model call (`answer_considerations`) | 31 | 11.3 s | 14.9 s | **the bottleneck: 97 % of the briefing** |
+| — of which Bedrock rerank | 31 | 0.24 s | 1.1 s | one call per briefing |
+| — of which sparse + dense retrieval | 34 | 2 ms | 5 ms | local, in-process |
+| Read + briefing, end to end | 31 | 16.8 s | 20.2 s | |
+
+Three documents (ALT, platelets, WBC) returned a briefing in 4 ms: the guideline corpus has nothing on
+those tests, so no evidence reaches the answer step and no model call is made — the briefing says so.
+
+**Against target.** Week 1's target was a briefing complete in ≤ 8 s p95. The document briefing misses
+it at 15.8 s. The cause is output length, not input: the answer call averages 3,550 input tokens but
+965 output tokens, and generating ~1,000 tokens is most of the 11 s. The levers, in order of value:
+(1) generate the briefing when chart-open processing finishes and cache it against the set of
+documents and their review state, so the click shows a stored result; (2) cap the draft
+(fewer, shorter considerations — the verifier drops most long ones anyway); (3) move the answer step to
+Sonnet 5, gated by the eval set. None is built; (1) is the one that changes what the clinician feels.
+
+### 8.2 Cost per document and per briefing
+
+| Item | Unit cost | Source |
+|---|---|---|
+| Extraction model call | **$0.0094** per document (3,974 in / 322 out tokens avg) | Langfuse, 34 calls, $0.320 |
+| Textract `DetectDocumentText` | $0.0015 per OCR'd page | AWS list price; 5 of 34 fixture documents needed it |
+| Answer model call | **$0.0285** per briefing (3,550 in / 965 out tokens avg) | Langfuse, 31 calls, $0.883 |
+| Cohere Rerank 3.5 on Bedrock | $0.002 per rerank query (≤ 100 candidates) | AWS list price; one query per briefing |
+| Retrieval, verification, filing, identity check | $0 | deterministic code and SQL |
+
+A document is read once per (content, prompt version) and the extraction is stored, so re-opening the
+chart costs nothing. **One new lab document, read and briefed: ≈ $0.040** (≈ $0.042 if scanned).
+The answer call is 70 % of it.
+
+### 8.3 Projection
+
+Assumptions, added to the Week 1 usage model (§4): 30 % of the 14 daily established-patient visits
+bring at least one new outside document (≈ 4.2 documents per physician-day, 1.2 pages each, 30 %
+scanned), and each gets one document briefing.
+
+| Physicians | Documents / day | Model + AWS spend / month (document path) | Week 1 note path (§5) | Total |
+|---|---|---|---|---|
+| 1 | 4.2 | $3.56 | $2.09 | **$5.65** |
+| 100 | 420 | $356 | $209 | **$565** |
+| 1,000 | 4,200 | $3,560 | $2,087 | **$5,650** |
+| 10,000 | 42,000 | $35,600 | $20,868 | **$56,500** |
+| 100,000 | 420,000 | $356,000 | $208,679 | **$565,000** |
+
+Per physician-month, the document path is $0.88 of reading (extraction + OCR) and $2.68 of briefing
+(answer + rerank). Moving the answer step to Sonnet 5 (× 0.6 on that call) would take the document path to ≈ $2.56;
+precomputing (8.1, lever 1) does not change cost, only when it is paid.
+
+**What binds before cost does.** Bedrock's Rerank quota is 10 requests/second per account-region and
+is not adjustable (ADR-002). At 10,000 physicians the morning peak is ≈ 3.5 briefings/s — fine. At
+100,000 it is ≈ 35/s, 3.5× over, which needs rerank sharded across regions/accounts or a
+self-hosted reranker; Textract's synchronous TPS quota needs the same check in Service Quotas before
+that scale. The answer model's ~11 s per briefing also means a peak of 35/s holds ~400 concurrent
+model calls — an Anthropic rate-limit tier question, not a code change.
+
+### 8.4 Development spend, Week 2
+
+| Item | Amount | Source |
+|---|---|---|
+| This measurement run (34 documents, both routes) | $1.20 model + ≈ $0.07 rerank + < $0.01 Textract | Langfuse `measurement-w2`; call counts |
+| Production traffic since the Week 2 deploy | $0.29 model | Langfuse `production`, 2026-09-22 → 09-26 |
+| Golden-set recordings (the replayed real-model responses) | recorded once; replays are free | `fixtures/recordings/` |
+| Unit suite, eval gate, CI | $0 | stub provider, fake OCR, fake reranker — no key needed |
+| Claude Code / ChatGPT / Railway | unchanged from §2 | plans, not metered per project |
+
+The console total for the Anthropic API (§2's method) is the authoritative figure; the traced items
+above are the part attributable to the Week 2 document path.
