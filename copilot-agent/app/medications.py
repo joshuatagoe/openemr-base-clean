@@ -73,6 +73,16 @@ def _name_matches(record: MedicationRecord, key: str) -> bool:
     return key != "" and key in _WORD.findall(normalize(record.drug_name))
 
 
+def records_named(name: str, records: Iterable[MedicationRecord]) -> list[MedicationRecord]:
+    """Records whose normalized drug name contains ``name``'s ingredient as a whole word.
+
+    The same rule the commitment matcher uses (rule 3), shared with the intake
+    briefing so a reported medication and a plan commitment match one way.
+    """
+    key = ingredient_key(name)
+    return [r for r in records if _name_matches(r, key)]
+
+
 def _match(commitment: ExtractedCommitment, context: ContextBundle, state: EvidenceState, summary: str, cited: Iterable[MedicationRecord] = (), candidates: Iterable[MedicationRecord] = ()) -> EvidenceMatch:
     return EvidenceMatch(
         commitment=commitment.model_copy(deep=True),
@@ -147,4 +157,4 @@ def match_medication(commitment: ExtractedCommitment, context: ContextBundle) ->
     return _match(commitment, context, EvidenceState.AMBIGUOUS_MATCH, f"The plan's wording for '{commitment.drug_name}' does not state an action that can be checked; matching records are shown.", candidates=candidates)
 
 
-__all__ = ["ingredient_key", "match_medication"]
+__all__ = ["ingredient_key", "match_medication", "records_named"]

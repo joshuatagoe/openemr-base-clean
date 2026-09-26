@@ -550,3 +550,32 @@ def test_document_briefing_is_one_trace_with_every_step_and_no_document_text(
         blob = json.dumps(dict(s.attributes), default=str)
         for needle in needles:
             assert needle not in blob, (s.name, needle)
+
+
+def test_intake_medication_conflicts_leave_no_drug_name_in_an_exported_span(
+    traced_document_client: TestClient, exporter: InMemorySpanExporter
+) -> None:
+    """ADR-010: reported and chart medication names are compared in-process and never exported."""
+    import asyncio
+
+    from tests.test_document_briefing import _signed
+    from tests.test_intake_briefing import _chart_med, _intake, _stored_intake
+    from tests.test_stored_documents import _payload
+
+    extraction = asyncio.run(_intake(301))
+    chart = [_chart_med("prescriptions:11", "Metformin 1000 mg", "twice daily"), _chart_med("lists:12", "Zolpidemix 5 mg", "nightly")]
+    payload = _payload([_stored_intake(301, extraction)], chart_medications=chart)
+    body = json.dumps(payload).encode()
+    r = traced_document_client.post("/v1/documents/briefing", content=body, headers=_signed(body))
+    assert r.status_code == 200 and r.json()["status"] == "ok"
+    attention = r.json()["briefing"]["needs_attention"]
+    assert any(line["text"].startswith("Patient reports") for line in attention)
+
+    spans = _exported(exporter)
+    assert any(s.name == "document_briefing" for s in spans)
+    needles = {"Metformin", "Lisinopril", "Atorvastatin", "Zolpidemix", "twice daily", payload["patient_uuid"]}
+    needles |= {line["text"] for line in attention}
+    for s in spans:
+        blob = json.dumps(dict(s.attributes), default=str)
+        for needle in needles:
+            assert needle not in blob, (s.name, needle)

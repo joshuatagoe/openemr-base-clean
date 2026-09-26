@@ -7,6 +7,8 @@
  * With the module tables installed (ADR-012), the briefing covers every
  * extracted, non-held document: the stored extractions and the chart's lab
  * history (`prior_facts`) are sent (contract C4) and nothing is re-extracted;
+ * when an intake form is among them, the chart's current medications go too
+ * (`chart_medications`, ADR-010), read only, for the patient-reported conflict lines;
  * nothing extracted yet is `degraded` / `no_extracted_documents`. Until the
  * tables exist, the legacy single-document path below still runs (the agent
  * accepts `document_base64` for one more release).
@@ -70,6 +72,13 @@ final class DocumentBriefingController
     public const MAX_DOCUMENTS = 20;
     public const PRIOR_FACTS_SINCE = '1900-01-01 00:00:00';
     public const PRIOR_FACTS_LIMIT = 500;
+
+    /**
+     * ADR-010 medication conflicts: rows read (the reader's own cap) and current entries
+     * sent as `chart_medications`. Matches DocumentBriefingRequest's MAX_CHART_MEDICATIONS.
+     */
+    public const MEDICATION_READ_LIMIT = 500;
+    public const MAX_CHART_MEDICATIONS = 200;
 
     /** Matches DocumentBriefingRequest.question's max_length. */
     public const QUESTION_MAX_LENGTH = 500;
@@ -271,6 +280,10 @@ final class DocumentBriefingController
             'prior_facts' => $priorFacts,
             'question' => $question === null || $question === '' ? null : mb_substr($question, 0, self::QUESTION_MAX_LENGTH),
         ];
+        // Read only when an intake form is briefed: a lab-only briefing has nothing to compare them with.
+        if (in_array('intake_form', array_column($documents, 'doc_type'), true)) {
+            $request['chart_medications'] = $this->currentChartMedications($correlationId, $pid);
+        }
         try {
             $body = $this->agent->postDocumentBriefing($request, $correlationId);
             return [$body, 'agent_' . Scalar::str($body['status'] ?? 'unknown') . '; documents=' . count($documents) . '; prior_facts=' . count($priorFacts)];
@@ -282,6 +295,30 @@ final class DocumentBriefingController
             ]);
             return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_AGENT_UNAVAILABLE), $e->getReason()];
         }
+    }
+
+    /**
+     * The chart's current medications (ADR-010) in the Week 1 bundle's shape: every entry not
+     * known to be inactive (an indeterminate status still counts as on the list), the newest
+     * MAX_CHART_MEDICATIONS of them. Null when the source cannot be read, so the agent says
+     * nothing was compared rather than flagging every reported medication as missing.
+     *
+     * @return list<array<string,mixed>>|null
+     */
+    private function currentChartMedications(string $correlationId, int $pid): ?array
+    {
+        assert($this->builder !== null);
+        try {
+            $rows = $this->reader->listMedications($pid, self::MEDICATION_READ_LIMIT);
+        } catch (SourceUnavailableException $e) {
+            $this->logger->warning('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
+            return null;
+        }
+        $current = array_values(array_filter(
+            $this->builder->mapMedications($rows, null),
+            static fn(array $m): bool => $m['active'] !== false
+        ));
+        return array_slice($current, -self::MAX_CHART_MEDICATIONS);
     }
 
     /** REST route adapter: `POST /api/copilot/document-briefing` under the local API bridge. */
