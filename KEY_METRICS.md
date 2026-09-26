@@ -165,7 +165,7 @@ Everything above is the Week 1 metric set, still in force for the Week 1 briefin
 
 **Why this one.** The failure that would end clinical use is not a slow or incomplete briefing — it is a confident wrong one: a value the model invented, or our own arithmetic presented as the lab's flag. This metric is 1 only when neither happened anywhere in the briefing, so it cannot be improved by being right on average.
 
-**Target:** 1.00 on the golden set, enforced as a floor by the CI gate. **Current:** 1.00 on all 46 Week 2 document cases, on recorded real-model output (§12.4).
+**Target:** 1.00 on the golden set, enforced as a floor by the CI gate. **Current:** 1.00 on all 47 Week 2 document cases, on recorded real-model output (§12.4).
 
 ### 12.2 Safety metrics — these are floors, not targets
 
@@ -211,10 +211,10 @@ end to end 15.0 s, $0.039 — agrees with these numbers.)*
 
 | Metric | Current | Source |
 |---|---|---|
-| Golden cases | 70 — 24 Week 1 note cases; 46 Week 2: 26 lab extraction (21 auto-generated 2026-09-23, not yet reviewed), 3 intake, 17 briefing/routing/follow-up/safety/PHI flow cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
+| Golden cases | 71 — 24 Week 1 note cases; 47 Week 2: 26 lab extraction (21 auto-generated 2026-09-23, not yet reviewed), 3 intake, 18 briefing/routing/follow-up/safety/PHI/ageing flow cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
 | Rubric pass rate, all five categories | 1.00 | `scripts/eval_gate.py` |
 | Document cases on **real recorded model output** | 5 of 5 | `fixtures/recordings/` |
-| Test suite (gate stage 1) | 798 passed, 7 skipped; module PHPUnit 241; panel jest 97 | `uv run pytest` |
+| Test suite (gate stage 1) | 822 passed, 7 skipped; module PHPUnit 247; panel jest 109 | `uv run pytest` |
 | Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule; a changed extraction prompt | `EVAL_GATE.md` |
 
 ### 12.5 What is not yet measured

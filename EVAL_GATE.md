@@ -24,13 +24,13 @@ All three are committed. Nothing is fetched at runtime.
 | **Gate** | [`copilot-agent/scripts/eval_gate.py`](copilot-agent/scripts/eval_gate.py) |
 | **Baseline** | [`copilot-agent/evals/baseline.json`](copilot-agent/evals/baseline.json) |
 
-**Case count: 70** — 21 of them auto-generated on 2026-09-23 and **not yet
+**Case count: 71** — 21 of them auto-generated on 2026-09-23 and **not yet
 reviewed by a human**.
 
 - **24 Week 1 note cases:** boundary (12), missing/conflicting (7), regression
   (2), adversarial (2), invariant (1). Scripted model output; they test our
   grounding and matching logic.
-- **17 Week 2 flow cases** (added 2026-09-26, `app/doc_eval_flows.py`), replaying existing recordings: briefing from stored documents (reviewed values not briefed, computed vs printed flag labels, chart history used for *What changed*), routing (stored documents skip extraction; step-cap and budget degrade with a reason code), follow-ups over pending facts (label present, never called chart data, pending-vs-filed conflict shown), safety (planted instructions never reach the briefing, a dosing question refused, a blank allergy section never becomes "no known allergies"), intake medication conflicts, and PHI (no document string, printed identity or patient id in logs or exported spans for the extract, stored-briefing and pending-fact routes). Each was mutation-checked: breaking the behaviour fails the gate.
+- **18 Week 2 flow cases** (added 2026-09-26; the 18th, old unreviewed documents aged out of the briefing, `app/doc_eval_flows.py`), replaying existing recordings: briefing from stored documents (reviewed values not briefed, computed vs printed flag labels, chart history used for *What changed*), routing (stored documents skip extraction; step-cap and budget degrade with a reason code), follow-ups over pending facts (label present, never called chart data, pending-vs-filed conflict shown), safety (planted instructions never reach the briefing, a dosing question refused, a blank allergy section never becomes "no known allergies"), intake medication conflicts, and PHI (no document string, printed identity or patient id in logs or exported spans for the extract, stored-briefing and pending-fact routes). Each was mutation-checked: breaking the behaviour fails the gate.
 - **3 intake cases** (typed form, blank allergy section, handwriting photo verified from Textract words recorded once and replayed).
 - **26 Week 2 lab-extraction cases**, each a synthetic lab PDF plus the **real model's
   recorded response** to it. Five were built by hand: Three come from the Week 2 starter working set
@@ -98,7 +98,7 @@ server-side. The two invoke one script, so they cannot drift apart.
 
 ### What runs — two stages, one command
 
-**Stage 1 — the full test suite** (`pytest`, ~800 tests, ~2 min). Any failure fails
+**Stage 1 — the full test suite** (`pytest`, ~830 tests, ~2 min). Any failure fails
 the gate and the golden set is not scored.
 
 This stage was added on 2026-09-23 after a proof that the golden set alone could
@@ -137,7 +137,7 @@ Boolean per case, never a 1–10 rating, so a failure names a defect.
 **Applicability.** A category is `None` for cases it does not apply to and is
 excluded from that category's denominator. `safe_refusal` applies only to
 `adversarial`, `patient_isolation` and `missing_conflicting` note cases, and to
-document and flow cases where restraint is the point — 28 of 70.
+document and flow cases where restraint is the point — 28 of 71.
 Scoring the other 42 as passes would inflate the rate, and the inflation would
 be largest exactly where coverage is thinnest.
 
@@ -179,7 +179,7 @@ guessed at.
 ### Why four floors are at 1.00
 
 **The 5% rule alone cannot catch a single-case regression.** One case out of 29
-was 3.4 points; at the 70 cases the set now has, it is 1.4 points. Both clear a 5%
+was 3.4 points; at the 71 cases the set now has, it is 1.4 points. Both clear a 5%
 tolerance.
 
 This is not theoretical — it is what the demonstration regression below actually
