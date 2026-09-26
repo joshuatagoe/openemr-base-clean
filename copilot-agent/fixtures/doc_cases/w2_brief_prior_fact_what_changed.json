@@ -1,0 +1,44 @@
+{
+  "case_id": "w2_brief_prior_fact_what_changed",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "stored_briefing",
+  "guards": "prior_facts turn a new document value into a dated change citing both sources (chart 8.1 in March -> document 8.9 in September).",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c"
+    }
+  ],
+  "prior_facts": [
+    {
+      "result_id": "procedure_result:9001",
+      "order_id": "procedure_order:12",
+      "test_name": "Hemoglobin A1c",
+      "code": null,
+      "value": "8.1",
+      "units": "%",
+      "abnormal_flag": null,
+      "range": "4.0-5.6",
+      "status": "final",
+      "observed_at": "2026-03-01T09:00:00+00:00"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "lines": [
+      {
+        "section": "what_changed",
+        "tier": "document_stated",
+        "count": 1,
+        "text_contains": [
+          "Hemoglobin A1c 8.9 % on 2026-09-12",
+          "the chart value was 8.1 % on 2026-03-01"
+        ],
+        "record_citation": "procedure_result:9001",
+        "document_source": "101",
+        "not_yet_in_chart": true
+      }
+    ]
+  }
+}

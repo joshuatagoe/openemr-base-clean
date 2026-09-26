@@ -1,0 +1,18 @@
+{
+  "case_id": "w2_brief_budget_reason_code",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "safe_refusal",
+  "test_class": "routing_degrade",
+  "guards": "A spent wall-clock budget stops the briefing degraded with the fixed reason code budget_exhausted, not a transport error.",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c"
+    }
+  ],
+  "budget_seconds": 0,
+  "expect": {
+    "status": "degraded",
+    "degraded_reason": "budget_exhausted"
+  }
+}

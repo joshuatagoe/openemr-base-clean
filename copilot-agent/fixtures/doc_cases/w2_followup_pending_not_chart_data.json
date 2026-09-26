@@ -1,0 +1,102 @@
+{
+  "case_id": "w2_followup_pending_not_chart_data",
+  "kind": "followup",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "pending_facts",
+  "guards": "ADR-011: a pending value is never presented as chart data ('on file'), and 'no result found' may not hide a pending value.",
+  "bundle_update": {
+    "pending_document_facts": [
+      {
+        "fact_id": "copilot_extracted_value:41",
+        "document_id": 201,
+        "test_name": "Hemoglobin A1c",
+        "value_text": "9.8",
+        "unit": "%",
+        "reference_range": "4.0-5.6",
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": "2026-09-12",
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": [
+          0.1,
+          0.2,
+          0.3,
+          0.25
+        ],
+        "status": "candidate"
+      },
+      {
+        "fact_id": "copilot_extracted_value:42",
+        "document_id": 201,
+        "test_name": "LDL Cholesterol",
+        "value_text": "131",
+        "unit": "mg/dL",
+        "reference_range": "0-99",
+        "abnormal_flag": "H",
+        "flag_source": "derived",
+        "collection_date": "2026-09-01",
+        "verification_status": "verified_exact",
+        "page": 2,
+        "bbox": null,
+        "status": "candidate"
+      }
+    ]
+  },
+  "question": "Is there an LDL result?",
+  "script": [
+    {
+      "tool_calls": [
+        {
+          "name": "find_results",
+          "arguments": {
+            "test_query": "ldl"
+          }
+        },
+        {
+          "name": "find_pending_document_facts",
+          "arguments": {
+            "test_query": "ldl"
+          }
+        }
+      ]
+    },
+    {
+      "answer": [
+        {
+          "text": "LDL Cholesterol 131 mg/dL is on file, not yet verified or filed.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:42"
+          ]
+        },
+        {
+          "text": "No LDL result was found.",
+          "kind": "no_record_found",
+          "cited": []
+        },
+        {
+          "text": "No filed LDL result was found; a value read from an uploaded document is not yet verified or filed.",
+          "kind": "no_record_found",
+          "cited": []
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "kept": [
+      {
+        "kind": "no_record_found",
+        "text_contains": [
+          "not yet verified or filed"
+        ]
+      }
+    ],
+    "kept_count": 1,
+    "rejection_codes": [
+      "absence_ignores_pending",
+      "pending_cited_as_chart"
+    ]
+  }
+}

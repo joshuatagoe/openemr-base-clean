@@ -1,0 +1,23 @@
+{
+  "case_id": "w2_brief_step_cap_reason_code",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "safe_refusal",
+  "test_class": "routing_degrade",
+  "guards": "The supervisor's step cap stops the run degraded with the fixed reason code iteration_limit, logged as the last routing decision - never an unbounded loop, never a raw error.",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c"
+    }
+  ],
+  "max_steps": 1,
+  "expect": {
+    "status": "degraded",
+    "degraded_reason": "iteration_limit",
+    "last_reason_code": "iteration_limit",
+    "routing_targets": [
+      "evidence-retriever",
+      "finish"
+    ]
+  }
+}

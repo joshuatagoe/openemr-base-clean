@@ -1,0 +1,59 @@
+{
+  "case_id": "w2_brief_reviewed_values_not_briefed",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "stored_briefing",
+  "guards": "A value the clinician already reviewed is never briefed from the document: the module sends only values still waiting (rejected/un-filed dropped, filed ones as prior facts). Agent side: a value absent from the stored extraction yields no line, and a filed value arriving as chart history is not briefed as new. The module filter itself: StoredExtractionBriefingTest (PHPUnit).",
+  "documents": [
+    {
+      "from_case": "lab_clean_hba1c",
+      "reviewed": [
+        "Glucose",
+        "Creatinine"
+      ]
+    }
+  ],
+  "prior_facts": [
+    {
+      "result_id": "procedure_result:7001",
+      "order_id": "procedure_order:12",
+      "test_name": "Creatinine",
+      "code": null,
+      "value": "0.9",
+      "units": "mg/dL",
+      "abnormal_flag": null,
+      "range": "0.6-1.1",
+      "status": "final",
+      "observed_at": "2026-09-12T00:00:00+00:00"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "lines": [
+      {
+        "section": "what_changed",
+        "text_contains": [
+          "Hemoglobin A1c 8.9"
+        ],
+        "document_source": "101"
+      },
+      {
+        "text_contains": [
+          "Glucose"
+        ],
+        "count": 0
+      },
+      {
+        "text_contains": [
+          "Creatinine"
+        ],
+        "count": 0
+      }
+    ],
+    "never_shown": [
+      "Glucose, Fasting 164",
+      "Creatinine 0.9"
+    ]
+  }
+}

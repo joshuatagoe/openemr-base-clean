@@ -12,6 +12,7 @@ import pytest
 
 import app.doc_eval as doc_eval
 from app.doc_eval import load_doc_cases, score_doc_case
+from app.doc_eval_flows import FLOW_KINDS
 
 MODEL = "claude-opus-5"
 CASES = load_doc_cases()
@@ -54,9 +55,59 @@ def test_an_invented_value_on_a_degraded_scan_is_caught(monkeypatch: pytest.Monk
 
 
 def test_the_tier_reads_documents_and_recordings_from_the_committed_fixtures() -> None:
+    by_id = {c["case_id"]: c for c in CASES}
     for case in CASES:
+        if case.get("kind") in FLOW_KINDS:  # flow cases replay other cases' documents and recordings
+            sources = [d["from_case"] for d in case.get("documents", [])] + ([case["from_case"]] if "from_case" in case else [])
+            assert all(s in by_id and by_id[s].get("kind") not in FLOW_KINDS for s in sources), case["case_id"]
+            continue
         document = case.get("document") or case["pdf"]  # intake cases name an image or PDF
         assert (doc_eval.DOCUMENTS_DIR / document).exists(), document
+
+
+# --------------------------------------------------------------------------- #
+# Week 2 flow cases (app/doc_eval_flows.py)
+# --------------------------------------------------------------------------- #
+
+FLOWS = [c for c in CASES if c.get("kind") in FLOW_KINDS]
+
+
+def test_every_flow_case_is_mapped_to_one_rubric() -> None:
+    from app.rubrics import CATEGORIES
+
+    assert len(FLOWS) >= 15
+    assert all(c["rubric"] in CATEGORIES for c in FLOWS)
+    assert {c["rubric"] for c in FLOWS} == set(CATEGORIES) - {"schema_valid"}
+
+
+def test_a_flow_expectation_that_does_not_hold_fails_its_own_rubric() -> None:
+    case = next(c for c in FLOWS if c["case_id"] == "w2_brief_intake_medication_conflict")
+    forged = {**case, "expect": {**case["expect"], "lines": [{"text_contains": ["Patient reports Metformin"], "count": 1}]}}
+    result = score_doc_case(forged, model=MODEL)
+    assert result.scores["factually_consistent"] is False
+    assert result.scores["schema_valid"] and result.scores["citation_present"] and result.scores["no_phi_in_logs"]
+
+
+def test_a_briefing_line_written_to_a_log_fails_no_phi(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.briefing as briefing
+    from app.observability import log_event
+
+    real = briefing.build_briefing
+
+    def leaky(**kwargs):  # type: ignore[no-untyped-def]
+        built = real(**kwargs)
+        log_event("debug.lines", lines=[line.text for line in built.needs_attention])
+        return built
+
+    monkeypatch.setattr("app.workflow.build_briefing", leaky)
+    case = next(c for c in FLOWS if c["case_id"] == "w2_brief_intake_medication_conflict")
+    assert score_doc_case(case, model=MODEL).scores["no_phi_in_logs"] is False
+
+
+def test_traced_flow_cases_export_spans_and_scan_them() -> None:
+    case = next(c for c in FLOWS if c["case_id"] == "w2_followup_pending_phi")
+    result = score_doc_case(case, model=MODEL)
+    assert result.passed, result.failures  # includes "tracing was on but no span was exported"
 
 
 # --------------------------------------------------------------------------- #

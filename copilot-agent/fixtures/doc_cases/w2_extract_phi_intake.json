@@ -1,0 +1,12 @@
+{
+  "case_id": "w2_extract_phi_intake",
+  "kind": "extract",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "no_phi_in_logs",
+  "test_class": "phi",
+  "guards": "The extract route (C2, ADR-012): the written name and DOB go to the module once, top-level, and are stripped from the stored form; no form text, printed identity or patient id reaches a log or an exported span.",
+  "from_case": "intake_typed_evelyn",
+  "expect": {
+    "printed_identity_returned": true
+  }
+}

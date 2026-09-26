@@ -1,0 +1,97 @@
+{
+  "case_id": "w2_followup_pending_label",
+  "kind": "followup",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "citation_present",
+  "test_class": "pending_facts",
+  "guards": "ADR-011: a statement citing a pending document value must carry 'not yet verified or filed'; the unlabelled one is rejected, the labelled one is kept and cited as a pending_document_fact.",
+  "bundle_update": {
+    "pending_document_facts": [
+      {
+        "fact_id": "copilot_extracted_value:41",
+        "document_id": 201,
+        "test_name": "Hemoglobin A1c",
+        "value_text": "9.8",
+        "unit": "%",
+        "reference_range": "4.0-5.6",
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": "2026-09-12",
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": [
+          0.1,
+          0.2,
+          0.3,
+          0.25
+        ],
+        "status": "candidate"
+      },
+      {
+        "fact_id": "copilot_extracted_value:42",
+        "document_id": 201,
+        "test_name": "LDL Cholesterol",
+        "value_text": "131",
+        "unit": "mg/dL",
+        "reference_range": "0-99",
+        "abnormal_flag": "H",
+        "flag_source": "derived",
+        "collection_date": "2026-09-01",
+        "verification_status": "verified_exact",
+        "page": 2,
+        "bbox": null,
+        "status": "candidate"
+      }
+    ]
+  },
+  "question": "What did the new report say about LDL?",
+  "script": [
+    {
+      "tool_calls": [
+        {
+          "name": "find_pending_document_facts",
+          "arguments": {
+            "test_query": "ldl"
+          }
+        }
+      ]
+    },
+    {
+      "answer": [
+        {
+          "text": "LDL Cholesterol was 131 mg/dL on 2026-09-01.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:42"
+          ]
+        },
+        {
+          "text": "LDL Cholesterol 131 mg/dL on 2026-09-01, read from document 201 page 2, is not yet verified or filed.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:42"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "kept": [
+      {
+        "text_contains": [
+          "not yet verified or filed"
+        ],
+        "cited": [
+          "copilot_extracted_value:42"
+        ],
+        "cited_types": [
+          "pending_document_fact"
+        ]
+      }
+    ],
+    "kept_count": 1,
+    "rejection_codes": [
+      "pending_label_missing"
+    ]
+  }
+}

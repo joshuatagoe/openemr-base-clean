@@ -1,0 +1,102 @@
+{
+  "case_id": "w2_brief_intake_medication_conflict",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: flow cases); replays existing extraction recordings - no new model calls",
+  "rubric": "factually_consistent",
+  "test_class": "intake_briefing",
+  "guards": "ADR-010: a reported medication missing from the chart's current list is a patient-reported conflict citing the form item and saying the list was checked; the same drug at another dose cites the form item and the chart record; a matching one and a chart-only one are not flagged.",
+  "documents": [
+    {
+      "from_case": "intake_typed_evelyn"
+    }
+  ],
+  "chart_medications": [
+    {
+      "record_id": "prescriptions:11",
+      "source_table": "prescriptions",
+      "drug_name": "Metformin 500 mg tablet",
+      "rxnorm_code": null,
+      "dosage_text": "1 tab by mouth twice daily",
+      "active": true,
+      "status_field": "active,end_date",
+      "status_value": "active=1,end_date=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    },
+    {
+      "record_id": "lists:12",
+      "source_table": "lists",
+      "drug_name": "Lisinopril 20 mg",
+      "rxnorm_code": null,
+      "dosage_text": "daily",
+      "active": true,
+      "status_field": "activity,enddate",
+      "status_value": "activity=1,enddate=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    },
+    {
+      "record_id": "prescriptions:13",
+      "source_table": "prescriptions",
+      "drug_name": "Amlodipine 5 mg",
+      "rxnorm_code": null,
+      "dosage_text": "daily",
+      "active": true,
+      "status_field": "active,end_date",
+      "status_value": "active=1,end_date=null",
+      "started_at": "2026-01-10T09:00:00+00:00",
+      "ended_at": null,
+      "modified_at": null,
+      "timestamp": "2026-01-10T09:00:00+00:00",
+      "timestamp_field": "date_added"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "lines": [
+      {
+        "section": "needs_attention",
+        "tier": "patient_reported",
+        "document_source": "301",
+        "count": 1,
+        "not_yet_in_chart": true,
+        "text_contains": [
+          "Patient reports Atorvastatin 20 mg nightly on the intake form; not on the chart medication list",
+          "were checked"
+        ]
+      },
+      {
+        "section": "needs_attention",
+        "tier": "patient_reported",
+        "document_source": "301",
+        "record_citation": "lists:12",
+        "count": 1,
+        "text_contains": [
+          "Patient reports Lisinopril 10 mg daily on the intake form",
+          "the dose differs"
+        ]
+      },
+      {
+        "text_contains": [
+          "Patient reports Metformin"
+        ],
+        "count": 0
+      },
+      {
+        "text_contains": [
+          "Amlodipine"
+        ],
+        "count": 0
+      }
+    ],
+    "limitations_contain": [
+      "compared with the chart's current medication list"
+    ]
+  }
+}
