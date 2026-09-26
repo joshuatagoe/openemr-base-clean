@@ -106,7 +106,7 @@
         doc_status_skipped_duplicate: 'The same file was already read in this chart; its values are listed under that document. Nothing is read twice.',
         doc_status_unsupported: 'Not read: it needs a Co-Pilot category (Lab Report), or it is a kind of file the Co-Pilot does not read.',
         doc_status_held_identity: 'Held: the patient printed on the document may not be this patient. Its values are not shown or used until a clinician confirms the patient.',
-        confirm_patient: 'For a held document you have viewed: confirms it belongs to this patient. Its values then become reviewable, waiting to be verified and filed or rejected; the identity check result is kept, and your confirmation is recorded in the EHR audit log. Needs lab-write and sign permissions, like filing. If the document is another patient\u2019s, move it in Documents instead.',
+        confirm_patient: 'For a held document you have viewed: confirms it belongs to this patient. Its values then become reviewable, waiting to be verified and filed or rejected; the identity check result is kept, and your confirmation is recorded in the EHR audit log. Needs lab-write and sign permissions, like filing. If the document is another patient\u2019s, move it instead: open it in Documents, click Properties, and use Move to Patient.',
         pending_count: 'Values read from this document that are waiting for a clinician to verify and file or reject.',
         verification_verified_exact: 'The system found this exact value on the page; the box shows where. Found is not the same as correct - check it.',
         verification_verified_fuzzy: 'The system found a close match on the page (for example different spacing); the box shows where. Check it.',
@@ -1133,9 +1133,9 @@
         agent_bad_response: 'The Co-Pilot agent’s answer was not usable. It will be tried again the next time the chart is opened.',
         agent_degraded: 'The Co-Pilot agent could not read it this time. It will be tried again the next time the chart is opened.'
     };
-    const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it. If it belongs to another patient, move it: open it in Documents, click Properties, and use Move to Patient.';
     // Held for another reason (the same file live in another chart, no matching printed identity here): no mismatch was found.
-    const HELD_OTHER_TEXT = 'This document is held for an identity check. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const HELD_OTHER_TEXT = 'This document is held for an identity check. Its values are not shown or used until the patient is confirmed. Open the document to check it. If it belongs to another patient, move it: open it in Documents, click Properties, and use Move to Patient.';
     const CONFIRMED_CODE = 'identity_confirmed_by_clinician';
     const CONFIRMED_IDENTITY_TEXT = {
         mismatch: 'the name or date of birth printed on it did not match this chart',
@@ -2026,7 +2026,7 @@
                     confirm.dataset.armed = '1';
                     confirm.textContent = 'Confirm: this is the right patient';
                     cancel.hidden = false;
-                    say('Confirm only if you checked that the document belongs to this patient. Its values become reviewable here (nothing is filed automatically); the identity check result is kept and your confirmation is recorded in the EHR audit log. If it is another patient\u2019s, move it to the right chart in Documents instead.', 'text-warning');
+                    say('Confirm only if you checked that the document belongs to this patient. Its values become reviewable here (nothing is filed automatically); the identity check result is kept and your confirmation is recorded in the EHR audit log. If it is another patient\u2019s, move it instead: open it in Documents, click Properties, and use Move to Patient.', 'text-warning');
                     return;
                 }
                 confirm.disabled = true;
