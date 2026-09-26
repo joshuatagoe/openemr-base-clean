@@ -84,23 +84,28 @@ API collection: [`copilot-agent/api-collection/`](copilot-agent/api-collection/R
 
 Everything in this section is Week 2 work, added after commit `e80e740`. Nothing above it changed behaviour; the Week 1 panel and briefing still work exactly as described.
 
-**What it adds.** A lab report filed through OpenEMR's own Documents screen can now be briefed: the agent reads the document, extracts structured results with citations back to the printed text, retrieves guideline evidence, and returns a grounded briefing — *What changed*, *Needs attention*, *What to consider* — where every claim carries its tier and its source.
+**What it adds.** Lab reports and patient intake forms filed through OpenEMR's own Documents screen are read, checked against the page and briefed. Each extracted value carries a citation to its page and a box around the printed text, shown in a source viewer in the panel. A clinician can verify a lab value against its source and file it into the chart's lab results, or reject or un-file it. Intake answers are shown as patient-reported evidence and are never filed. The briefing (*What changed*, *Needs attention*, *What to consider*) compares new values with the chart's lab history, retrieves guideline evidence (sparse + dense retrieval, Cohere Rerank on Bedrock), and cites every claim.
 
 **Run the Week 2 flow** (deployed or local — no separate branch, service or build)
 
-1. The Co-Pilot must already be on — steps 1–3 of *Turn on the Co-Pilot* above.
-2. Open a patient → **Documents** → **Add/Upload** → file a lab PDF. A synthetic one is committed at [`copilot-agent/fixtures/documents/lab_hba1c_clean.pdf`](copilot-agent/fixtures/documents/lab_hba1c_clean.pdf); [`lab_hba1c_degraded_scan.pdf`](copilot-agent/fixtures/documents/lab_hba1c_degraded_scan.pdf) shows an obscured value being reported as unreadable rather than guessed.
-3. Open the patient's **Patient Summary** → Co-Pilot panel → **Brief from latest lab document**.
+1. The Co-Pilot must already be on — steps 1–3 of *Turn on the Co-Pilot* above. The module's own tables are created automatically when the OpenEMR container starts (`bin/copilot-migrate.php`).
+2. One-time: in **Administration → Other → Document Categories**, make sure a **Lab Report** category exists and add an **Intake Form** category with access control *Patients → Documents*. The document type comes from the category name; a document in any other category is listed as "needs a category" and never analysed.
+3. Open the demo patient (**Demo, Evelyn**) → **Documents** → **Add/Upload** → file a document into *Lab Report* or *Intake Form*. Synthetic documents that print this patient's name and date of birth are in [`copilot-agent/fixtures/documents/demo/`](copilot-agent/fixtures/documents/demo/README.md) (a follow-up lab, an image-only scan, a copy printed for the wrong patient) and [`copilot-agent/fixtures/documents/intake/`](copilot-agent/fixtures/documents/intake/).
+4. Open the patient's **Patient Summary**. The Co-Pilot panel processes new documents on chart open and lists each one with its status. Click **View source** on a value to see its box on the page; **Verify and file** to file a lab value; **Brief from all read documents** for the briefing.
 
-The document is stored by OpenEMR, not by the Co-Pilot: the module reads the patient's newest PDF from the core `documents` table and posts it, signed, to the agent. Extracted values are shown as **not yet in the chart**. **Not built yet (planned for Final):** filing a value into the chart after a clinician verifies it against its source, and comparing a new document with earlier chart values — today the briefing reads the document alone, so "no earlier value" means none was supplied, not that the chart has none. See `W2_ARCHITECTURE.md` §1.4–1.5.
+A document whose printed name or date of birth does not match the chart is **held**: nothing from it is briefed until a clinician views it and chooses *This is the right patient*, or moves it to the right chart. Values not yet filed are labelled **not yet in the chart** wherever they appear, including in answers to follow-up questions. Design and decisions: [`W2_ARCHITECTURE.md`](W2_ARCHITECTURE.md) (§0 status, §7 decision log).
 
 **Environment variables added in Week 2** (agent service; all optional)
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `COPILOT_OCR` | `fake` | `fake` = offline stand-in (CI). `textract` = AWS Textract `DetectDocumentText` for scans, photos and form fields drawn as images — **set in production** |
+| `COPILOT_TEXTRACT_REGION` | `us-east-2` | The AWS organisation's region policy allows Textract only in us-east-2 |
+| `COPILOT_TEXTRACT_TIMEOUT_SECONDS` | `10` | Whole budget per page, retries included |
+| `COPILOT_OCR_RENDER_DPI` | `200` | Render resolution for pages sent to OCR |
 | `COPILOT_RERANKER` | `fake` | `fake` = deterministic lexical reranker, offline. `bedrock` = Cohere Rerank 3.5 via Amazon Bedrock — **set in production**. The panel's footer names whichever ran; a failed call logs `rerank.bedrock_error` with the AWS error code |
 | `COPILOT_BEDROCK_REGION` | `us-east-1` | Region for Cohere Rerank 3.5. The AWS organisation's region policy allows `bedrock:Rerank` only in us-east-1 (us-west-2 is denied) |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock`; scope the key to `bedrock:Rerank` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | — | Only with `COPILOT_RERANKER=bedrock` or `COPILOT_OCR=textract`; scope the key to `bedrock:Rerank` and `textract:DetectDocumentText` |
 | `COPILOT_MAX_SIGNED_BODY_BYTES` | `15728640` (15 MiB) | Signed request bodies over this are refused with 413 while being read, before the signature is checked. Fits the 10 MiB document cap after base64 |
 | `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Per model call. Set `40` in production: the briefing makes two sequential calls (~18 s total), and 2 × 40 s stays inside the module's 90 s round-trip timeout |
 
@@ -115,7 +120,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 
 **Supervisor and workers.** The document briefing runs as a LangGraph graph ([`app/workflow.py`](copilot-agent/app/workflow.py)): a supervisor routes to `intake-extractor`, then `evidence-retriever`, then the answer step, and logs every handoff with its reason; the panel footer shows the route.
 
-**Observability.** Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and the workers, with `lab_extract` (generation) under `intake-extractor`, `retrieval.hybrid` and `rerank` under `evidence-retriever`, and `answer_considerations` (generation) under `answer`. Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
+**Observability.** Reading a document is one trace (`document_extract`, with `lab_extract` or the intake extraction and `verify_document`). Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and the workers, with `lab_extract` (generation) under `intake-extractor`, `retrieval.hybrid` and `rerank` under `evidence-retriever`, and `answer_considerations` (generation) under `answer`. Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
 
 **Week 2 documents**
 
@@ -125,6 +130,7 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [EVAL_GATE.md](EVAL_GATE.md) | Where prompts, schemas and golden set live; how to run the gate; what makes it fail; what it does and does not test |
 | [COPILOT_GLOSSARY.md](COPILOT_GLOSSARY.md) | Every panel label, tier, evidence state and trace name — Week 1 and Week 2 — and what it means (the panel shows the same text on hover) |
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
+| [COST_ANALYSIS.md §8](COST_ANALYSIS.md) | Week 2 cost and latency report: measured p50/p95 per step, cost per document, projection to 100K physicians, what binds first |
 
 **Tests.** Agent: `uv run pytest` in `copilot-agent/` — 534 passed, 6 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 69 / 69 PHPUnit, up from 57.
 

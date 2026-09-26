@@ -181,25 +181,31 @@ Four of the five rubric categories sit at a floor of 1.00 for a reason worth sta
 
 ### 12.3 Operational metrics — measured, not projected
 
-Three live runs of the full pipeline against the synthetic lab report, `claude-opus-5`, 2026-09-23:
+Measured 2026-09-26 over 34 synthetic documents (23 text-layer lab reports; 11 scans, photos,
+rotated/cropped pages and the demo set), the real pipeline end to end: `claude-opus-5`, AWS Textract
+(us-east-2), Cohere Rerank 3.5 on Bedrock. Full method and table: [`COST_ANALYSIS.md`](COST_ANALYSIS.md) §8;
+raw numbers: `copilot-agent/loadtest/W2_MEASUREMENT.json`.
 
-| Step | Median | Range | Share |
+| Step | p50 | p95 | When it runs |
 |---|---|---|---|
-| Extraction — read the PDF | 4.7 s | 4.0 – 5.3 s | 31 % |
-| Retrieval + rerank (local) | 0.005 s | — | ~0 % |
-| Answer model — propose considerations | **10.7 s** | 10.3 – 11.4 s | **71 %** |
-| **End to end** | **15.0 s** | 14.7 – 16.8 s | |
+| Read a document (extract + verify against the page) | 3.9 s | 7.0 s | at chart open, in the background |
+| — a Textract page (5 documents needed OCR) | 0.9 s | 1.5 s | |
+| Briefing (retrieve, rerank, answer, verify) | **11.6 s** | **15.8 s** | on click — what the clinician waits for |
+| — answer model call | 11.3 s | 14.9 s | **97 % of the briefing** |
+| — Bedrock rerank | 0.24 s | 1.1 s | |
+| — sparse + dense retrieval | 2 ms | 5 ms | |
 
-| Tokens | Input | Output |
-|---|---|---|
-| Extraction call | 1,907 | 334 |
-| Answer call | 2,317 | ~980 |
+**Cost:** $0.0094 to read a document, $0.0285 + $0.002 rerank per briefing — **≈ $0.040 per new lab
+document**, read and briefed. A document is read once per content and prompt version; re-opening the
+chart costs nothing.
 
-**Cost per document briefing: $0.039** median (range $0.039–$0.055), both calls on `claude-opus-5` at $5 / $25 per MTok.
+**Bottleneck.** The answer model's output — about 965 tokens on Opus. The briefing misses Week 1's
+8 s p95 target. The recorded next step is to generate the briefing when processing finishes and
+cache it, so the click shows a stored result; after that, a shorter draft or a smaller answer model,
+each only if the golden set holds.
 
-**Bottleneck.** The answer model, not document reading — about 1,000 output tokens on Opus. The obvious experiments, each measurable against the same golden set: a lower `effort`, a smaller answer model, or fewer considerations per briefing. None is taken until the golden set says quality holds.
-
-**These are n = 3.** Enough to identify the bottleneck and order of magnitude; not enough for a p95. The per-encounter latency and cost are also recorded as spans and scores in Langfuse (`§CR7`), which is where a real distribution will come from.
+*(Superseded: the Early Submission's n = 3 run on one report — extraction 4.7 s, answer 10.7 s,
+end to end 15.0 s, $0.039 — agrees with these numbers.)*
 
 ### 12.4 Eval-gate metrics
 
@@ -214,5 +220,5 @@ Three live runs of the full pipeline against the synthetic lab report, `claude-o
 ### 12.5 What is not yet measured
 
 - **The reranker's contribution.** Production runs Cohere Rerank 3.5 via Bedrock since 2026-09-24; the Early Submission and the CI gate use the local lexical reranker. On the demo report the lexical reranker did not surface NDEP Principle 7 on individualised targets — retrieval precision is the metric that would show whether Cohere fixes that, and it is not yet computed.
-- **Intake forms.** Not built; no metric.
+- **Intake forms at scale.** Built 2026-09-26; covered by golden cases on recorded output, but not included in the latency run above (three fixtures only).
 - **Real-world accuracy.** Every document is synthetic and self-authored. A 1.00 here says the system is internally consistent and does not invent; it does not say it reads real clinic scans well.

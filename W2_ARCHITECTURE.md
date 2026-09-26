@@ -19,25 +19,27 @@ a file in this repo, it is marked as planned.
 | Provider-neutral `TextPart` / `DocumentPart` content | **Built** | `copilot-agent/app/providers/base.py:189–204` |
 | Lab-PDF extraction + deterministic post-processing | **Built** | `copilot-agent/app/lab_extractor.py` |
 | Document schemas, citation with page and box | **Built** (2026-09-25) | `copilot-agent/app/documents.py`; every value's status, page and box now come from the matcher (next row), never from the model |
-| Box and verification source: text layer first, Textract for scans and photos | **Built** (2026-09-25, ADR-007) | `app/page_text.py` (pdfplumber words in the cropbox frame; pypdfium2 render; EXIF orientation; `TextractOcr` in us-east-2; `FakeOcr` in CI), `app/verification.py` (one matcher). Production OCR stays the offline fake until `COPILOT_OCR=textract` is set on the agent |
+| Box and verification source: text layer first, Textract for scans and photos | **Built** (2026-09-25, ADR-007) | `app/page_text.py` (pdfplumber words in the cropbox frame; pypdfium2 render; EXIF orientation; `TextractOcr` in us-east-2; `FakeOcr` in CI), `app/verification.py` (one matcher). Textract is live in production (`COPILOT_OCR=textract`, us-east-2, set 2026-09-25) |
 | Source preview with highlight box | **Built** (2026-09-25, ADR-008) | module `GET /api/copilot/document-file/:did` (same 404 for another patient's document, `can_access`, sandbox CSP, audit); panel viewer: vendored pdf.js 6.3.289 (scripting off, canvas only) for PDFs, `<img>` for photos, one overlay (tested pure functions); a value with no box shows a notice, never a guessed box |
 | Per-document processing record and analysis trigger | **Built** (2026-09-25, ADR-012) | chart open runs `POST /api/copilot/documents/process` until nothing remains; the panel lists each document with type, date, status, pending count and plain explanations (needs category, held identity, same file in another chart); values via `GET /api/copilot/documents/:did/values` |
 | Eval gate: 5 boolean rubrics, exact arithmetic, floors | **Built** | `copilot-agent/scripts/eval_gate.py`, `app/rubrics.py` |
 | CI job that runs the gate | **Built** | `.gitlab-ci.yml` (one job, `eval-gate`) |
-| Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; today the module reads the newest one (`oe-module-copilot/src/Data/SqlDocumentReader.php`) — to be replaced by per-document selection (ADR-012) |
+| Upload → OpenEMR `documents` table | **Built** | OpenEMR's own Documents screen stores the file; chart-open processing picks up every new document in the *Lab Report* and *Intake Form* categories (ADR-012). The old newest-upload reader (`SqlDocumentReader` in the briefing controller) now runs only as a fallback when the module's tables are missing |
 | Signed module → agent document route | **Built** | `POST /api/copilot/document-briefing` (module) → `POST /v1/documents/briefing` (agent, `app/document_briefing.py`) |
 | Sparse + dense retrieval, RRF (k = 60) | **Built** | `copilot-agent/app/retrieval.py` — BM25 and a hashed-n-gram dense index, both local and deterministic |
 | Reranking | **Built; Cohere live in production** (2026-09-24) | `copilot-agent/app/reranker.py` — Cohere Rerank 3.5 via Amazon Bedrock in production (`COPILOT_RERANKER=bedrock`); the local deterministic `FakeReranker` is the default and what the offline CI gate uses |
 | Answer model: considerations from the top evidence only | **Built** | `app/document_briefing.py` — flat draft schema; citations built in code, never by the model |
 | Grounded briefing: three headings, tiers, admissibility screening | **Built** | `copilot-agent/app/briefing.py` |
-| Panel: *Brief from latest lab document* | **Built** | `oe-module-copilot/public/copilot-panel.js` |
+| Panel: document list, source viewer, filing, *Brief from all read documents* | **Built** | `oe-module-copilot/public/copilot-panel.js` — the briefing covers every read document for the patient, with values already filed, rejected or un-filed left out |
 | Record/replay harness + committed real-model responses | **Built** | `copilot-agent/app/recording.py`, `fixtures/recordings/` |
 | Pre-commit hook running the gate | **Built** | `.githooks/pre-commit` |
 | Guideline corpus (NDEP + CDC), tier rule enforced | **Built** | `copilot-agent/app/corpus.py`, `fixtures/corpus/` |
 | Export-stage trace masking (`mask_otel_spans`) | **Built** | `copilot-agent/app/observability.py` |
 | Per-encounter trace for the document briefing (`§CR7`) | **Built** | `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and worker spans, with `lab_extract`, `retrieval.hybrid`, `rerank` and `answer_considerations` under the worker that made each call, plus per-encounter scores; `app/document_briefing.py`, leak test in `tests/test_tracing.py` |
 | Supervisor / `intake-extractor` / `evidence-retriever` graph | **Built** (2026-09-23) | `copilot-agent/app/workflow.py` — LangGraph state graph; every handoff logged, traced as a `supervisor` span and returned to the panel as `routing`. Document briefing only; the Week 1 note briefing is unchanged (§2) |
-| Intake-form extraction | **Planned** | no schema, no fixture. Values will be shown as pending document evidence, not filed, in Week 2 (ADR-010) |
+| Intake-form extraction | **Built** (2026-09-26, ADR-010) | `app/intake.py` (strict `IntakeForm`: demographics, chief concern, medications, allergies, family history; every item cited with page and box by the matcher), `app/intake_extractor.py` (prompt `intake-v1`; typed and handwritten forms, handwriting via Textract). Items are listed in the panel as **patient-reported** with source boxes and briefed as patient-reported lines; they are never filed (ADR-010). The written name and date of birth are used for the identity check and never stored |
+| Cost and latency report, measured | **Built** (2026-09-26) | [`COST_ANALYSIS.md`](COST_ANALYSIS.md) §8; `copilot-agent/loadtest/measure_documents.py`, raw numbers in `loadtest/W2_MEASUREMENT.json` |
+| Demo documents for the demo patient | **Built** (2026-09-26) | `copilot-agent/fixtures/documents/demo/` (follow-up lab, image-only scan, wrong-patient copy) and `fixtures/documents/intake/` |
 | Derived-fact persistence + clinician verify-before-file | **Built** (2026-09-25, ADR-003, ADR-009) | Verify and file beside the outlined value writes OpenEMR's lab chain (outside-lab order, required order code, one report per collection date, one result per value) in one transaction; Reject; Un-file (entered-in-error, candidate `unfiled`); verified on the dev stack in FHIR, the lab view and the order-results screen |
 
 Two runtime dependencies were added: `langgraph` (MIT, in-process) for the supervisor graph
@@ -61,11 +63,13 @@ true when the document briefing was wired in the same evening; the rows above re
   front desk uploads a file, patient chart open
         │
         │  [BUILT] OpenEMR's own Documents screen stores the file against the
-        │          chart patient; the module reads the newest one (SqlDocumentReader)
+        │          chart patient; on chart open the module processes each new
+        │          document once, typed by its category (ADR-012)
         ▼
   documents table row  ──►  document_id (a stored reference, never a file path)
         │
-        │  [BUILT] extract_lab_document(document_id, pdf_bytes, media_type)
+        │  [BUILT] POST /v1/documents/extract → lab or intake extractor
+        │          (document_id, bytes, media_type)
         ▼
   DocumentPart(media_type, data_base64)      ← the only place the bytes are encoded
         │                                       and the only place the encoding goes
@@ -77,8 +81,8 @@ true when the document briefing was wired in the same evening; the rows above re
         ▼
   LabDocument — application-owned identity, labelled flags, recomputed metadata
         │
-        │  [PLANNED] clinician verifies each value against its highlighted source,
-        │            then it is filed as a chart result (ADR-003)
+        │  [BUILT] stored on the processing record; clinician verifies each value
+        │          against its highlighted source, then files it (ADR-003, ADR-009)
         ▼
   citation: {source_type, source_id, page_or_section, field_or_chunk_id, quote_or_value, page, bbox}
 ```
@@ -131,21 +135,19 @@ silently corrected box highlights the wrong text, which is worse than no box. `b
 
 ### 1.4 What is not built
 
-- **No Co-Pilot upload endpoint — by design.** Upload uses OpenEMR's own Documents screen; the module
-  reads the newest stored document (`SqlDocumentReader`) and posts it, signed, to
-  `/v1/documents/briefing`. "Newest document" is unsafe (two uploads at once, a non-lab upload, a
-  re-uploaded old report) and is replaced by a per-document processing record (ADR-012). *(Corrected 2026-09-23: an earlier revision said no storage wiring existed
-  and `extract_lab_document` had no caller; both stopped being true when the route was wired.)*
-- **No intake-form extraction.** `app/documents.py` defines `LabDocument` and nothing else; "intake"
-  appears only in comments describing the seam that will accept it.
-- **No persistence of derived facts**, and therefore no round-trip demonstration yet. The planned
-  path (ADR-003, ADR-009): a per-result *Verify and file* action writes an outside-lab order, its
-  required order-code row, a report and one `procedure_result` per value linked to the source
-  document, read back through FHIR for the round-trip.
-- *(Fixed 2026-09-25.)* Values were marked `VERIFIED_EXACT` without being compared with the page, and no
-  box was produced. Verification and boxes now come only from the matcher (ADR-007, §1.6).
-- *(Fixed 2026-09-25.)* The briefing now receives the chart's lab history as prior facts, so *What
-  changed* compares against the chart rather than reporting "no earlier value" by default.
+- **No Co-Pilot upload endpoint — by design.** Upload uses OpenEMR's own Documents screen; chart-open
+  processing finds new documents by category (ADR-012). *(Corrected 2026-09-26: earlier revisions said
+  the module read only the newest upload and that intake extraction and filing were not built; all three
+  were replaced on 2026-09-25/26 — see §0.)*
+- **Intake values are not filed** — by decision, not omission (ADR-010). Filing medications, allergies
+  and family history is reconciliation against existing lists, a separate feature.
+- **Intake items are not offered to follow-up questions.** Follow-ups see pending *lab* values only;
+  the follow-up prompt has no patient-reported label yet.
+- **The briefing is generated on click, not precomputed.** It takes 11.6 s p50 / 15.8 s p95, almost all
+  of it the answer model's output (COST_ANALYSIS.md §8.1). Precomputing it when processing finishes is
+  the recorded next step.
+- **No live-model eval job in CI.** The gate replays recorded real-model output; re-recording is a
+  manual step (`scripts/record_evals.py`).
 
 ### 1.5 Filing is gated on a human (ADR-003)
 
@@ -165,7 +167,7 @@ clinician; it is not treated as permission.
 panel becomes tedious, and tedium invites rubber-stamping. Week 2's scenario is one or two values;
 a larger panel needs a different answer, and inventing one now would be premature.
 
-### 1.6 Where boxes and verification come from (ADR-007, planned)
+### 1.6 Where boxes and verification come from (ADR-007, built)
 
 Every extracted value is checked against the page itself, not against the model's claim. PDF pages
 with a text layer give word boxes directly (pdfplumber). Pages without one are rendered to an image
@@ -178,7 +180,7 @@ the page's cropbox), and one matcher looks up each value: found gives `VERIFIED_
 makes the affected values `UNVERIFIED`; extraction never fails as a whole. CI uses a fake OCR source,
 so the gate needs no AWS access.
 
-### 1.7 How the box is shown (ADR-008, planned)
+### 1.7 How the box is shown (ADR-008, built)
 
 The panel opens the cited document by its id and page through a module route that serves the stored
 file only for the chart that is open. PDFs are drawn with a pinned, vendored pdf.js (scripting off,
@@ -489,8 +491,9 @@ patient is stable". The deterministic stage bounds what such a document can achi
 must be found in the document's own text, guideline claims must resolve to a retrieved chunk, and
 directive or uncited statements are dropped before display — all tested. What is not tested is the
 model's own behaviour on a crafted document (does it follow the planted text, and does anything it
-produces survive the screen?). That needs a crafted PDF and a recorded real-model response; it is
-planned as golden case GC-51 for Final.
+produces survive the screen?). *(Built 2026-09-23 as golden case GC-51,
+`gen_injected_instruction.pdf`, on a recorded real-model response: the model did not follow the
+planted text.)*
 
 **Document size is capped.** The module refuses a stored file over 10 MiB before encoding it
 (`document_too_large`, named in the panel); the agent refuses a signed body over 15 MiB while still
@@ -546,16 +549,16 @@ This section is the tracked record of every Week 2 decision. The longer working 
 vendor citations, check transcripts) live in a local planning folder that is deliberately not in the
 repository; everything needed to understand a decision and its status is here.
 
-| ADR | Decision | Status (2026-09-25) |
+| ADR | Decision | Status (2026-09-26) |
 |---|---|---|
 | 001 | **Orchestration: LangGraph, LangSmith off.** One in-process graph; LangSmith cannot be switched on (the graph refuses to run); no checkpointer, so document state is never persisted. | Built (`app/workflow.py`) |
 | 002 | **Reranking: Cohere Rerank 3.5 via Amazon Bedrock.** Local deterministic reranker in CI so the gate stays offline. Runs in **us-east-1**, the only region the AWS organisation's region policy allows `bedrock:Rerank` in for this account; the code default was changed to match (2026-09-25). | Live in production |
-| 003 | **A clinician verifies each value before it is filed.** No auto-filing; extracted values are "not yet in the chart" until then. | Accepted; not built |
+| 003 | **A clinician verifies each value before it is filed.** No auto-filing; extracted values are "not yet in the chart" until then. | Accepted; **built** 2026-09-25 as ADR-009's Verify and file |
 | 004–006 | **Guideline corpus: NDEP + CDC.** General US adults, licence-clear; ADA (text-mining prohibition) and VA/DoD (veteran population) rejected. Tier B passages can never be the sole support for a threshold. | Built |
 | 007 | **Boxes and verification come from the page, not the model.** Text layer first (pdfplumber); image-only pages and photos read by AWS Textract, one page per call; OCR also runs on a page whose text layer misses a value (handwriting on printed forms); photos rotated upright first; one matcher decides verified / unverified; one PDF/PNG/JPEG allow-list; fake OCR in CI. (§1.6) | Accepted; **built** 2026-09-25 (Lane 1). Live evidence: Textract runs in **us-east-2** (the organisation's region policy denies it in us-east-1 and us-west-2); handwriting-style forms 0.96 word / 0.94 field recall; an image-only scan page in 1.2 s. Production uses the fake OCR until `COPILOT_OCR=textract` is set |
 | 008 | **Source preview: pdf.js for PDFs, an image element for photos, one overlay.** Opens by document id and page; no box is ever guessed; server-side rendering rejected (no Ghostscript, PDF disabled in the image). (§1.7) | Accepted; **built** 2026-09-25 (file route, pdf.js viewer, overlay, security tests) |
 | 009 | **Filing writes OpenEMR's own lab tables.** One outside-lab order with its required order-code row and a report per document, one result per value linked to the source document. Filing is the physician sign-off in OpenEMR's terms, so it needs `patients/lab` write **and** `patients/sign`. Dedup by our own per-patient SHA-256 (OpenEMR accepts duplicate uploads and does not index its hash). A wrongly filed result is marked `entered-in-error`: verified on the dev stack to leave the active Co-Pilot bundle while the row, the native lab view and FHIR (status `entered-in-error`) keep its history. Never call FHIR or `ProcedureService` inside the filing transaction — it commits the transaction early. | Accepted. **Built (incl. Verify and file, reject, un-file, 2026-09-25):** schema, the module's own migration runner at container start (verified on the dev stack: installs once, then no-op; upgrades a 0.1.0-without-tables install), candidate storage, entered-in-error excluded from the bundle. The "Intake Form" category is created by an administrator and looked up by name; OpenEMR's module CLI is not used (it resolves the wrong module). Decisions while building filing (2026-09-25): filed results are written **without** `procedure_result.document_id` (setting it makes OpenEMR's order-results screen show the file name instead of the value); the link from each filed result to its source document lives in the Co-Pilot data and the panel. Un-filing marks the chart result entered-in-error and the candidate `unfiled`. A missing collection date is never guessed or replaced by the upload date: the clinician must enter a verified date, or the value is not filed. Reject needs the same permissions as filing. Collection dates (2026-09-25): one report per distinct collection date, so each value shows its own date in FHIR and the lab view; a misread extracted date may be corrected only with explicit confirmation and a reason, both dates shown first, and the original date, corrected date, clinician, time and reason recorded in OpenEMR's audit log |
-| 010 | **Intake forms are shown as evidence, not filed, this week.** Filing allergies/medications/family history is reconciliation against existing lists, a separate feature. | Accepted |
+| 010 | **Intake forms are shown as evidence, not filed, this week.** Filing allergies/medications/family history is reconciliation against existing lists, a separate feature. Built details (2026-09-26): a blank section stays empty and is stated as a limitation — never read as "no known allergies"; a written `MM/DD/YYYY` date is read month-first (OpenEMR's US format), because leaving it ambiguous would make every US form's identity check `missing` — the failure mode is a false hold a clinician resolves, never a false match; the written name and date of birth go only to the identity check and are stripped before storage (by the agent and again by the module); the model is sent a flat draft schema (the full strict schema was rejected by the API as too complex) and the strict `IntakeForm` is built and validated in code; the matcher accepts longer written phrases for intake items only (lab matching unchanged); filing and rejecting an intake item both return 409 `not_fileable`. A reported medication that is not on the chart list, or the same drug at a different dose, is shown as a conflict under *Needs attention*; a chart medication missing from the form is not flagged, since partial forms are common. | **Built** 2026-09-26 (medication conflicts: in progress) |
 | 011 | **Follow-ups on documents use the Week 1 follow-up path**, seeing the chart plus pending (unfiled) document facts, always labelled "not yet verified or filed". | Accepted; **built** 2026-09-25 (agent: pending-facts tool, verifier rules, contract smoke test; module: pending facts in the bundle). The agent was deployed before the module |
 | 012 | **Each document is processed on its own.** "Newest document" removed; a processing record per document; `doc_type` from the OpenEMR document category (by name); the module compares the printed name and date of birth with the chart and holds back a mismatch. The validated extraction (results, citations, boxes) is stored on the processing record, so a briefing reuses it and never re-reads the PDF. **Documents are analysed when the chart is opened** — chosen over a background worker because OpenEMR has no post-save upload event and nothing runs on a schedule on Railway; a rate-capped background worker is the production path. | Accepted; **backend built** 2026-09-25 (processing on chart open, document list, identity check, stored extractions). Same file in another chart (user decision 2026-09-25): only a copy still filed there counts; a printed name/DOB that matches this chart outranks it (extracted, with an informational code), otherwise the document is held. A document moved to another patient in OpenEMR is processed afresh, unless a value from it was already filed. Chart history sent to briefings is the newest 500 results, in date order. Panel document list built 2026-09-25. A held document is resolved by a clinician's "This is the right patient" after viewing it (filing permissions, audited; the identity result stays as history), or by moving a misfiled document to the right patient in OpenEMR (re-processed automatically) |
 
