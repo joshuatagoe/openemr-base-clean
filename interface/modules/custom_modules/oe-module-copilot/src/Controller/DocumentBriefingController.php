@@ -9,7 +9,9 @@
  * history (`prior_facts`) are sent (contract C4) and nothing is re-extracted;
  * when an intake form is among them, the chart's current medications go too
  * (`chart_medications`, ADR-010), read only, for the patient-reported conflict lines;
- * nothing extracted yet is `degraded` / `no_extracted_documents`. Until the
+ * nothing extracted yet is `degraded` / `no_extracted_documents`; documents read
+ * whose every value was already filed, rejected or un-filed is `degraded` /
+ * `all_values_reviewed` (nothing new to brief - filed values are chart history). Until the
  * tables exist, the legacy single-document path below still runs (the agent
  * accepts `document_base64` for one more release).
  *
@@ -67,6 +69,8 @@ final class DocumentBriefingController
     public const DEGRADED_AGENT_UNAVAILABLE = 'agent_unavailable';
     public const DEGRADED_DOCUMENT_TOO_LARGE = 'document_too_large';
     public const DEGRADED_NO_EXTRACTED_DOCUMENTS = 'no_extracted_documents';
+    /** Documents were read, and every value read from them was filed, rejected or un-filed: nothing new to brief. */
+    public const DEGRADED_ALL_VALUES_REVIEWED = 'all_values_reviewed';
 
     /** Stored-extraction mode: documents per briefing, and the chart lab history sent as prior_facts. */
     public const MAX_DOCUMENTS = 20;
@@ -259,10 +263,26 @@ final class DocumentBriefingController
                 }
                 $extraction['results'] = $kept;
             }
-            $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
+            $documents[] = [
+                'document_id' => $row['document_id'],
+                'doc_type' => $row['doc_type'],
+                'extraction' => $extraction,
+                // The upload date: the agent dates a document by it when no collection date was read.
+                'received_at' => self::uploadDate($row['received_at'] ?? null),
+            ];
         }
         if ($documents === []) {
-            return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_NO_EXTRACTED_DOCUMENTS), self::DEGRADED_NO_EXTRACTED_DOCUMENTS];
+            // "Nothing read" only when that is true: documents that were read and fully reviewed are a different
+            // answer (2026-09-26 production report: a filed-only chart was told no document had been read).
+            try {
+                $counts = $this->records->countExtractions($pid);
+            } catch (Throwable $e) {
+                throw new SourceUnavailableException('copilot_document', $e);
+            }
+            $reason = $counts['extracted'] > 0 && $counts['waiting'] === 0
+                ? self::DEGRADED_ALL_VALUES_REVIEWED
+                : self::DEGRADED_NO_EXTRACTED_DOCUMENTS;
+            return [self::degraded($correlationId, $patientUuid, null, $reason), $reason];
         }
 
         try {
@@ -279,6 +299,7 @@ final class DocumentBriefingController
             'documents' => $documents,
             'prior_facts' => $priorFacts,
             'question' => $question === null || $question === '' ? null : mb_substr($question, 0, self::QUESTION_MAX_LENGTH),
+            'documents_not_included' => $this->documentsNotIncluded($pid, count($stored)),
         ];
         // Read only when an intake form is briefed: a lab-only briefing has nothing to compare them with.
         if (in_array('intake_form', array_column($documents, 'doc_type'), true)) {
@@ -295,6 +316,36 @@ final class DocumentBriefingController
             ]);
             return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_AGENT_UNAVAILABLE), $e->getReason()];
         }
+    }
+
+    /** `Y-m-d` from a stored datetime; null when unknown or a zero date (the agent never hides an undated document). */
+    private static function uploadDate(mixed $stored): ?string
+    {
+        if (!is_string($stored) || preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $stored, $m) !== 1) {
+            return null;
+        }
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
+    }
+
+    /**
+     * Documents with a value still waiting for review that the MAX_DOCUMENTS cap left out (the oldest),
+     * so the agent can say so. A count only - no ids, no content. Counted only when the cap was reached:
+     * below it, listExtractions returned every waiting document.
+     *
+     * @throws SourceUnavailableException
+     */
+    private function documentsNotIncluded(int $pid, int $listed): int
+    {
+        assert($this->records !== null);
+        if ($listed < self::MAX_DOCUMENTS) {
+            return 0;
+        }
+        try {
+            $waiting = $this->records->countExtractions($pid)['waiting'];
+        } catch (Throwable $e) {
+            throw new SourceUnavailableException('copilot_document', $e);
+        }
+        return max(0, $waiting - $listed);
     }
 
     /**

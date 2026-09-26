@@ -78,7 +78,9 @@ final class MedicationBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'lab_pdf', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $repo->records[8] = self::record(8, 'intake_form', '{"document_id":8,"doc_type":"intake_form","current_medications":[{"name":"Zolpidemix"}]}');
+        $repo->waiting(5, 8);
         return $repo;
     }
 
@@ -151,6 +153,7 @@ final class MedicationBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'lab_pdf', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $reader = self::reader();
         $reader->medications = [self::med(11, 'Metformin 500 mg')];
 

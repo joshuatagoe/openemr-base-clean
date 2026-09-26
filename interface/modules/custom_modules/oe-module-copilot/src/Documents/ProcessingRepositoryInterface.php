@@ -87,14 +87,26 @@ interface ProcessingRepositoryInterface
 
     /**
      * Stored lab and intake extractions of this patient's `extracted` documents (not
-     * held, not deleted in OpenEMR): the newest `$limit`, returned oldest first.
+     * held, not deleted in OpenEMR) that still have a value waiting for review (at least one
+     * `candidate` value, see countExtractions): the newest `$limit`, returned oldest first.
+     * A fully reviewed document takes no slot.
      *
      * `reviewed_indices`: result positions whose value was filed, rejected or un-filed - the briefing
      * leaves them out (filed values reach it as chart history instead).
+     * `received_at`: the OpenEMR upload date (`documents.date`) as stored, or null.
      *
-     * @return list<array{document_id:int, doc_type:string, extraction_json:string, reviewed_indices:list<int>}>
+     * @return list<array{document_id:int, doc_type:string, extraction_json:string, reviewed_indices:list<int>, received_at?:?string}>
      */
     public function listExtractions(int $pid, int $limit): array;
+
+    /**
+     * How many of this patient's documents were read (`extracted` lab or intake extractions, not held,
+     * not deleted in OpenEMR), and how many of those still have a value waiting for review (at least
+     * one `candidate` value). Counts only.
+     *
+     * @return array{extracted:int, waiting:int}
+     */
+    public function countExtractions(int $pid): array;
 
     /**
      * `candidate` values of this patient's `extracted` lab documents (held and

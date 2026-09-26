@@ -175,19 +175,61 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
 
     public function listExtractions(int $pid, int $limit): array
     {
-        $out = [];
+        // Like the SQL: extracted lab/intake documents with a value still waiting (a `candidate` row),
+        // the newest `$limit` by document id, returned oldest first.
+        $ids = [];
         foreach ($this->records as $id => $r) {
-            if ($r['pid'] === $pid && $r['status'] === 'extracted' && is_string($r['extraction_json'])) {
-                $reviewed = [];
-                foreach ($this->values[$id] ?? [] as $v) {
-                    if (in_array($v['status'], ['filed', 'rejected', 'unfiled'], true) && isset($v['result_index'])) {
-                        $reviewed[] = (int) $v['result_index'];
-                    }
-                }
-                $out[] = ['document_id' => $id, 'doc_type' => $r['doc_type'], 'extraction_json' => $r['extraction_json'], 'reviewed_indices' => $reviewed];
+            if ($r['pid'] === $pid && $r['status'] === 'extracted' && is_string($r['extraction_json'] ?? null)
+                && in_array($r['doc_type'], ['lab_pdf', 'intake_form'], true) && $this->hasCandidate($id)) {
+                $ids[] = $id;
             }
         }
-        return array_slice($out, 0, $limit);
+        rsort($ids);
+        $ids = array_reverse(array_slice($ids, 0, max(1, min($limit, 50))));
+        $out = [];
+        foreach ($ids as $id) {
+            $reviewed = [];
+            foreach ($this->values[$id] ?? [] as $v) {
+                if (in_array($v['status'], ['filed', 'rejected', 'unfiled'], true) && isset($v['result_index'])) {
+                    $reviewed[] = (int) $v['result_index'];
+                }
+            }
+            $out[] = ['document_id' => $id, 'doc_type' => $this->records[$id]['doc_type'], 'extraction_json' => $this->records[$id]['extraction_json'], 'reviewed_indices' => $reviewed, 'received_at' => $this->records[$id]['received_at'] ?? null];
+        }
+        return $out;
+    }
+
+    /** Test helper: give each document one value waiting for review (a `candidate` row at result 0). */
+    public function waiting(int ...$documentIds): void
+    {
+        foreach ($documentIds as $id) {
+            $this->values[$id][] = ['id' => $this->nextValueId++, 'document_id' => $id, 'pid' => $this->records[$id]['pid'], 'result_index' => 0, 'status' => 'candidate'];
+        }
+    }
+
+    public function countExtractions(int $pid): array
+    {
+        $extracted = 0;
+        $waiting = 0;
+        foreach ($this->records as $id => $r) {
+            if ($r['pid'] === $pid && $r['status'] === 'extracted' && is_string($r['extraction_json']) && in_array($r['doc_type'], ['lab_pdf', 'intake_form'], true)) {
+                $extracted++;
+                if ($this->hasCandidate($id)) {
+                    $waiting++;
+                }
+            }
+        }
+        return ['extracted' => $extracted, 'waiting' => $waiting];
+    }
+
+    private function hasCandidate(int $documentId): bool
+    {
+        foreach ($this->values[$documentId] ?? [] as $v) {
+            if ($v['status'] === 'candidate') {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function listPendingFacts(int $pid, int $limit): array

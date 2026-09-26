@@ -106,7 +106,7 @@
         doc_status_skipped_duplicate: 'The same file was already read in this chart; its values are listed under that document. Nothing is read twice.',
         doc_status_unsupported: 'Not read: it needs a Co-Pilot category (Lab Report), or it is a kind of file the Co-Pilot does not read.',
         doc_status_held_identity: 'Held: the patient printed on the document may not be this patient. Its values are not shown or used until a clinician confirms the patient.',
-        confirm_patient: 'For a held document you have viewed: confirms it belongs to this patient. Its values then become reviewable, waiting to be verified and filed or rejected; the identity check result is kept, and your confirmation is recorded in the EHR audit log. Needs lab-write and sign permissions, like filing. If the document is another patient\u2019s, move it in Documents instead.',
+        confirm_patient: 'For a held document you have viewed: confirms it belongs to this patient. Its values then become reviewable, waiting to be verified and filed or rejected; the identity check result is kept, and your confirmation is recorded in the EHR audit log. Needs lab-write and sign permissions, like filing. If the document is another patient\u2019s, move it instead: open it in Documents, click Properties, and use Move to Patient.',
         pending_count: 'Values read from this document that are waiting for a clinician to verify and file or reject.',
         verification_verified_exact: 'The system found this exact value on the page; the box shows where. Found is not the same as correct - check it.',
         verification_verified_fuzzy: 'The system found a close match on the page (for example different spacing); the box shows where. Check it.',
@@ -835,6 +835,7 @@
     // ------------------------------------------------------------------ //
     const DOC_DEGRADED_MESSAGES = {
         no_extracted_documents: 'No lab document has been read yet for this patient. Documents are read when the chart opens; see the list above.',
+        all_values_reviewed: 'Every value read from this patient\'s documents has been filed, rejected or un-filed. Filed values are part of the chart\'s lab history; there is nothing new from documents to brief.',
         no_document_on_file: 'No lab document (PDF, PNG or JPEG) is on file in this patient’s Documents.',
         document_unavailable: 'The latest document on file could not be read.',
         document_too_large: 'The latest document on file is over 10 MB, the largest the Co-Pilot reads.',
@@ -1017,7 +1018,7 @@
                 view.dataset.action = 'citation-source';
                 const page = Number.isInteger(cite.page) ? cite.page : null;
                 const bbox = Array.isArray(cite.bbox) ? cite.bbox : null;
-                view.addEventListener('click', () => this.documents.openSource(Number(cite.source_id), null, { page: page, bbox: bbox, located: bbox !== null }));
+                view.addEventListener('click', () => this.documents.openSource(Number(cite.source_id), null, { page: page, bbox: bbox, located: bbox !== null }, view));
                 item.appendChild(view);
             }
             return item;
@@ -1132,9 +1133,9 @@
         agent_bad_response: 'The Co-Pilot agent’s answer was not usable. It will be tried again the next time the chart is opened.',
         agent_degraded: 'The Co-Pilot agent could not read it this time. It will be tried again the next time the chart is opened.'
     };
-    const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const HELD_TEXT = 'The name or date of birth printed on this document does not match this chart. Its values are not shown or used until the patient is confirmed. Open the document to check it. If it belongs to another patient, move it: open it in Documents, click Properties, and use Move to Patient.';
     // Held for another reason (the same file live in another chart, no matching printed identity here): no mismatch was found.
-    const HELD_OTHER_TEXT = 'This document is held for an identity check. Its values are not shown or used until the patient is confirmed. Open the document to check it; if it belongs to another patient, move it to the right chart in Documents.';
+    const HELD_OTHER_TEXT = 'This document is held for an identity check. Its values are not shown or used until the patient is confirmed. Open the document to check it. If it belongs to another patient, move it: open it in Documents, click Properties, and use Move to Patient.';
     const CONFIRMED_CODE = 'identity_confirmed_by_clinician';
     const CONFIRMED_IDENTITY_TEXT = {
         mismatch: 'the name or date of birth printed on it did not match this chart',
@@ -1420,6 +1421,8 @@
             this.task = null;
             this.blobUrl = null;
             this.onResize = null;
+            // In the popup the dialog carries the title and the Close button.
+            this.embedded = !!(options && options.embedded);
         }
 
         close() {
@@ -1459,7 +1462,9 @@
             frame.setAttribute('role', 'region');
             frame.setAttribute('aria-label', 'Source document viewer');
             const bar = el('div', 'd-flex flex-wrap align-items-center mb-2');
-            bar.appendChild(el('strong', 'mr-2', target.title || ('Document ' + String(target.documentId))));
+            if (!this.embedded) {
+                bar.appendChild(el('strong', 'mr-2', target.title || ('Document ' + String(target.documentId))));
+            }
             this.pageLabel = el('span', 'text-muted small mr-2');
             this.pageLabel.dataset.role = 'page-label';
             bar.appendChild(this.pageLabel);
@@ -1479,10 +1484,12 @@
             full.target = '_blank';
             full.rel = 'noopener';
             bar.appendChild(full);
-            const closeBtn = el('button', 'btn btn-outline-secondary btn-sm py-0 ml-auto', 'Close');
-            closeBtn.type = 'button';
-            closeBtn.addEventListener('click', () => this.close());
-            bar.appendChild(closeBtn);
+            if (!this.embedded) {
+                const closeBtn = el('button', 'btn btn-outline-secondary btn-sm py-0 ml-auto', 'Close');
+                closeBtn.type = 'button';
+                closeBtn.addEventListener('click', () => this.close());
+                bar.appendChild(closeBtn);
+            }
             frame.appendChild(bar);
 
             this.notice = el('p', 'small text-warning mb-1');
@@ -1498,6 +1505,9 @@
             row.appendChild(this.stage);
             if (target.side) {
                 const side = el('div', 'flex-grow-1');
+                // Start at the 240px stageWidth() leaves free, then grow: a content-sized
+                // basis (up to 420px) would wrap the value and its controls below the page.
+                side.style.flexBasis = '240px';
                 side.style.minWidth = '240px';
                 side.style.maxWidth = '420px';
                 side.appendChild(target.side);
@@ -1704,6 +1714,133 @@
         }
     }
 
+    const VIEWER_TITLE_ID = 'oe-copilot-viewer-title';
+
+    /** The popup's title: the document type and its upload date. */
+    function viewerTitle(doc) {
+        return describeDocument(doc).typeLabel + ' · uploaded ' + fmtDate(doc.uploaded_at) + ' · document ' + String(doc.document_id);
+    }
+
+    /**
+     * The source viewer's popup: one modal dialog over the page (plain DOM,
+     * Bootstrap classes). Esc, the Close button or a click on the backdrop
+     * closes it; focus moves in on open and back to the opening button on
+     * close; the page does not scroll while it is open; Tab stays inside.
+     * `content` is the node the viewer draws into; it moves into the dialog.
+     */
+    class ViewerDialog {
+        constructor(content, onClose) {
+            this.content = content;
+            this.onClose = onClose;
+            this.backdrop = null;
+            this.opener = null;
+            this.onKey = null;
+            this.savedOverflow = '';
+        }
+
+        isOpen() {
+            return this.backdrop !== null;
+        }
+
+        show(title, opener) {
+            if (this.backdrop) {
+                this.titleNode.textContent = title;
+                return;
+            }
+            const backdrop = el('div');
+            backdrop.dataset.role = 'viewer-backdrop';
+            Object.assign(backdrop.style, {
+                position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', zIndex: '1050',
+                background: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            });
+            const dialog = el('div', 'bg-white rounded shadow d-flex flex-column');
+            dialog.dataset.role = 'viewer-dialog';
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.setAttribute('aria-labelledby', VIEWER_TITLE_ID);
+            dialog.tabIndex = -1;
+            Object.assign(dialog.style, { width: '1200px', maxWidth: '90vw', maxHeight: '90vh' });
+            const header = el('div', 'd-flex align-items-center border-bottom px-3 py-2');
+            this.titleNode = el('h5', 'mb-0 mr-auto', title);
+            this.titleNode.id = VIEWER_TITLE_ID;
+            const close = el('button', 'btn btn-outline-secondary btn-sm ml-2', 'Close');
+            close.type = 'button';
+            close.dataset.action = 'close-viewer';
+            close.setAttribute('aria-label', 'Close the document viewer');
+            close.addEventListener('click', () => this.close());
+            header.appendChild(this.titleNode);
+            header.appendChild(close);
+            const body = el('div', 'p-2');
+            Object.assign(body.style, { overflow: 'auto', flex: '1 1 auto', minHeight: '0' });
+            body.appendChild(this.content);
+            dialog.appendChild(header);
+            dialog.appendChild(body);
+            backdrop.appendChild(dialog);
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) {
+                    this.close();
+                }
+            });
+            this.onKey = (e) => {
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.close();
+                } else if (e.key === 'Tab') {
+                    this.keepFocusInside(e);
+                }
+            };
+            document.addEventListener('keydown', this.onKey, true);
+            this.savedOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            this.backdrop = backdrop;
+            this.dialog = dialog;
+            this.opener = opener || null;
+            document.body.appendChild(backdrop);
+            close.focus();
+        }
+
+        keepFocusInside(e) {
+            const nodes = Array.from(this.dialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+                .filter((n) => !n.disabled && !n.hidden && !n.closest('[hidden]'));
+            if (!nodes.length) {
+                e.preventDefault();
+                return;
+            }
+            const first = nodes[0];
+            const last = nodes[nodes.length - 1];
+            const active = document.activeElement;
+            if (e.shiftKey && (active === first || !this.dialog.contains(active))) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && (active === last || !this.dialog.contains(active))) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+
+        close() {
+            if (!this.backdrop) {
+                return;
+            }
+            const backdrop = this.backdrop;
+            const opener = this.opener;
+            this.backdrop = null;
+            this.opener = null;
+            document.removeEventListener('keydown', this.onKey, true);
+            this.onKey = null;
+            if (this.onClose) {
+                this.onClose();
+            }
+            backdrop.remove();
+            document.body.style.overflow = this.savedOverflow;
+            const back = opener && opener.isConnected ? opener : (this.fallbackFocus ? this.fallbackFocus() : null);
+            if (back && typeof back.focus === 'function') {
+                back.focus();
+            }
+        }
+    }
+
     class DocumentsSection {
         /** @param {{loadPdfjs?: function}} [options] test seam for the viewer */
         constructor(container, options) {
@@ -1723,15 +1860,22 @@
             this.status.setAttribute('aria-live', 'polite');
             this.list = el('ul', 'list-group');
             this.list.dataset.role = 'document-list';
-            this.viewerHost = el('div', 'mt-2');
+            // The viewer draws into viewerHost, which lives in the popup while it is open.
+            this.viewerHost = el('div');
             this.viewerHost.dataset.role = 'viewer-host';
             this.root.appendChild(this.status);
             this.root.appendChild(this.list);
-            this.root.appendChild(this.viewerHost);
             container.appendChild(this.root);
-            this.viewer = new SourceViewer(this.viewerHost, this.api, options);
+            this.viewer = new SourceViewer(this.viewerHost, this.api, Object.assign({}, options || {}, { embedded: true }));
+            this.dialog = new ViewerDialog(this.viewerHost, () => this.viewer.close());
+            // The list is re-rendered after filing; focus then goes back to the document's row.
+            this.dialog.fallbackFocus = () => {
+                const item = this.list.querySelector('[data-role="document-item"][data-document-id="' + String(Number(this.viewedDocumentId)) + '"]');
+                return item ? item.querySelector('button:not([disabled])') : null;
+            };
             const onLeave = () => {
                 this.api.abort.abort();
+                this.dialog.close();
                 this.viewer.close();
             };
             window.addEventListener('pagehide', onLeave);
@@ -1817,7 +1961,7 @@
                 const view = el('button', 'btn btn-link btn-sm p-0 ml-auto', 'View document');
                 view.type = 'button';
                 view.dataset.action = 'view-document';
-                view.addEventListener('click', () => this.openSource(doc.document_id, null, null));
+                view.addEventListener('click', () => this.openSource(doc.document_id, null, null, view));
                 if (!d.canConfirm && (!doc.error_code || ['unsupported_media_type', 'document_too_large'].indexOf(String(doc.error_code)) < 0)) {
                     head.appendChild(view);
                 }
@@ -1874,7 +2018,7 @@
                 this.viewedDocs[documentId] = true;
                 confirm.disabled = false;
                 say('');
-                this.openSource(documentId, null, null);
+                this.openSource(documentId, null, null, view);
             });
             cancel.addEventListener('click', () => {
                 disarm();
@@ -1885,7 +2029,7 @@
                     confirm.dataset.armed = '1';
                     confirm.textContent = 'Confirm: this is the right patient';
                     cancel.hidden = false;
-                    say('Confirm only if you checked that the document belongs to this patient. Its values become reviewable here (nothing is filed automatically); the identity check result is kept and your confirmation is recorded in the EHR audit log. If it is another patient\u2019s, move it to the right chart in Documents instead.', 'text-warning');
+                    say('Confirm only if you checked that the document belongs to this patient. Its values become reviewable here (nothing is filed automatically); the identity check result is kept and your confirmation is recorded in the EHR audit log. If it is another patient\u2019s, move it instead: open it in Documents, click Properties, and use Move to Patient.', 'text-warning');
                     return;
                 }
                 confirm.disabled = true;
@@ -1982,7 +2126,7 @@
             view.type = 'button';
             view.dataset.action = 'view';
             view.setAttribute('aria-label', 'View where ' + String(v.test_name || 'this item') + ' is written on the form');
-            view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+            view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null, view));
             line.appendChild(view);
             row.appendChild(line);
             if (v.page) {
@@ -2010,13 +2154,13 @@
                 review.type = 'button';
                 review.dataset.action = 'review';
                 review.setAttribute('aria-label', 'Review the source of ' + String(v.test_name || 'this value') + ' before filing');
-                review.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+                review.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null, review));
                 line.appendChild(review);
             } else if (v.status === 'filed' || v.status === 'unfiled') {
                 const view = el('button', 'btn btn-link btn-sm py-0', 'View source');
                 view.type = 'button';
                 view.dataset.action = 'view';
-                view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+                view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null, view));
                 line.appendChild(view);
                 if (v.status === 'filed') {
                     line.appendChild(this.unfileButton(doc.document_id, v));
@@ -2047,9 +2191,12 @@
         /**
          * Open the viewer on a document: at a candidate's page and box (with its
          * details and actions beside it), at a given source {page, bbox}, or at page 1.
+         * It opens in the popup; `opener` gets focus back when the popup closes.
          */
-        openSource(documentId, resultIndex, source) {
+        openSource(documentId, resultIndex, source, opener) {
             const doc = this.docFor(documentId);
+            this.viewedDocumentId = documentId;
+            this.dialog.show(viewerTitle(doc), opener || document.activeElement);
             const value = resultIndex === null || resultIndex === undefined ? null : this.valueFor(documentId, resultIndex);
             const target = { documentId: Number(documentId), title: describeDocument(doc).typeLabel + ' · document ' + String(documentId) };
             if (value) {
@@ -2425,7 +2572,7 @@
                 return;
             }
             const s = result.data;
-            await this.openSource(s.document_id, s.result_index, { page: s.page, bbox: s.bbox, located: Array.isArray(s.bbox) });
+            await this.openSource(s.document_id, s.result_index, { page: s.page, bbox: s.bbox, located: Array.isArray(s.bbox) }, link);
         }
     }
 

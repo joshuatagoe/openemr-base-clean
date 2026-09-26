@@ -139,7 +139,7 @@ describe('DocumentsSection - intake items', () => {
         const { c } = await openPanel([intakeDoc()]);
         c.querySelector('[data-role="value-row"][data-result-index="0"] [data-action="view"]').click();
         await settle();
-        const panel = c.querySelector('[data-role="value-panel"]');
+        const panel = document.querySelector('[data-role="value-panel"]');
         expect(panel).not.toBeNull();
         expect(panel.textContent).toContain('As written: Tired and thirsty');
         expect(panel.textContent).toContain('Patient-reported');
@@ -148,7 +148,7 @@ describe('DocumentsSection - intake items', () => {
         const labels = Array.from(panel.querySelectorAll('button')).map((b) => b.textContent);
         expect(labels).not.toContain('Verify and file');
         expect(labels).not.toContain('Reject');
-        expect(c.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
+        expect(document.querySelector('[data-role="bbox-overlay"]')).not.toBeNull();
     });
 
     test('hover text explains patient-reported and why it is not filed', async () => {

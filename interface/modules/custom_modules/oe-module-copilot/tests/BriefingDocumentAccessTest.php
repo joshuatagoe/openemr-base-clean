@@ -44,14 +44,21 @@ final class BriefingDocumentAccessTest extends TestCase
 
     private static function record(int $id): array
     {
-        return ['document_id' => $id, 'pid' => self::PID, 'content_sha256' => hash('sha256', (string) $id), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'v', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{"document_id":' . $id . ',"results":[]}', 'created_at' => '', 'updated_at' => ''];
+        return ['document_id' => $id, 'pid' => self::PID, 'content_sha256' => hash('sha256', (string) $id), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'v', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}', 'created_at' => '', 'updated_at' => ''];
+    }
+
+    /** A read document with its one value still waiting for review. */
+    private static function add(FakeProcessingRepository $repo, int $id): void
+    {
+        $repo->records[$id] = self::record($id);
+        $repo->values[$id] = [['id' => $id, 'document_id' => $id, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
     }
 
     public function testStoredExtractionOfAnInaccessibleDocumentIsNotSent(): void
     {
         $repo = new FakeProcessingRepository();
-        $repo->records[5] = self::record(5);
-        $repo->records[6] = self::record(6);
+        self::add($repo, 5);
+        self::add($repo, 6);
         $documents = new FakeDocumentReader([]);
         $documents->denied = [6];
         $agent = new FakeAgentClient();
@@ -65,7 +72,7 @@ final class BriefingDocumentAccessTest extends TestCase
     public function testOnlyInaccessibleStoredExtractionsIsDegraded(): void
     {
         $repo = new FakeProcessingRepository();
-        $repo->records[6] = self::record(6);
+        self::add($repo, 6);
         $documents = new FakeDocumentReader([]);
         $documents->denied = [6];
         $agent = new FakeAgentClient();

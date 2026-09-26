@@ -68,6 +68,7 @@ final class StoredExtractionBriefingTest extends TestCase
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[{"test_name":"Hemoglobin A1c"}]}');
         $repo->records[6] = self::record(6, 'extracted', '{"document_id":6,"results":[]}');
         $repo->records[7] = self::record(7, 'held_identity', '{"document_id":7,"results":[]}');
+        $repo->waiting(5, 6, 7);
         $labs = [
             ['result_id' => 1, 'order_id' => 3, 'test_name' => 'Hemoglobin A1c', 'code' => '4548-4', 'value' => '8.4', 'units' => '%', 'range' => '4.0-5.6', 'abnormal' => 'high', 'result_status' => 'final', 'observed_at' => '2026-06-01 08:00:00'],
             ['result_id' => 2, 'order_id' => 3, 'test_name' => 'Glucose', 'code' => '', 'value' => '142', 'units' => 'mg/dL', 'range' => '', 'abnormal' => '', 'result_status' => 'entered-in-error', 'observed_at' => '2026-06-01 08:00:00'],
@@ -117,6 +118,134 @@ final class StoredExtractionBriefingTest extends TestCase
         self::assertSame([['test_name' => 'A']], $sent[0]['extraction']['results'], 'only the value still waiting for review is sent');
     }
 
+    /**
+     * The 20 briefing slots go to the newest documents that still have work: a value waiting for
+     * review (a `candidate` row - an unreadable lab value is still fileable or rejectable, and an
+     * intake item is never reviewable, so both stay waiting). Fully reviewed documents, however new,
+     * no longer push older unreviewed ones out.
+     */
+    public function testFullyReviewedDocumentsDoNotTakeBriefingSlots(): void
+    {
+        $repo = new FakeProcessingRepository();
+        for ($id = 1; $id <= 21; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+            $repo->values[$id] = [['id' => $id, 'document_id' => $id, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate', 'verification_status' => $id === 21 ? 'unreadable' : 'verified_exact']];
+        }
+        for ($id = 30; $id <= 34; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+            $repo->values[$id] = [['id' => $id, 'document_id' => $id, 'pid' => self::PID, 'result_index' => 0, 'status' => $id % 2 === 0 ? 'filed' : 'rejected']];
+        }
+        $repo->records[40] = ['doc_type' => 'intake_form'] + self::record(40, 'extracted', '{"document_id":40,"doc_type":"intake_form","current_medications":[]}');
+        $repo->values[40] = [['id' => 40, 'document_id' => 40, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        $sent = array_column($agent->documentPosts[0]['request']['documents'], 'document_id');
+        self::assertSame(array_merge(range(3, 21), [40]), $sent, 'the newest 20 documents with a value waiting, oldest first');
+        // Documents 1 and 2 still have a value waiting but no slot: the agent is told how many, never which.
+        self::assertSame(2, $agent->documentPosts[0]['request']['documents_not_included']);
+    }
+
+    /**
+     * Each document's upload date goes as `received_at` (a date only): the agent dates a document by it
+     * when no collection date was read, to age out values nobody reviewed in 12 months. An unknown or
+     * zero date is sent as null - the agent then never hides the document.
+     */
+    public function testEachDocumentCarriesItsUploadDateAsReceivedAt(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[5] = ['received_at' => '2025-01-10 14:22:00'] + self::record(5, 'extracted', '{"document_id":5,"results":[{"test_name":"A"}]}');
+        $repo->records[6] = ['received_at' => '0000-00-00 00:00:00'] + self::record(6, 'extracted', '{"document_id":6,"results":[{"test_name":"A"}]}');
+        $repo->records[7] = self::record(7, 'extracted', '{"document_id":7,"results":[{"test_name":"A"}]}');
+        $repo->waiting(5, 6, 7);
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        $sent = $agent->documentPosts[0]['request']['documents'];
+        self::assertSame(['2025-01-10', null, null], array_column($sent, 'received_at'));
+    }
+
+    public function testNothingLeftOutWhenEveryWaitingDocumentFits(): void
+    {
+        $repo = new FakeProcessingRepository();
+        for ($id = 1; $id <= 20; $id++) {
+            $repo->records[$id] = self::record($id, 'extracted', '{"document_id":' . $id . ',"results":[{"test_name":"Glucose"}]}');
+        }
+        $repo->waiting(...range(1, 20));
+        $repo->records[30] = self::record(30, 'extracted', '{"document_id":30,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[30] = [['id' => 30, 'document_id' => 30, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed']];
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertCount(20, $agent->documentPosts[0]['request']['documents']);
+        self::assertSame(0, $agent->documentPosts[0]['request']['documents_not_included'], 'a fully reviewed document is not "left out"');
+    }
+
+    public function testTheRepositoryListsOnlyDocumentsWithAValueWaiting(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[1] = self::record(1, 'extracted', '{"document_id":1,"results":[{"test_name":"A"}]}');
+        $repo->values[1] = [['id' => 1, 'document_id' => 1, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $repo->records[2] = self::record(2, 'extracted', '{"document_id":2,"results":[{"test_name":"A"}]}');
+        $repo->values[2] = [['id' => 2, 'document_id' => 2, 'pid' => self::PID, 'result_index' => 0, 'status' => 'unfiled']];
+        $repo->records[3] = self::record(3, 'extracted', '{"document_id":3,"results":[]}'); // read, nothing to review
+        $repo->records[4] = self::record(4, 'extracted', '{"document_id":4,"results":[{"test_name":"A"},{"test_name":"B"}]}');
+        $repo->values[4] = [
+            ['id' => 3, 'document_id' => 4, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed'],
+            ['id' => 4, 'document_id' => 4, 'pid' => self::PID, 'result_index' => 1, 'status' => 'candidate'],
+        ];
+
+        self::assertSame([1, 4], array_column($repo->listExtractions(self::PID, 20), 'document_id'));
+        self::assertSame([4], array_column($repo->listExtractions(self::PID, 1), 'document_id'), 'the newest when capped');
+        self::assertSame([0], $repo->listExtractions(self::PID, 20)[1]['reviewed_indices']);
+        self::assertSame(['extracted' => 4, 'waiting' => 2], $repo->countExtractions(self::PID));
+    }
+
+    /**
+     * 2026-09-26 production report: five documents - one read document whose only value was filed,
+     * two "already read (same file)" duplicates, two held for identity. The briefing said nothing had
+     * been read (`no_extracted_documents`), which was false: everything read had been reviewed.
+     */
+    public function testEveryReadValueReviewedIsItsOwnReasonNotNothingRead(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[10] = self::record(10, 'extracted', '{"document_id":10,"results":[{"test_name":"Hemoglobin A1c"}]}');
+        $repo->values[10] = [['id' => 1, 'document_id' => 10, 'pid' => self::PID, 'result_index' => 0, 'status' => 'filed']];
+        $repo->records[11] = ['extraction_json' => null] + self::record(11, 'skipped_duplicate', '');
+        $repo->records[12] = ['extraction_json' => null] + self::record(12, 'skipped_duplicate', '');
+        $repo->records[13] = self::record(13, 'held_identity', '{"document_id":13,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[13] = [['id' => 2, 'document_id' => 13, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $repo->records[14] = self::record(14, 'held_identity', '{"document_id":14,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[14] = [['id' => 3, 'document_id' => 14, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertSame(200, $result['status']);
+        self::assertSame('degraded', $result['body']['status']);
+        self::assertSame('all_values_reviewed', DocumentBriefingController::DEGRADED_ALL_VALUES_REVIEWED);
+        self::assertSame(DocumentBriefingController::DEGRADED_ALL_VALUES_REVIEWED, $result['body']['degraded_reason']);
+        self::assertSame([], $agent->documentPosts, 'nothing is sent when nothing is waiting');
+        self::assertStringContainsString('outcome=all_values_reviewed', $this->audit->events[0]['comment']);
+    }
+
+    public function testOnlyHeldAndDuplicateDocumentsIsStillNothingRead(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[11] = ['extraction_json' => null] + self::record(11, 'skipped_duplicate', '');
+        $repo->records[13] = self::record(13, 'held_identity', '{"document_id":13,"results":[{"test_name":"Glucose"}]}');
+        $repo->values[13] = [['id' => 2, 'document_id' => 13, 'pid' => self::PID, 'result_index' => 0, 'status' => 'candidate']];
+        $agent = new FakeAgentClient();
+
+        $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        self::assertSame('no_extracted_documents', $result['body']['degraded_reason']);
+        self::assertSame([], $agent->documentPosts);
+    }
+
     public function testNothingExtractedYetIsDegradedWithoutAnAgentCall(): void
     {
         $agent = new FakeAgentClient();
@@ -131,6 +260,7 @@ final class StoredExtractionBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $agent = new FakeAgentClient();
         $this->controller($repo, $agent, new SourceUnavailableException('lab_results'))->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID]);
         self::assertSame([], $agent->documentPosts[0]['request']['prior_facts']);
@@ -147,6 +277,7 @@ final class StoredExtractionBriefingTest extends TestCase
     {
         $repo = new FakeProcessingRepository();
         $repo->records[5] = self::record(5, 'extracted', '{"document_id":5,"results":[]}');
+        $repo->waiting(5);
         $agent = new FakeAgentClient(new AgentUnavailableException(AgentUnavailableException::REASON_REJECTED, 422));
         $result = $this->controller($repo, $agent)->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID]);
         self::assertSame('agent_unavailable', $result['body']['degraded_reason']);

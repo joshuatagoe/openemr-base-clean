@@ -372,6 +372,37 @@ class PatientReport(StrictModel):
     native_link: str | None = None
 
 
+class AgedDocument(StrictModel):
+    """A stored document too old to brief as new facts (``UNREVIEWED_MAX_AGE_MONTHS``).
+
+    It becomes one Needs attention line saying it holds values nobody has
+    reviewed, citing it; its values are not briefed.
+    """
+
+    document_id: int = Field(ge=1)
+    dated: date
+    date_kind: Literal["collected", "received"]
+    value_count: int = Field(ge=0)
+    citation: DocumentCitation | None = Field(default=None, description="The document's first cited value; None when it has none.")
+
+
+def _aged_lines(aged: Sequence[AgedDocument]) -> list[BriefingLine]:
+    return [
+        BriefingLine(
+            line_id=f"aged-{doc.document_id}",
+            tier=AssertionTier.DOCUMENT_STATED,
+            text=(
+                f"An older document ({doc.date_kind} {doc.dated.isoformat()}) has "
+                f"{doc.value_count} value(s) nobody has reviewed."
+            ),
+            document_citation=doc.citation,
+            not_yet_in_chart=True,
+        )
+        for doc in aged
+        if doc.citation is not None and doc.value_count > 0  # nothing waiting: nothing to say
+    ]
+
+
 class ConsiderationCandidate(StrictModel):
     """A proposed consideration, before screening.
 
@@ -694,6 +725,14 @@ REPORTED_MEDICATIONS_COMPARED = (
 )
 
 
+def documents_not_included_limitation(count: int) -> str:
+    """Said when the module's 20-document cap left documents with values still waiting out of the briefing."""
+    return (
+        f"{count} older document(s) with values not yet reviewed were not included in this briefing; "
+        "review them in the document list."
+    )
+
+
 def blank_section_limitation(section: str, document_id: int) -> str:
     return (
         f"The intake form (document {document_id}) lists no {section} and no written \"none\"; "
@@ -853,6 +892,8 @@ def build_briefing(
     chart_medications: Sequence[MedicationRecord] | None = None,
     question: str | None = None,
     document_reviewed: bool = False,
+    documents_not_included: int = 0,
+    aged_documents: Sequence[AgedDocument] = (),
 ) -> Briefing:
     """Assemble the three-heading briefing from record facts and screened evidence.
 
@@ -873,8 +914,11 @@ def build_briefing(
     reported, reported_attention, intake_limitations = _intake_lines(intake_forms, chart_medications)
     what_changed += reported
     needs_attention += reported_attention
+    needs_attention += _aged_lines(aged_documents)
 
     limitations: list[str] = list(intake_limitations)
+    if documents_not_included > 0:
+        limitations.append(documents_not_included_limitation(documents_not_included))
     dropped: list[DroppedAssertion] = []
     kept: list[Consideration] = []
 
@@ -1022,6 +1066,7 @@ def render_briefing(briefing: Briefing) -> str:
 
 
 __all__ = [
+    "AgedDocument",
     "COMPARISON_RULE",
     "COMPUTED_LABEL",
     "EVIDENCE_UNAVAILABLE_LIMITATION",

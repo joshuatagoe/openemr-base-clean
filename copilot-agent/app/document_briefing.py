@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import calendar
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date
@@ -38,6 +39,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from app.briefing import (
+    AgedDocument,
     AssertionTier,
     Briefing,
     ChartFact,
@@ -50,7 +52,7 @@ from app.contracts import Citation, LabResult as ChartLabResult, MedicationRecor
 from app.corpus import ClaimKind
 from app.documents import SUPPORTED_MEDIA_TYPES, ExtractionMetadata, LabDocument, LabResult, MediaType, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
-from app.intake import IntakeForm, all_citations
+from app.intake import IntakeForm, all_citations, intake_items
 from app.intake_extractor import extract_intake_document
 from app.lab_extractor import extract_lab_document
 from app.providers.prompt import INTAKE_EXTRACTION_PROMPT_VERSION, LAB_EXTRACTION_PROMPT_VERSION
@@ -96,6 +98,10 @@ class StoredDocument(StrictModel):
     document_id: int = Field(ge=1)
     doc_type: Literal["lab_pdf", "intake_form"]
     extraction: LabDocument | IntakeForm
+    received_at: date | None = Field(
+        default=None,
+        description="The date the document was uploaded to OpenEMR. Dates it when no collection date was read.",
+    )
 
     @model_validator(mode="after")
     def _attributed_to_this_document(self) -> StoredDocument:
@@ -110,6 +116,59 @@ class StoredDocument(StrictModel):
         if any(c.source_id != str(self.document_id) for c in citations):
             raise ValueError("a stored citation names a different document")
         return self
+
+
+#: A document whose values are still unreviewed this long after its date is not
+#: briefed as new facts: it becomes one Needs attention line (``aged_documents``).
+UNREVIEWED_MAX_AGE_MONTHS = 12
+
+DateKind = Literal["collected", "received"]
+
+
+def document_date(document: StoredDocument) -> tuple[date, DateKind] | None:
+    """A stored document's date: its latest collection date, else ``received_at``, else None (undated).
+
+    An intake form has no collection date, so it is dated by ``received_at``.
+    """
+    extraction = document.extraction
+    if isinstance(extraction, LabDocument):
+        collected = [d for d in (extraction.collection_date, *(r.collection_date for r in extraction.results)) if d is not None]
+        if collected:
+            return max(collected), "collected"
+    if document.received_at is not None:
+        return document.received_at, "received"
+    return None
+
+
+def is_aged(when: date, *, as_of: date) -> bool:
+    """More than UNREVIEWED_MAX_AGE_MONTHS before ``as_of``; exactly that many months is not aged."""
+    months = as_of.year * 12 + (as_of.month - 1) - UNREVIEWED_MAX_AGE_MONTHS
+    year, month = divmod(months, 12)
+    month += 1
+    day = min(as_of.day, calendar.monthrange(year, month)[1])  # 29 Feb -> 28 Feb
+    return when < date(year, month, day)
+
+
+def aged_document(document: StoredDocument, *, as_of: date) -> AgedDocument | None:
+    """The Needs attention summary of a document too old to brief as new facts; None when it is recent or undated.
+
+    A document with nothing left to review is dropped without a line (there is nothing to say about it).
+    """
+    dated = document_date(document)
+    if dated is None or not is_aged(dated[0], as_of=as_of):
+        return None
+    extraction = document.extraction
+    citations = (
+        [item.citation for item in intake_items(extraction)] if isinstance(extraction, IntakeForm)
+        else [r.citation for r in extraction.results]
+    )
+    return AgedDocument(
+        document_id=document.document_id,
+        dated=dated[0],
+        date_kind=dated[1],
+        value_count=len(citations),
+        citation=citations[0] if citations else None,
+    )
 
 
 class DocumentBriefingRequest(StrictModel):
@@ -145,6 +204,12 @@ class DocumentBriefingRequest(StrictModel):
     documents: list[StoredDocument] | None = Field(default=None, min_length=1, max_length=MAX_BRIEFING_DOCUMENTS)
     prior_facts: list[ChartLabResult] = Field(default_factory=list, max_length=MAX_PRIOR_FACTS)
     chart_medications: list[MedicationRecord] | None = Field(default=None, max_length=MAX_CHART_MEDICATIONS)
+    documents_not_included: int = Field(
+        default=0,
+        ge=0,
+        description="Documents with a value still waiting for review that the module left out at the "
+        "MAX_BRIEFING_DOCUMENTS cap (the oldest). A count only: no ids, no content.",
+    )
     document_id: int | None = Field(default=None, ge=1)
     media_type: MediaType | None = None
     document_base64: str | None = Field(
@@ -406,8 +471,9 @@ def combine_documents(documents: list[LabDocument]) -> LabDocument:
     )
 
 
-def empty_lab_document(document_id: int, forms: list[IntakeForm]) -> LabDocument:
-    """The lab reading of a briefing that holds intake forms only: no results, the forms' provenance."""
+def empty_lab_document(document_id: int, forms: list[IntakeForm] | list[LabDocument | IntakeForm]) -> LabDocument:
+    """The lab reading of a briefing with no lab results to brief (intake forms only, or every
+    document aged out): no results, the given extractions' provenance."""
     metas = [f.extraction_metadata for f in forms]
     return LabDocument(
         document_id=document_id,
@@ -804,7 +870,11 @@ __all__ = [
     "MAX_BRIEFING_DOCUMENTS",
     "MAX_PRIOR_FACTS",
     "MAX_CHART_MEDICATIONS",
+    "UNREVIEWED_MAX_AGE_MONTHS",
     "StoredDocument",
+    "aged_document",
+    "document_date",
+    "is_aged",
     "build_query",
     "build_reranker",
     "chart_facts",

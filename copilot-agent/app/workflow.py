@@ -38,6 +38,7 @@ import asyncio
 import operator
 import os
 import time
+from datetime import UTC, date, datetime
 from functools import lru_cache
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -45,9 +46,10 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.errors import GraphRecursionError
 from langgraph.graph import END, START, StateGraph
 
-from app.briefing import ConsiderationCandidate, build_briefing, render_briefing
+from app.briefing import AgedDocument, ConsiderationCandidate, build_briefing, render_briefing
 from app.document_briefing import (
     ANSWER_MAX_OUTPUT_TOKENS,
+    aged_document,
     ANSWER_SYSTEM_PROMPT,
     QUERY_TOP_K,
     BriefingStatus,
@@ -287,6 +289,7 @@ async def run_supervised_briefing(
     reranker: FakeReranker | BedrockReranker,
     budget_seconds: float = DOCUMENT_BRIEFING_BUDGET_SECONDS,
     max_steps: int = MAX_ROUTING_STEPS,
+    as_of: date | None = None,
 ) -> DocumentBriefingResponse:
     """Run the graph and assemble the panel's response from its final state.
 
@@ -299,14 +302,28 @@ async def run_supervised_briefing(
     assert_langsmith_off()  # checked per request too: the environment can change after build
     initial: BriefingState = {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None}
     intake_forms: list[IntakeForm] = []
+    aged: list[AgedDocument] = []
     if request.documents is not None:
         # Stored extractions (ADR-012): the documents are already read, so the
         # supervisor's first decision is evidence retrieval, never extraction.
-        labs = [d.extraction for d in request.documents if isinstance(d.extraction, LabDocument)]
-        intake_forms = [d.extraction for d in request.documents if isinstance(d.extraction, IntakeForm)]
-        initial["document"] = combine_documents(labs) if labs else empty_lab_document(request.document_ids[0], intake_forms)
+        # A document older than UNREVIEWED_MAX_AGE_MONTHS is not briefed as new facts
+        # (nor given to the answer model): it becomes one Needs attention line.
+        today = as_of or datetime.now(UTC).date()
+        current = []
+        for d in request.documents:
+            old = aged_document(d, as_of=today)
+            if old is None:
+                current.append(d)
+            else:
+                aged.append(old)
+        labs = [d.extraction for d in current if isinstance(d.extraction, LabDocument)]
+        intake_forms = [d.extraction for d in current if isinstance(d.extraction, IntakeForm)]
+        initial["document"] = (
+            combine_documents(labs) if labs
+            else empty_lab_document(request.document_ids[0], intake_forms or [d.extraction for d in request.documents])
+        )
         initial["intake_forms"] = intake_forms
-        if not labs:
+        if not labs and intake_forms:
             initial["doc_type"] = "intake_form"
     graph = build_graph()
     config: RunnableConfig = {
@@ -353,6 +370,8 @@ async def run_supervised_briefing(
         intake_forms=intake_forms,
         chart_medications=request.chart_medications,
         question=request.question,
+        documents_not_included=request.documents_not_included,
+        aged_documents=aged,
     )
 
     # CR7 per-encounter signals, as scores on the encounter trace. Counts, rates

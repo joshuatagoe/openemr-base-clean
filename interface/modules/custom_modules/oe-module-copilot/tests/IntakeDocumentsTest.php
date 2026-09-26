@@ -153,6 +153,7 @@ final class IntakeDocumentsTest extends TestCase
         $lab = ['document_id' => 5, 'pid' => self::PID, 'content_sha256' => 'a', 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'v', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{"document_id":5,"results":[]}', 'created_at' => '', 'updated_at' => ''];
         $repo->records[5] = $lab;
         $repo->records[8] = ['document_id' => 8, 'doc_type' => 'intake_form', 'extraction_json' => json_encode(self::intakeExtraction(8))] + $lab;
+        $repo->waiting(5, 8);
         $agent = new FakeAgentClient();
         $controller = new DocumentBriefingController(
             new CopilotAuthorizer(new FakeAcl(self::FULL_ACL), new FakeRelationships([self::USER . ':' . self::PID => 'primary_provider'])),

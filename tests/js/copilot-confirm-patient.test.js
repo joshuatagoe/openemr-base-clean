@@ -63,6 +63,15 @@ describe('describeDocument - held and confirmed documents', () => {
         expect(d.notes.join(' ')).toMatch(/does not match this chart/);
     });
 
+    test.each([
+        ['mismatch', HELD],
+        ['other hold', doc(9, { status: 'held_identity', identity_check: 'missing', error_code: 'same_file_in_other_chart', pending_count: 0 })]
+    ])('%s: the explanation says how to move it (Documents, Properties, Move to Patient)', (_label, held) => {
+        const text = describeDocument(held).notes.join(' ');
+        expect(text).toContain('If it belongs to another patient, move it: open it in Documents, click Properties, and use Move to Patient.');
+        expect(text).not.toMatch(/right chart in Documents/);
+    });
+
     test('a held copy of a file in another chart does not claim a name mismatch it did not find', () => {
         const d = describeDocument(doc(9, { status: 'held_identity', identity_check: 'missing', error_code: 'same_file_in_other_chart', pending_count: 0 }));
         expect(d.canConfirm).toBe(true);
@@ -177,7 +186,8 @@ describe('DocumentsSection - This is the right patient', () => {
         expect(calls.filter((c) => c.url.endsWith('/confirm-patient'))).toHaveLength(0);
         expect(confirm.textContent).toBe('Confirm: this is the right patient');
         const message = item().querySelector('[data-role="held-message"]');
-        expect(message.textContent).toMatch(/move it to the right chart in Documents instead/);
+        expect(message.textContent).toContain('move it instead: open it in Documents, click Properties, and use Move to Patient.');
+        expect(message.textContent).not.toMatch(/right chart in Documents/);
         expect(message.textContent).toMatch(/audit/);
 
         confirm.click();

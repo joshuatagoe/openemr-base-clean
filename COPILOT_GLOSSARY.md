@@ -11,7 +11,7 @@ The panel shows the same definitions on hover (`HELP` in
   already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
   and shows *What changed*, *Needs attention* and *What to consider*. Intake forms read for the
   patient are included as patient-reported lines. *View source* on a document
-  citation opens the page and box it came from.
+  citation opens the page and box it came from in a popup over the page (Esc or Close returns to the panel).
 
 ---
 
@@ -117,6 +117,7 @@ The panel shows the same definitions on hover (`HELP` in
 | Code | Meaning |
 |---|---|
 | `no_extracted_documents` | No lab document has been read yet for this patient (see the document list). |
+| `all_values_reviewed` | Documents were read, and every value read from them has been filed, rejected or un-filed. Filed values are part of the chart's lab history; there is nothing new from documents to brief. |
 | `no_document_on_file` | No PDF, PNG or JPEG in the patient's Documents. |
 | `document_unavailable` | The newest document could not be read from OpenEMR. |
 | `document_too_large` | The newest document is over 10 MB. |
@@ -143,8 +144,8 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | Could not be read | Failed this time; the reason is shown. Most failures are retried the next time the chart opens (up to three attempts). |
 | Already read (same file) | The same file was already read in this chart; its values are under that document. |
 | Not read / Needs a category | Needs the "Lab Report" or "Intake Form" category, or is a file type the Co-Pilot does not read (only PDF, PNG, JPEG, ≤ 10 MB). |
-| Held: identity check | The name or date of birth printed on the document does not match this chart (or the same file is in another chart and nothing printed here confirms this patient). Its values are not shown or used until a clinician confirms the patient with "This is the right patient"; if it is another patient's, move it in Documents. |
-| View document → This is the right patient | On a held document, after its explanation: view the document first, then confirm it belongs to this patient (a second click, "Confirm: this is the right patient", sends it). The document becomes Read and its values reviewable — nothing is filed automatically. The identity check result is kept as history, and the confirmation (clinician, time, the hold code and identity result) is an EHR audit row. Needs lab-write and sign permissions, like filing. If the document is another patient's, move it in Documents instead; it is then read again in the right chart. |
+| Held: identity check | The name or date of birth printed on the document does not match this chart (or the same file is in another chart and nothing printed here confirms this patient). Its values are not shown or used until a clinician confirms the patient with "This is the right patient". If it is another patient's, move it: open it in Documents, click Properties (next to Contents), and use Move to Patient. |
+| View document → This is the right patient | On a held document, after its explanation: view the document first, then confirm it belongs to this patient (a second click, "Confirm: this is the right patient", sends it). The document becomes Read and its values reviewable — nothing is filed automatically. The identity check result is kept as history, and the confirmation (clinician, time, the hold code and identity result) is an EHR audit row. Needs lab-write and sign permissions, like filing. If the document is another patient's, move it instead: open it in Documents, click Properties, and use Move to Patient; it is then read again in the right chart. |
 | Held for an identity check …; a clinician confirmed this is the right patient | A Read document that was held and then confirmed with "This is the right patient" (code `identity_confirmed_by_clinician`). The original identity result (did not match / could not be compared / same file in another chart) is still shown. |
 | N to review | Values from this document waiting for a clinician to file or reject. |
 | N patient-reported | On an intake form: the items the patient wrote (chief concern, medications, allergies, family history). Evidence only — not filed, and not counted as values waiting for review. |
@@ -164,7 +165,7 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | Label | Meaning |
 |---|---|
 | Waiting for review | Read from the document, not in the chart. |
-| Review source | Opens the document at the value's page with the box drawn over it, and the filing controls beside it. |
+| Review source | Opens the document in a popup over the page, at the value's page with the box drawn over it and the filing controls beside it. Esc, Close or a click outside it closes the popup. |
 | Verify and file | Files the value as an outside-lab result after you compared it with the source. Filing is signing: needs lab-write and sign permissions. A changed value is filed as corrected (the value as read is kept). A missing collection date must be entered from the document or another reliable record — never guessed, never the upload date. |
 | The collection dates differ | The date you entered differs from the one read from the document. Both are shown side by side; filing your date needs a confirmation and a reason, recorded in the EHR audit log. |
 | same result already in the chart | Filed, with a warning: a result with the same test, date and value was already in the chart — check for a duplicate. |
