@@ -9,7 +9,8 @@ The panel shows the same definitions on hover (`HELP` in
   evidence for each.
 - **Week 2 (document briefing):** *Brief from all read lab documents* briefs from every lab report
   already read for this patient (their stored readings; nothing is re-read), grounds it in guidelines
-  and shows *What changed*, *Needs attention* and *What to consider*. *View source* on a document
+  and shows *What changed*, *Needs attention* and *What to consider*. Intake forms read for the
+  patient are included as patient-reported lines. *View source* on a document
   citation opens the page and box it came from.
 
 ---
@@ -69,7 +70,7 @@ The panel shows the same definitions on hover (`HELP` in
 | `document_stated` | Printed in the uploaded document, quoted exactly. Not yet confirmed by a clinician. |
 | `chart_fact` | Already recorded in the patient's chart. |
 | `computed` | Worked out by this system with a fixed rule (e.g. value above the printed reference range). The lab did not print it; the inputs and rule are shown. Never displayed as a lab flag. |
-| `patient_reported` | Stated by the patient on an intake form. An observation, not a finding. (Intake forms are not built yet.) |
+| `patient_reported` | Stated by the patient on an intake form, citing the form. An observation, not a finding, and never filed into the chart (ADR-010). |
 | `guideline_supported` | What a published guideline says, quoted and attributed, with why it bears on this patient. Describes the guidance; never a recommendation or order. |
 
 **Other Week 2 labels**
@@ -141,11 +142,12 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | Read | Read. Its values are listed as candidates; nothing is in the chart until a clinician files it. |
 | Could not be read | Failed this time; the reason is shown. Most failures are retried the next time the chart opens (up to three attempts). |
 | Already read (same file) | The same file was already read in this chart; its values are under that document. |
-| Not read / Needs a category | Needs the "Lab Report" category, or is a file type the Co-Pilot does not read (only PDF, PNG, JPEG, ≤ 10 MB). |
+| Not read / Needs a category | Needs the "Lab Report" or "Intake Form" category, or is a file type the Co-Pilot does not read (only PDF, PNG, JPEG, ≤ 10 MB). |
 | Held: identity check | The name or date of birth printed on the document does not match this chart (or the same file is in another chart and nothing printed here confirms this patient). Its values are not shown or used until a clinician confirms the patient with "This is the right patient"; if it is another patient's, move it in Documents. |
 | View document → This is the right patient | On a held document, after its explanation: view the document first, then confirm it belongs to this patient (a second click, "Confirm: this is the right patient", sends it). The document becomes Read and its values reviewable — nothing is filed automatically. The identity check result is kept as history, and the confirmation (clinician, time, the hold code and identity result) is an EHR audit row. Needs lab-write and sign permissions, like filing. If the document is another patient's, move it in Documents instead; it is then read again in the right chart. |
 | Held for an identity check …; a clinician confirmed this is the right patient | A Read document that was held and then confirmed with "This is the right patient" (code `identity_confirmed_by_clinician`). The original identity result (did not match / could not be compared / same file in another chart) is still shown. |
 | N to review | Values from this document waiting for a clinician to file or reject. |
+| N patient-reported | On an intake form: the items the patient wrote (chief concern, medications, allergies, family history). Evidence only — not filed, and not counted as values waiting for review. |
 | same file in another patient's chart | The identical file is also filed in another chart. With a matching printed name/DOB here, the other copy is the likely misfiling; without one, this copy is held. |
 
 **Value verification** (how the system located the value on the page — never a model's claim)
@@ -171,6 +173,18 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | Un-file / Un-filed (entered in error) | Withdraws a filed value (two clicks): the chart result is kept for history, marked entered-in-error, and no longer counts as chart data. It cannot be filed again. |
 | Source document | On a chart result filed from a document: opens the page and box it came from. |
 | Box on the page | Where the system found the value. It shows where it read, not that it read correctly. |
+
+**Intake forms** (documents in the "Intake Form" category; ADR-010)
+
+| Label | Meaning |
+|---|---|
+| Intake form | A patient intake form (typed, or a photo of a handwritten form). Read like a lab report; the name and date of birth written on it are compared with the chart (identity check) and are not stored. |
+| Chief concern / Current medication / Allergy / Family history | One item the patient wrote, as read. "(none reported)" means the patient actually wrote "none" (e.g. "None known"); a blank section is not shown as an item and is never read as "no known allergies". |
+| Patient-reported | What the patient wrote on the form: an observation, not a clinical finding, and not a chart record. |
+| Patient-reported evidence: shown with its source, not filed into the chart this week | Intake items have **View source** (the form at the item's box) but no **Verify and file** or **Reject**. The chart already has medication and allergy lists; adding the patient's own list beside them without comparing item by item could create duplicates or conflicts. That comparison is a separate step. |
+| Not found on the page (intake item) | The system could not find the item on the form, so there is no box. Check the form yourself before relying on it. |
+| unreadable (intake item) | The entry could not be read. Nothing was guessed; open the form to read it yourself. |
+| [patient-reported] line in the briefing | An intake item in the document briefing, citing the form. Unreadable entries are listed under *Needs attention*. A blank allergy or medication section is stated as a limitation ("not a statement of no known allergies"). Reported medications are not compared with the chart's medication list in the briefing, and the briefing says so. |
 
 ---
 

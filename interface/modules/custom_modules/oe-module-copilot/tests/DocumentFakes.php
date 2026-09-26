@@ -194,8 +194,8 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
     {
         $out = [];
         foreach ($this->values as $docId => $rows) {
-            if (($this->records[$docId]['status'] ?? null) !== 'extracted') {
-                continue;
+            if (($this->records[$docId]['status'] ?? null) !== 'extracted' || ($this->records[$docId]['doc_type'] ?? 'lab_pdf') !== 'lab_pdf') {
+                continue; // like the SQL: only lab candidates are pending lab facts (intake is patient-reported evidence)
             }
             foreach ($rows as $v) {
                 if ($v['pid'] === $pid && $v['status'] === 'candidate') {

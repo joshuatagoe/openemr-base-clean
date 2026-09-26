@@ -74,3 +74,24 @@ async def test_a_read_past_the_budget_stops_with_a_reason(monkeypatch: pytest.Mo
 
 def test_the_budget_is_below_the_module_timeout() -> None:
     assert db.DOCUMENT_EXTRACT_BUDGET_SECONDS < 90.0
+
+
+@pytest.mark.anyio
+async def test_an_intake_form_has_the_same_page_cap_and_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def never(**_: Any) -> Any:
+        raise AssertionError("the extractor must not run")
+
+    async def slow(**_: Any) -> str:
+        await asyncio.sleep(5)
+        return "too late"
+
+    monkeypatch.setattr(db, "extract_intake_document", never)
+    over = await db.read_intake_document(
+        document_id=1, document_base64=_pdf(db.MAX_DOCUMENT_PAGES + 1), media_type="application/pdf", provider=StubProvider()
+    )
+    assert over == (None, "too_many_pages")
+    monkeypatch.setattr(db, "extract_intake_document", slow)
+    late = await db.read_intake_document(
+        document_id=1, document_base64=_pdf(1), media_type="application/pdf", provider=StubProvider(), budget_seconds=0.05
+    )
+    assert late == (None, "budget_exhausted")

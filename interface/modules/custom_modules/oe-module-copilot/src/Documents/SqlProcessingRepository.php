@@ -177,12 +177,12 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
     public function listExtractions(int $pid, int $limit): array
     {
         // The newest documents when there are more than the limit, returned oldest first.
-        // Only lab extractions: the briefing contract accepts doc_type lab_pdf only (C4).
+        // Lab and intake extractions: the briefing contract accepts both (C4, ADR-010).
         $rows = array_reverse(QueryUtils::fetchRecords(
             "SELECT d.document_id, d.doc_type, d.extraction_json
                FROM copilot_document d
                JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
-              WHERE d.pid = ? AND d.status = 'extracted' AND d.doc_type = 'lab_pdf' AND d.extraction_json IS NOT NULL
+              WHERE d.pid = ? AND d.status = 'extracted' AND d.doc_type IN ('lab_pdf', 'intake_form') AND d.extraction_json IS NOT NULL
               ORDER BY d.document_id DESC
               LIMIT " . max(1, min($limit, 50)),
             [$pid]
@@ -216,7 +216,7 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
                FROM copilot_extracted_value v
                JOIN copilot_document d ON d.document_id = v.document_id AND d.pid = v.pid
                JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
-              WHERE v.pid = ? AND v.status = 'candidate' AND d.status = 'extracted'
+              WHERE v.pid = ? AND v.status = 'candidate' AND d.status = 'extracted' AND d.doc_type = 'lab_pdf'
               ORDER BY v.document_id ASC, v.result_index ASC
               LIMIT " . max(1, min($limit, 500)),
             [$pid]

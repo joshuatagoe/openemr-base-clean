@@ -1,0 +1,56 @@
+{
+  "case_id": "intake_handwritten_photo",
+  "content_digest": "e85191f881c94fb4",
+  "model": "claude-opus-5",
+  "output": {
+    "allergies": [],
+    "allergies_none_text": "None known",
+    "chief_concern": "Short of breath on stairs",
+    "current_medications": [
+      {
+        "dose": "90 mcg",
+        "frequency": "as needed",
+        "name": "Albuterol",
+        "page": 1,
+        "quote": "Albuterol 90 mcg as needed",
+        "unreadable": false
+      },
+      {
+        "dose": "5 mg",
+        "frequency": "daily",
+        "name": "Amlodipine",
+        "page": 1,
+        "quote": "Amlodipine 5 mg daily",
+        "unreadable": false
+      }
+    ],
+    "family_history": [
+      {
+        "condition": "heart attack at 58",
+        "page": 1,
+        "quote": "Father: heart attack at 58",
+        "relation": "Father",
+        "unreadable": false
+      }
+    ],
+    "family_history_none_text": "",
+    "illegible_fields": [],
+    "medications_none_text": "",
+    "page_count": 1,
+    "patient_dob": "",
+    "patient_dob_as_written": "11/02/1964",
+    "patient_name": "Demo, Patient",
+    "patient_phone": "",
+    "patient_sex": ""
+  },
+  "schema": "IntakeDraft",
+  "system_digest": "177a27a0f1fc4d4d",
+  "usage": {
+    "cached_input_tokens": 3285,
+    "input_tokens": 4448,
+    "latency_ms": 5394,
+    "model": "claude-opus-5",
+    "output_tokens": 425,
+    "provider": "anthropic"
+  }
+}

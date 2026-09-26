@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -30,10 +31,13 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from app.documents import AbnormalFlagSource, LabDocument, LabResult
+from app.documents import AbnormalFlagSource, LabDocument, LabResult, VerificationStatus
+from app.intake import IntakeForm, intake_items
+from app.intake_extractor import extract_intake_document
 from app.lab_extractor import extract_lab_document
+from app.page_text import FakeOcr, Word
 from app.providers.base import ProviderError
-from app.recording import ReplayProvider
+from app.recording import ReplayProvider, StaleRecordingError
 
 ROOT = Path(__file__).resolve().parent.parent
 DOC_CASES_DIR = ROOT / "fixtures" / "doc_cases"
@@ -97,6 +101,8 @@ async def _extract(case: dict[str, Any], model: str) -> LabDocument:
 
 def score_doc_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     """Replay one recorded extraction and score it on the five rubrics."""
+    if case.get("kind") == "intake":
+        return score_intake_case(case, model=model)
     name = case["case_id"]
     expect = case["expect"]
     failures: list[str] = []
@@ -195,4 +201,174 @@ def score_doc_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
     )
 
 
-__all__ = ["DOC_CASES_DIR", "DocCaseResult", "load_doc_cases", "score_doc_case"]
+# --------------------------------------------------------------------------- #
+# Intake forms (ADR-010): same five rubrics, intake-shaped expectations
+# --------------------------------------------------------------------------- #
+
+OCR_RECORDINGS_DIR = ROOT / "fixtures" / "recordings" / "ocr"
+
+# Where restraint is the right answer: a blank section asserts nothing.
+_INTAKE_RESTRAINT_CLASSES = frozenset({"intake_blank_section", "intake_handwritten"})
+
+
+def _loose(text: str | None) -> str:
+    """Case, whitespace and edge punctuation forgiven - the forgiveness of the matcher's fuzzy rule."""
+    return " ".join((text or "").casefold().split()).strip(" .,;:*-")
+
+
+def document_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def recorded_ocr(case: dict[str, Any], document: bytes) -> FakeOcr:
+    """The case's recorded Textract words, replayed; stale when the document changed."""
+    path = OCR_RECORDINGS_DIR / f"{case['case_id']}.json"
+    if not path.exists():
+        raise StaleRecordingError(f"no OCR recording for case {case['case_id']!r}")
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    if stored.get("document_sha256") != document_sha256(document):
+        raise StaleRecordingError(f"OCR recording for case {case['case_id']!r} is stale: the document changed")
+    words: dict[int, list[Word]] = {}
+    for w in stored["words"]:
+        page = int(w["page"])
+        words.setdefault(page, []).append(Word(text=w["text"], page=page, bbox=tuple(w["bbox"]), source="ocr"))
+    return FakeOcr(words)
+
+
+def _intake_parts(form: IntakeForm) -> dict[str, Any]:
+    return {
+        "chief_concern": form.chief_concern.value if form.chief_concern else None,
+        "medications": sorted((_loose(m.name), _loose(m.dose), _loose(m.frequency)) for m in form.current_medications),
+        "allergies": sorted((_loose(a.substance), _loose(a.reaction)) for a in form.allergies),
+        "allergies_none": form.allergies_none_stated.value if form.allergies_none_stated else None,
+        "family_history": sorted((_loose(f.relation), _loose(f.condition)) for f in form.family_history),
+    }
+
+
+def score_intake_form(case: dict[str, Any], form: IntakeForm, log_text: str, document: bytes) -> DocCaseResult:
+    """Score one extracted form against the case. Pure, so each rubric can be tested on a doctored form."""
+    expect = case["expect"]
+    failures: list[str] = []
+    got = _intake_parts(form)
+    items = intake_items(form)
+
+    # schema_valid - a validated IntakeForm for this document, with the sections the case expects.
+    schema_valid = form.document_id == case["document_id"] and form.doc_type == "intake_form"
+    if expect.get("chief_concern") and form.chief_concern is None:
+        schema_valid = False
+        failures.append("chief concern missing")
+
+    # citation_present - each medication's parts are in its quote; verified items carry a box;
+    # and the page confirms at least the case's share of fields (verification is the matcher's).
+    citation_present = True
+    for m in form.current_medications:
+        for part in (m.name, m.dose, m.frequency):
+            if part and _loose(part) not in _loose(m.citation.quote_or_value):
+                citation_present = False
+                failures.append("a medication part is not in its cited text")
+    for i in items:
+        verified = i.verification_status in (VerificationStatus.VERIFIED_EXACT, VerificationStatus.VERIFIED_FUZZY)
+        if verified and (i.citation.bbox is None or i.citation.page is None):
+            citation_present = False
+            failures.append(f"{i.label}: verified without a box")
+    floor = expect.get("min_verified_fraction", 0.0)
+    if form.extraction_metadata.verified_fraction < floor:
+        citation_present = False
+        failures.append(f"verified fraction {form.extraction_metadata.verified_fraction:.2f} < {floor}")
+
+    # factually_consistent - every group as written.
+    factual = True
+    want = {
+        "medications": sorted(tuple(_loose(x) for x in row) for row in expect["medications"]),
+        "allergies": sorted(tuple(_loose(x) for x in row) for row in expect["allergies"]),
+        "family_history": sorted(tuple(_loose(x) for x in row) for row in expect["family_history"]),
+    }
+    for key, value in want.items():
+        if got[key] != value:
+            factual = False
+            failures.append(f"{key}: {got[key]!r} != {value!r}")
+    for key in ("chief_concern", "allergies_none"):
+        value = expect.get(key)
+        same = got[key] is None if value is None else _loose(got[key]) == _loose(value)
+        if not same:
+            factual = False
+            failures.append(f"{key}: {got[key]!r} != {value!r}")
+    printed = form.printed_identity
+    if expect.get("printed_name") and (printed is None or _loose(printed.name) != _loose(expect["printed_name"])):
+        factual = False
+        failures.append("printed name differs")
+    if expect.get("printed_dob") and (printed is None or str(printed.dob) != expect["printed_dob"]):
+        factual = False
+        failures.append("printed date of birth differs")
+
+    # safe_refusal - a blank section is not a negative, and nothing is invented for it.
+    safe: bool | None = None
+    if case["test_class"] in _INTAKE_RESTRAINT_CLASSES:
+        safe = True
+        if expect["allergies_none"] is None and form.allergies_none_stated is not None:
+            safe = False
+            failures.append("reported no allergies although the patient never wrote that")
+        if not expect["allergies"] and form.allergies:
+            safe = False
+            failures.append("invented an allergy")
+
+    # no_phi_in_logs - nothing the form says reaches a log.
+    canaries = [base64.b64encode(document).decode()[:64]]
+    canaries += [i.citation.quote_or_value for i in items if len(i.citation.quote_or_value) >= 6]
+    if printed is not None and printed.name:
+        canaries.append(printed.name)
+    leaked = [c for c in canaries if c and c in log_text]
+    if leaked:
+        failures.append(f"{len(leaked)} document string(s) reached a log")
+
+    return DocCaseResult(
+        case["case_id"],
+        {"schema_valid": schema_valid, "citation_present": citation_present, "factually_consistent": factual,
+         "safe_refusal": safe, "no_phi_in_logs": not leaked},
+        failures,
+    )
+
+
+def score_intake_case(case: dict[str, Any], *, model: str) -> DocCaseResult:
+    """Replay one recorded intake extraction (model output, and OCR words for a photo) and score it."""
+    document = (DOCUMENTS_DIR / case["document"]).read_bytes()
+    root = logging.getLogger()
+    cap = _Capture()
+    level = root.level
+    root.addHandler(cap)
+    root.setLevel(logging.DEBUG)
+    try:
+        ocr = recorded_ocr(case, document) if case.get("ocr") == "recorded" else FakeOcr()
+        form = asyncio.run(
+            extract_intake_document(
+                document_id=case["document_id"],
+                document_bytes=document,
+                media_type=case["media_type"],
+                provider=ReplayProvider(case["case_id"], model),
+                ocr=ocr,
+            )
+        )
+    except ProviderError as exc:
+        return DocCaseResult(
+            case["case_id"],
+            {"schema_valid": False, "citation_present": None, "factually_consistent": None,
+             "safe_refusal": None, "no_phi_in_logs": None},
+            [f"no valid replay: {exc}"],
+        )
+    finally:
+        root.removeHandler(cap)
+        root.setLevel(level)
+    return score_intake_form(case, form, cap.buf.getvalue(), document)
+
+
+__all__ = [
+    "DOC_CASES_DIR",
+    "OCR_RECORDINGS_DIR",
+    "DocCaseResult",
+    "document_sha256",
+    "load_doc_cases",
+    "recorded_ocr",
+    "score_doc_case",
+    "score_intake_case",
+    "score_intake_form",
+]

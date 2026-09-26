@@ -55,4 +55,65 @@ def test_an_invented_value_on_a_degraded_scan_is_caught(monkeypatch: pytest.Monk
 
 def test_the_tier_reads_documents_and_recordings_from_the_committed_fixtures() -> None:
     for case in CASES:
-        assert (doc_eval.DOCUMENTS_DIR / case["pdf"]).exists(), case["pdf"]
+        document = case.get("document") or case["pdf"]  # intake cases name an image or PDF
+        assert (doc_eval.DOCUMENTS_DIR / document).exists(), document
+
+
+# --------------------------------------------------------------------------- #
+# Intake forms (ADR-010)
+# --------------------------------------------------------------------------- #
+
+INTAKE_CASES = [c for c in CASES if c.get("kind") == "intake"]
+
+
+def _intake(case_id: str) -> dict:
+    return next(c for c in INTAKE_CASES if c["case_id"] == case_id)
+
+
+def test_intake_cases_cover_a_typed_form_a_blank_section_and_a_handwritten_photo() -> None:
+    classes = {c["test_class"] for c in INTAKE_CASES}
+    assert {"intake_clean", "intake_blank_section", "intake_handwritten"} <= classes
+    photo = _intake("intake_handwritten_photo")
+    assert photo["media_type"] == "image/jpeg" and photo["ocr"] == "recorded"
+    assert (doc_eval.OCR_RECORDINGS_DIR / "intake_handwritten_photo.json").exists()
+
+
+def test_a_changed_intake_prompt_makes_the_intake_cases_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.intake_extractor as intake
+
+    monkeypatch.setattr(intake, "INTAKE_EXTRACTION_SYSTEM_PROMPT", intake.INTAKE_EXTRACTION_SYSTEM_PROMPT + " Guess.")
+    result = score_doc_case(_intake("intake_typed_evelyn"), model=MODEL)
+    assert result.scores["schema_valid"] is False
+    assert any("prompt changed" in f for f in result.failures)
+
+
+def test_an_invented_no_known_allergies_fails_safe_refusal() -> None:
+    import asyncio
+
+    from app.intake import IntakeField
+    from app.documents import DocumentCitation, VerificationStatus
+    from app.intake_extractor import extract_intake_document
+    from app.page_text import FakeOcr
+    from app.recording import ReplayProvider
+
+    case = _intake("intake_typed_blank_allergies")
+    document = (doc_eval.DOCUMENTS_DIR / case["document"]).read_bytes()
+    form = asyncio.run(extract_intake_document(
+        document_id=case["document_id"], document_bytes=document, media_type=case["media_type"],
+        provider=ReplayProvider(case["case_id"], MODEL), ocr=FakeOcr(),
+    ))
+    assert doc_eval.score_intake_form(case, form, "", document).passed
+    forged = form.model_copy(update={"allergies_none_stated": IntakeField(
+        value="No known allergies", verification_status=VerificationStatus.UNVERIFIED,
+        citation=DocumentCitation(source_id=str(case["document_id"]), page_or_section="p. 1",
+                                  field_or_chunk_id="allergies_none_stated", quote_or_value="No known allergies"),
+    )})
+    result = doc_eval.score_intake_form(case, forged, "", document)
+    assert result.scores["safe_refusal"] is False and result.scores["factually_consistent"] is False
+
+
+def test_a_changed_photo_makes_its_ocr_recording_stale() -> None:
+    from app.recording import StaleRecordingError
+
+    with pytest.raises(StaleRecordingError):
+        doc_eval.recorded_ocr(_intake("intake_handwritten_photo"), b"other bytes")

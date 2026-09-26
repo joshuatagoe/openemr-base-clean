@@ -122,7 +122,13 @@
         bbox_overlay: 'Where on the page the system found this value. It shows where the system read, not that it read correctly.',
         bbox_missing: 'The system could not locate this value on the page, so no box is drawn. It never guesses a position.',
         collection_date_conflict: 'The date you entered differs from the collection date printed on the document. Filing your date needs your confirmation and a reason; both dates and the reason go to the EHR audit log.',
-        filed_result_source: 'This chart result was filed from an uploaded document. Opens the document at the page and box it came from.'
+        filed_result_source: 'This chart result was filed from an uploaded document. Opens the document at the page and box it came from.',
+        // Week 2 - intake forms (ADR-010): patient-reported evidence, not filed
+        intake_count: 'Items the patient wrote on this intake form (chief concern, medications, allergies, family history). They are shown as evidence and are not filed into the chart.',
+        intake_item: 'What the patient wrote on the intake form, as read. Patient-reported: an observation, not a clinical finding, and not a chart record.',
+        intake_not_filed: 'Intake items are not filed into the chart this week. The chart already has medication and allergy lists; adding the patient\u2019s own list beside them without comparing item by item could create duplicates or conflicts. That comparison is a separate step.',
+        intake_verification_unverified: 'The system could not find this item on the form, so there is no box. Check the form yourself before relying on it.',
+        intake_verification_unreadable: 'This entry could not be read from the form. Nothing was guessed; open the form to read it yourself.'
     };
 
     function explain(node, key) {
@@ -1107,10 +1113,10 @@
         held_identity: ['Held: identity check', 'badge-warning']
     };
     const DOC_CODE_TEXT = {
-        needs_category: 'Needs a category: file it under “Lab Report” in this patient’s Documents to have it read.',
+        needs_category: 'Needs a category: file it under “Lab Report” or “Intake Form” in this patient’s Documents to have it read.',
         unsupported_media_type: 'Only PDF, PNG and JPEG files are read.',
         document_too_large: 'Over 10 MB, the largest file the Co-Pilot reads.',
-        doc_type_not_supported_yet: 'Intake forms are not read yet.',
+        doc_type_not_supported_yet: 'This intake form was sent to an older Co-Pilot agent that did not read intake forms yet.',
         same_content_as_other_document: 'The same file was already read in this chart; its values are listed under that document.',
         same_file_in_other_chart: 'The same file is also filed in another patient’s chart, and the name and date of birth printed on it do not confirm this patient: it may be misfiled.',
         same_file_also_in_other_chart: 'The same file is also filed in another patient’s chart. The name and date of birth printed on it match this chart, so the other copy is the likely misfiling.',
@@ -1147,7 +1153,16 @@
         rejected: ['Rejected', 'badge-secondary'],
         unfiled: ['Un-filed (entered in error)', 'badge-secondary']
     };
+    const INTAKE_NOT_FILED_TEXT = 'Patient-reported evidence: shown with its source, not filed into the chart this week.';
     const MAX_PROCESS_CALLS = 10;
+
+    function isIntake(doc) {
+        return Boolean(doc) && doc.doc_type === 'intake_form';
+    }
+
+    function intakeVerificationHelp(status) {
+        return status === 'unverified' || status === 'unreadable' ? 'intake_verification_' + status : 'verification_' + String(status);
+    }
     const MAX_VALUE_LISTS = 20;
 
     /**
@@ -1174,7 +1189,14 @@
         } else if (code) {
             notes.push(DOC_CODE_TEXT[code] || ('Reason code: ' + code + '.'));
         }
-        if (status === 'extracted') {
+        const intake = isIntake(doc);
+        if (status === 'extracted' && intake) {
+            const n = Number(doc.pending_count) || 0;
+            notes.push((n === 1 ? '1 patient-reported item' : n + ' patient-reported items') + ' (evidence only, not filed).');
+            if (doc.identity_check === 'missing' && !confirmed) {
+                notes.push('The name and date of birth written on it could not be compared with this chart; check the form is this patient’s before relying on it.');
+            }
+        } else if (status === 'extracted') {
             const n = Number(doc.pending_count) || 0;
             notes.push(n === 0 ? 'No values waiting for review.' : (n === 1 ? '1 value waiting for review.' : n + ' values waiting for review.'));
             if (doc.identity_check === 'missing' && !confirmed) {
@@ -1188,7 +1210,8 @@
             helpKey: 'doc_status_' + status,
             notes: notes,
             showValues: status === 'extracted',
-            canConfirm: status === 'held_identity'
+            canConfirm: status === 'held_identity',
+            intake: intake
         };
     }
 
@@ -1750,11 +1773,13 @@
         }
 
         summary() {
-            const pending = this.docs.reduce((n, d) => n + (d.status === 'extracted' ? (Number(d.pending_count) || 0) : 0), 0);
+            const counted = (intake) => this.docs.reduce((n, d) => n + (d.status === 'extracted' && isIntake(d) === intake ? (Number(d.pending_count) || 0) : 0), 0);
             if (!this.docs.length) {
                 return 'No documents on file.';
             }
-            return this.docs.length + ' document(s) on file; ' + pending + ' value(s) waiting for review.';
+            const reported = counted(true);
+            return this.docs.length + ' document(s) on file; ' + counted(false) + ' value(s) waiting for review'
+                + (reported ? '; ' + reported + ' patient-reported intake item(s), not filed.' : '.');
         }
 
         async refreshList() {
@@ -1784,7 +1809,9 @@
                 head.appendChild(el('strong', 'mr-2', d.typeLabel));
                 head.appendChild(el('span', 'text-muted mr-2', 'uploaded ' + fmtDate(doc.uploaded_at) + ' · document ' + String(doc.document_id)));
                 head.appendChild(explain(el('span', 'badge ' + d.badge + ' mr-1', d.statusLabel), d.helpKey));
-                if (doc.status === 'extracted' && Number(doc.pending_count) > 0) {
+                if (doc.status === 'extracted' && Number(doc.pending_count) > 0 && d.intake) {
+                    head.appendChild(explain(el('span', 'badge badge-light border mr-1', String(doc.pending_count) + ' patient-reported'), 'intake_count'));
+                } else if (doc.status === 'extracted' && Number(doc.pending_count) > 0) {
                     head.appendChild(explain(el('span', 'badge badge-info mr-1', String(doc.pending_count) + ' to review'), 'pending_count'));
                 }
                 const view = el('button', 'btn btn-link btn-sm p-0 ml-auto', 'View document');
@@ -1928,15 +1955,46 @@
             }
             const values = Array.isArray(data.values) ? data.values : [];
             if (!values.length) {
-                holder.appendChild(el('div', 'text-muted', 'No values were read from this document.'));
+                holder.appendChild(el('div', 'text-muted', isIntake(doc) ? 'No items were read from this form.' : 'No values were read from this document.'));
                 return;
+            }
+            if (isIntake(doc)) {
+                holder.appendChild(explain(el('div', 'text-muted', INTAKE_NOT_FILED_TEXT), 'intake_not_filed'));
             }
             const list = el('ul', 'list-unstyled mb-0 pl-2 border-left');
             values.forEach((v) => list.appendChild(this.valueRow(doc, v)));
             holder.appendChild(list);
         }
 
+        /** One intake item: patient-reported, with its source; never Verify and file or Reject (ADR-010). */
+        intakeRow(doc, v) {
+            const row = el('li', 'py-1');
+            row.dataset.role = 'value-row';
+            row.dataset.resultIndex = String(v.result_index);
+            row.dataset.kind = 'intake-item';
+            const line = el('div', 'd-flex flex-wrap align-items-center');
+            line.appendChild(el('strong', 'mr-1', String(v.test_name || 'item') + ':'));
+            line.appendChild(el('span', 'mr-2', v.value_text ? String(v.value_text) : 'unreadable'));
+            line.appendChild(explain(el('span', 'badge badge-light border mr-1', 'Patient-reported'), 'intake_item'));
+            const ver = VERIFICATION_LABELS[v.verification_status] || [String(v.verification_status || 'unknown'), 'badge-secondary'];
+            line.appendChild(explain(el('span', 'badge ' + ver[1] + ' mr-1', ver[0]), intakeVerificationHelp(v.verification_status)));
+            const view = el('button', 'btn btn-link btn-sm py-0', 'View source');
+            view.type = 'button';
+            view.dataset.action = 'view';
+            view.setAttribute('aria-label', 'View where ' + String(v.test_name || 'this item') + ' is written on the form');
+            view.addEventListener('click', () => this.openSource(doc.document_id, v.result_index, null));
+            line.appendChild(view);
+            row.appendChild(line);
+            if (v.page) {
+                row.appendChild(el('div', 'text-muted', 'page ' + String(v.page)));
+            }
+            return row;
+        }
+
         valueRow(doc, v) {
+            if (isIntake(doc)) {
+                return this.intakeRow(doc, v);
+            }
             const row = el('li', 'py-1');
             row.dataset.role = 'value-row';
             row.dataset.resultIndex = String(v.result_index);
@@ -2011,6 +2069,9 @@
 
         /** The value beside the page: what was read, how it was verified, where it stands. */
         valuePanel(doc, value, notice) {
+            if (isIntake(doc)) {
+                return this.intakePanel(doc, value);
+            }
             const panel = el('div', 'small');
             panel.dataset.role = 'value-panel';
             panel.dataset.documentId = String(doc.document_id);
@@ -2054,6 +2115,26 @@
                 panel.appendChild(this.unfileButton(doc.document_id, value, message));
             }
             panel.appendChild(message);
+            return panel;
+        }
+
+        /** An intake item beside the page: as written, how it was located, and why it is not filed. */
+        intakePanel(doc, value) {
+            const panel = el('div', 'small');
+            panel.dataset.role = 'value-panel';
+            panel.dataset.documentId = String(doc.document_id);
+            panel.dataset.resultIndex = String(value.result_index);
+            panel.appendChild(el('h6', 'mb-1', String(value.test_name || 'item')));
+            const read = el('div', 'mb-1');
+            read.appendChild(el('span', 'text-muted', 'As written: '));
+            read.appendChild(el('strong', 'mr-1', value.value_text ? String(value.value_text) : 'unreadable'));
+            const ver = VERIFICATION_LABELS[value.verification_status] || [String(value.verification_status || 'unknown'), 'badge-secondary'];
+            read.appendChild(explain(el('span', 'badge ' + ver[1], ver[0]), intakeVerificationHelp(value.verification_status)));
+            panel.appendChild(read);
+            panel.appendChild(explain(el('span', 'badge badge-light border', 'Patient-reported'), 'intake_item'));
+            const why = el('div', 'mt-1 text-muted', INTAKE_NOT_FILED_TEXT + ' No Verify and file or Reject: comparing the patient\u2019s list with the chart\u2019s is a separate step.');
+            why.dataset.role = 'intake-not-filed';
+            panel.appendChild(explain(why, 'intake_not_filed'));
             return panel;
         }
 

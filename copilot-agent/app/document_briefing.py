@@ -28,10 +28,11 @@ import asyncio
 import base64
 import binascii
 import re
+from collections.abc import Awaitable, Callable
 from datetime import date
 from enum import StrEnum
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, TypeVar
 from uuid import UUID
 
 from pydantic import Field, model_validator
@@ -49,8 +50,10 @@ from app.contracts import Citation, LabResult as ChartLabResult, RecordType, Str
 from app.corpus import ClaimKind
 from app.documents import SUPPORTED_MEDIA_TYPES, ExtractionMetadata, LabDocument, LabResult, MediaType, VerificationStatus
 from app.evidence import EvidencePackage, RetrievalQuery, RetrievalStatus
+from app.intake import IntakeForm, all_citations
+from app.intake_extractor import extract_intake_document
 from app.lab_extractor import extract_lab_document
-from app.providers.prompt import LAB_EXTRACTION_PROMPT_VERSION
+from app.providers.prompt import INTAKE_EXTRACTION_PROMPT_VERSION, LAB_EXTRACTION_PROMPT_VERSION
 from app.observability import generation, log_event, score, span
 from app.providers.base import ContentPart, ModelProvider, ProviderError, TextPart
 from app.providers.stub_provider import StubProvider
@@ -80,19 +83,28 @@ MAX_PRIOR_FACTS = 500
 class StoredDocument(StrictModel):
     """One document's stored extraction, as the module saved it from ``/v1/documents/extract``.
 
-    Fails closed on attribution: the extraction and every citation in it must
-    name the listed ``document_id``, or the briefing would cite the wrong file.
+    A lab report (``LabDocument``) or, since Wave 2, an intake form
+    (``IntakeForm``, ADR-010). Fails closed on type and attribution: the
+    extraction must be of the listed ``doc_type``, and it and every citation in
+    it must name the listed ``document_id``, or the briefing would cite the
+    wrong file.
     """
 
     document_id: int = Field(ge=1)
-    doc_type: Literal["lab_pdf"]
-    extraction: LabDocument
+    doc_type: Literal["lab_pdf", "intake_form"]
+    extraction: LabDocument | IntakeForm
 
     @model_validator(mode="after")
     def _attributed_to_this_document(self) -> StoredDocument:
+        if self.extraction.doc_type != self.doc_type:
+            raise ValueError("the stored extraction is not of the listed doc_type")
         if self.extraction.document_id != self.document_id:
             raise ValueError("the stored extraction belongs to a different document_id")
-        if any(r.citation.source_id != str(self.document_id) for r in self.extraction.results):
+        citations = (
+            all_citations(self.extraction) if isinstance(self.extraction, IntakeForm)
+            else [r.citation for r in self.extraction.results]
+        )
+        if any(c.source_id != str(self.document_id) for c in citations):
             raise ValueError("a stored citation names a different document")
         return self
 
@@ -161,11 +173,11 @@ class DocumentBriefingRequest(StrictModel):
 # HTTP contract - extraction only (contract C4, ADR-012)
 # --------------------------------------------------------------------------- #
 
-#: Document types the module sends, from the OpenEMR category (ADR-012). Only
-#: ``lab_pdf`` is extracted in Wave 1; ``intake_form`` is accepted and answered
-#: with a fixed "not supported yet" code so the module can record it.
+#: Document types the module sends, from the OpenEMR category (ADR-012). Both
+#: are extracted; ``intake_form`` since Wave 2 (ADR-010).
 DocType = Literal["lab_pdf", "intake_form"]
 
+#: Kept for modules that still record it; no longer returned by this agent.
 DOC_TYPE_NOT_SUPPORTED_YET = "doc_type_not_supported_yet"
 
 
@@ -211,7 +223,7 @@ class DocumentExtractResponse(StrictModel):
     )
     prompt_version: str = Field(description='The extraction prompt version the result is cached under; "none" when no extractor ran.')
     extraction_model: str = Field(description='The model that produced the extraction; "none" when there is none.')
-    extraction: LabDocument | None = None
+    extraction: LabDocument | IntakeForm | None = None
     printed_identity: PrintedIdentity | None = None
 
 
@@ -383,6 +395,24 @@ def combine_documents(documents: list[LabDocument]) -> LabDocument:
     )
 
 
+def empty_lab_document(document_id: int, forms: list[IntakeForm]) -> LabDocument:
+    """The lab reading of a briefing that holds intake forms only: no results, the forms' provenance."""
+    metas = [f.extraction_metadata for f in forms]
+    return LabDocument(
+        document_id=document_id,
+        results=[],
+        extraction_metadata=ExtractionMetadata(
+            model_id=",".join(dict.fromkeys(m.model_id for m in metas)) or "none",
+            prompt_version=",".join(dict.fromkeys(m.prompt_version for m in metas)) or "none",
+            extracted_at=max(m.extracted_at for m in metas),
+            page_count=max(1, sum(m.page_count for m in metas)),
+            verified_fraction=0.0,
+            unreadable_count=0,
+            unverified_count=0,
+        ),
+    )
+
+
 def chart_facts(prior: list[ChartLabResult]) -> list[ChartFact]:
     """The chart's lab history as briefing facts, oldest first so the newest value per test wins."""
     ordered = sorted(prior, key=lambda r: (r.observed_at, r.result_id))
@@ -543,19 +573,20 @@ def pdf_page_count(raw: bytes) -> int | None:
     return locked_page_count(raw)
 
 
-async def read_lab_document(
+DocumentT = TypeVar("DocumentT")
+
+
+async def _read_document(
     *,
-    document_id: int,
     document_base64: str,
     media_type: str,
-    provider: ModelProvider,
-    budget_seconds: float | None = None,
-) -> tuple[LabDocument | None, str | None]:
-    """Decode and extract one lab document. Never raises for a bad file, a model failure or a slow read.
+    extract: Callable[[bytes], Awaitable[DocumentT]],
+    budget_seconds: float | None,
+) -> tuple[DocumentT | None, str | None]:
+    """Decode, cap the page count, and run ``extract`` within the budget.
 
-    Returns the document, or ``None`` with a fixed reason code. Shared by the
-    extract route and the briefing graph's intake-extractor, so both report the
-    same code for the same failure.
+    Never raises for a bad file, a model failure or a slow read: returns the
+    document, or ``None`` with a fixed reason code.
     """
     try:
         raw = base64.b64decode(document_base64, validate=True)
@@ -567,12 +598,7 @@ async def read_lab_document(
             return None, "too_many_pages"
     try:
         async with asyncio.timeout(DOCUMENT_EXTRACT_BUDGET_SECONDS if budget_seconds is None else budget_seconds):
-            document = await extract_lab_document(
-                document_id=document_id,
-                pdf_bytes=raw,
-                media_type=media_type,
-                provider=provider,
-            )
+            document = await extract(raw)
     except TimeoutError:
         return None, "budget_exhausted"
     except ProviderError:
@@ -582,7 +608,60 @@ async def read_lab_document(
     return document, None
 
 
-def printed_identity_of(document: LabDocument) -> PrintedIdentity | None:
+async def read_lab_document(
+    *,
+    document_id: int,
+    document_base64: str,
+    media_type: str,
+    provider: ModelProvider,
+    budget_seconds: float | None = None,
+) -> tuple[LabDocument | None, str | None]:
+    """Decode and extract one lab document (see ``_read_document``).
+
+    Shared by the extract route and the briefing graph's intake-extractor, so
+    both report the same code for the same failure.
+    """
+    return await _read_document(
+        document_base64=document_base64,
+        media_type=media_type,
+        # Looked up at call time, so a test can replace the extractor.
+        extract=lambda raw: extract_lab_document(
+            document_id=document_id, pdf_bytes=raw, media_type=media_type, provider=provider
+        ),
+        budget_seconds=budget_seconds,
+    )
+
+
+async def read_intake_document(
+    *,
+    document_id: int,
+    document_base64: str,
+    media_type: str,
+    provider: ModelProvider,
+    budget_seconds: float | None = None,
+) -> tuple[IntakeForm | None, str | None]:
+    """Decode and extract one intake form: the same page cap, budget and reason codes as a lab."""
+    return await _read_document(
+        document_base64=document_base64,
+        media_type=media_type,
+        extract=lambda raw: extract_intake_document(
+            document_id=document_id, document_bytes=raw, media_type=media_type, provider=provider
+        ),
+        budget_seconds=budget_seconds,
+    )
+
+
+def stored_form(form: IntakeForm) -> IntakeForm:
+    """The form as the module may store it: the written name and DOB removed (ADR-012).
+
+    They go to the module once, top-level, as ``printed_identity``; the module
+    keeps only match / mismatch / missing. Sex and phone stay.
+    """
+    demographics = form.demographics.model_copy(update={"name": None, "date_of_birth": None})
+    return form.model_copy(update={"printed_identity": None, "demographics": demographics})
+
+
+def printed_identity_of(document: LabDocument | IntakeForm) -> PrintedIdentity | None:
     """The identity printed on the document, if the extractor read one (contract C2).
 
     Read by attribute so this route works before and after ``LabDocument``
@@ -603,40 +682,37 @@ async def run_document_extract(request: DocumentExtractRequest, *, provider: Mod
         "doc_type": request.doc_type,
     }
     with span("document_extract", cid=request.correlation_id, stage=request.doc_type) as attrs:
-        if request.doc_type != "lab_pdf":
+        intake = request.doc_type == "intake_form"
+        read = read_intake_document if intake else read_lab_document
+        document, reason = await read(
+            document_id=request.document_id,
+            document_base64=request.document_base64,
+            media_type=request.media_type,
+            provider=provider,
+        )
+        if document is None:
             response = DocumentExtractResponse(
                 **base,
                 status="degraded",
-                degraded_reason=DOC_TYPE_NOT_SUPPORTED_YET,
-                prompt_version="none",
+                degraded_reason=reason,
+                prompt_version=INTAKE_EXTRACTION_PROMPT_VERSION if intake else LAB_EXTRACTION_PROMPT_VERSION,
                 extraction_model="none",
             )
         else:
-            document, reason = await read_lab_document(
-                document_id=request.document_id,
-                document_base64=request.document_base64,
-                media_type=request.media_type,
-                provider=provider,
+            # ADR-012: the printed name/DOB go to the module once, top-level, for its
+            # identity check - never inside the extraction it stores (extraction_json).
+            stored = (
+                stored_form(document) if isinstance(document, IntakeForm)
+                else document.model_copy(update={"printed_identity": None})
             )
-            if document is None:
-                response = DocumentExtractResponse(
-                    **base,
-                    status="degraded",
-                    degraded_reason=reason,
-                    prompt_version=LAB_EXTRACTION_PROMPT_VERSION,
-                    extraction_model="none",
-                )
-            else:
-                response = DocumentExtractResponse(
-                    **base,
-                    prompt_version=document.extraction_metadata.prompt_version,
-                    extraction_model=document.extraction_metadata.model_id,
-                    # ADR-012: the printed name/DOB go to the module once, top-level, for its
-                    # identity check - never inside the extraction it stores (extraction_json).
-                    extraction=document.model_copy(update={"printed_identity": None}),
-                    printed_identity=printed_identity_of(document),
-                )
-                attrs["records"] = len(document.results)
+            response = DocumentExtractResponse(
+                **base,
+                prompt_version=document.extraction_metadata.prompt_version,
+                extraction_model=document.extraction_metadata.model_id,
+                extraction=stored,
+                printed_identity=printed_identity_of(document),
+            )
+            attrs["records"] = _record_count(stored)
         attrs["outcome"] = response.status
         attrs["reason_code"] = response.degraded_reason
         score("document_extract_degraded", response.status != "ok", data_type="BOOLEAN")
@@ -647,9 +723,18 @@ async def run_document_extract(request: DocumentExtractRequest, *, provider: Mod
             doc_type=request.doc_type,
             status=response.status,
             reason_code=response.degraded_reason,
-            results=len(response.extraction.results) if response.extraction is not None else 0,
+            results=_record_count(response.extraction),
         )
         return response
+
+
+def _record_count(extraction: LabDocument | IntakeForm | None) -> int:
+    """Results on a lab, cited fields and items on an intake form: a count, never content."""
+    if extraction is None:
+        return 0
+    if isinstance(extraction, IntakeForm):
+        return len(all_citations(extraction))
+    return len(extraction.results)
 
 
 async def run_document_briefing(
@@ -712,10 +797,13 @@ __all__ = [
     "build_reranker",
     "chart_facts",
     "combine_documents",
+    "empty_lab_document",
     "drafts_to_candidates",
     "get_retriever",
     "printed_identity_of",
+    "read_intake_document",
     "read_lab_document",
+    "stored_form",
     "run_document_extract",
     "run_document_briefing",
 ]

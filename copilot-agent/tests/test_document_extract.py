@@ -124,15 +124,55 @@ def test_a_tampered_body_is_refused(stub_client: TestClient) -> None:
     assert stub_client.post(ROUTE, content=body.replace(b"101", b"102"), headers=headers).status_code == 401
 
 
-def test_an_intake_form_is_not_supported_yet_and_calls_no_model() -> None:
-    for c in _client(_NeverCalled):
-        body = extract_body(doc_type="intake_form")
-        r = _post(c, body)
-    assert r.status_code == 200
-    d = r.json()
-    assert d["status"] == "degraded"
-    assert d["degraded_reason"] == "doc_type_not_supported_yet"
+INTAKE = Path(__file__).parent.parent / "fixtures" / "documents" / "intake"
+
+
+def intake_body(**over: object) -> bytes:
+    payload = json.loads(extract_body(doc_type="intake_form", document_id=301))
+    payload["document_base64"] = base64.b64encode((INTAKE / "intake_typed_evelyn.pdf").read_bytes()).decode()
+    payload.update(over)
+    return json.dumps(payload).encode()
+
+
+def test_an_intake_form_is_extracted_with_the_intake_prompt(stub_client: TestClient) -> None:
+    from app.providers.prompt import INTAKE_EXTRACTION_PROMPT_VERSION
+
+    d = _post(stub_client, intake_body()).json()
+    assert d["status"] == "ok" and d["degraded_reason"] is None
     assert d["doc_type"] == "intake_form"
+    assert d["prompt_version"] == INTAKE_EXTRACTION_PROMPT_VERSION
+    extraction = d["extraction"]
+    assert extraction["doc_type"] == "intake_form" and extraction["document_id"] == 301
+    assert [m["name"] for m in extraction["current_medications"]] == ["Metformin", "Lisinopril", "Atorvastatin"]
+    assert all(m["verification_status"] == "verified_exact" and m["citation"]["bbox"] for m in extraction["current_medications"])
+
+
+def test_an_intake_forms_printed_identity_goes_top_level_and_never_into_the_stored_extraction(stub_client: TestClient) -> None:
+    """ADR-012: the module keeps only match/mismatch/missing; the name and DOB are not stored."""
+    d = _post(stub_client, intake_body()).json()
+    assert d["printed_identity"] == {"name": "Demo, Evelyn", "dob": "1958-04-12"}
+    extraction = d["extraction"]
+    assert extraction["printed_identity"] is None
+    assert extraction["demographics"]["name"] is None and extraction["demographics"]["date_of_birth"] is None
+    assert "Evelyn" not in json.dumps(extraction) and "1958" not in json.dumps(extraction)
+    # Sex and phone stay: they are not the identity check's inputs.
+    assert extraction["demographics"]["sex"]["value"] == "F"
+
+
+def test_the_intake_extraction_json_round_trips_into_an_intake_form(stub_client: TestClient) -> None:
+    from app.intake import IntakeForm
+
+    extraction = _post(stub_client, intake_body()).json()["extraction"]
+    assert IntakeForm.model_validate(extraction).document_id == 301
+
+
+def test_an_intake_model_failure_is_a_fixed_code() -> None:
+    from app.providers.prompt import INTAKE_EXTRACTION_PROMPT_VERSION
+
+    for c in _client(_ExtractionDown):
+        d = _post(c, intake_body()).json()
+    assert d["status"] == "degraded" and d["degraded_reason"] == "extraction_unavailable"
+    assert d["prompt_version"] == INTAKE_EXTRACTION_PROMPT_VERSION
     assert d["extraction"] is None and d["printed_identity"] is None
 
 

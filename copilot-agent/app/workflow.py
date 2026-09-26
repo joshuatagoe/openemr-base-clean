@@ -61,10 +61,12 @@ from app.document_briefing import (
     chart_facts,
     combine_documents,
     drafts_to_candidates,
+    empty_lab_document,
     get_retriever,
     read_lab_document,
 )
 from app.documents import LabDocument
+from app.intake import IntakeForm
 from app.evidence import EvidencePackage, RetrievalQuery
 from app.observability import generation, log_event, score, span
 from app.providers.base import ModelProvider, ProviderError
@@ -114,6 +116,7 @@ class BriefingState(TypedDict, total=False):
     request: DocumentBriefingRequest
     doc_type: str
     document: LabDocument | None
+    intake_forms: list[IntakeForm]
     evidence: EvidencePackage | None
     retrieval_candidates: int
     candidates: list[ConsiderationCandidate]
@@ -295,10 +298,16 @@ async def run_supervised_briefing(
     """
     assert_langsmith_off()  # checked per request too: the environment can change after build
     initial: BriefingState = {"request": request, "doc_type": "lab_pdf", "routing": [], "status": BriefingStatus.OK, "reason": None}
+    intake_forms: list[IntakeForm] = []
     if request.documents is not None:
         # Stored extractions (ADR-012): the documents are already read, so the
         # supervisor's first decision is evidence retrieval, never extraction.
-        initial["document"] = combine_documents([d.extraction for d in request.documents])
+        labs = [d.extraction for d in request.documents if isinstance(d.extraction, LabDocument)]
+        intake_forms = [d.extraction for d in request.documents if isinstance(d.extraction, IntakeForm)]
+        initial["document"] = combine_documents(labs) if labs else empty_lab_document(request.document_ids[0], intake_forms)
+        initial["intake_forms"] = intake_forms
+        if not labs:
+            initial["doc_type"] = "intake_form"
     graph = build_graph()
     config: RunnableConfig = {
         "configurable": {"provider": provider, "reranker": reranker, "deadline": _now() + budget_seconds, "max_steps": max_steps},
@@ -341,6 +350,7 @@ async def run_supervised_briefing(
         evidence=evidence,
         prior_facts=chart_facts(request.prior_facts),
         considerations=candidates,
+        intake_forms=intake_forms,
         question=request.question,
     )
 
@@ -365,6 +375,7 @@ async def run_supervised_briefing(
         documents=len(request.document_ids),
         prior_facts=len(request.prior_facts),
         results=len(document.results),
+        intake_forms=len(intake_forms),
         snippets=len(evidence.snippets),
         considerations_proposed=len(candidates),
         considerations_shown=len(briefing.what_to_consider),

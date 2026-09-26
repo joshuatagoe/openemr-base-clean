@@ -1,0 +1,79 @@
+{
+  "case_id": "intake_typed_evelyn",
+  "content_digest": "c04f2546787aa83d",
+  "model": "claude-opus-5",
+  "output": {
+    "allergies": [
+      {
+        "page": 1,
+        "quote": "Allergy: Penicillin Reaction: hives",
+        "reaction": "hives",
+        "substance": "Penicillin",
+        "unreadable": false
+      }
+    ],
+    "allergies_none_text": "",
+    "chief_concern": "Tired and thirsty for three weeks",
+    "current_medications": [
+      {
+        "dose": "500 mg",
+        "frequency": "twice daily",
+        "name": "Metformin",
+        "page": 1,
+        "quote": "Medication: Metformin 500 mg twice daily",
+        "unreadable": false
+      },
+      {
+        "dose": "10 mg",
+        "frequency": "daily",
+        "name": "Lisinopril",
+        "page": 1,
+        "quote": "Medication: Lisinopril 10 mg daily",
+        "unreadable": false
+      },
+      {
+        "dose": "20 mg",
+        "frequency": "nightly",
+        "name": "Atorvastatin",
+        "page": 1,
+        "quote": "Medication: Atorvastatin 20 mg nightly",
+        "unreadable": false
+      }
+    ],
+    "family_history": [
+      {
+        "condition": "type 2 diabetes",
+        "page": 1,
+        "quote": "Family history: Mother type 2 diabetes",
+        "relation": "Mother",
+        "unreadable": false
+      },
+      {
+        "condition": "heart attack at 58",
+        "page": 1,
+        "quote": "Family history: Father heart attack at 58",
+        "relation": "Father",
+        "unreadable": false
+      }
+    ],
+    "family_history_none_text": "",
+    "illegible_fields": [],
+    "medications_none_text": "",
+    "page_count": 1,
+    "patient_dob": "",
+    "patient_dob_as_written": "04/12/1958",
+    "patient_name": "Demo, Evelyn",
+    "patient_phone": "555-0142",
+    "patient_sex": "F"
+  },
+  "schema": "IntakeDraft",
+  "system_digest": "177a27a0f1fc4d4d",
+  "usage": {
+    "cached_input_tokens": 3285,
+    "input_tokens": 1899,
+    "latency_ms": 5844,
+    "model": "claude-opus-5",
+    "output_tokens": 621,
+    "provider": "anthropic"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "intake_typed_evelyn",
+  "kind": "intake",
+  "source": "project fixture, fixtures/documents/intake/_generate.py",
+  "test_class": "intake_clean",
+  "guards": "Every CR2 intake group is read as written and every item is verified against the text layer with a box. The written name and DOB are returned for the module's identity check.",
+  "document": "intake/intake_typed_evelyn.pdf",
+  "media_type": "application/pdf",
+  "document_id": 301,
+  "expect": {
+    "chief_concern": "Tired and thirsty for three weeks",
+    "medications": [["Metformin", "500 mg", "twice daily"], ["Lisinopril", "10 mg", "daily"], ["Atorvastatin", "20 mg", "nightly"]],
+    "allergies": [["Penicillin", "hives"]],
+    "allergies_none": null,
+    "family_history": [["Mother", "type 2 diabetes"], ["Father", "heart attack at 58"]],
+    "printed_name": "Demo, Evelyn",
+    "printed_dob": "1958-04-12",
+    "min_verified_fraction": 1.0
+  }
+}
