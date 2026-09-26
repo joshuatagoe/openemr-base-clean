@@ -147,6 +147,26 @@ final class StoredExtractionBriefingTest extends TestCase
         self::assertSame(2, $agent->documentPosts[0]['request']['documents_not_included']);
     }
 
+    /**
+     * Each document's upload date goes as `received_at` (a date only): the agent dates a document by it
+     * when no collection date was read, to age out values nobody reviewed in 12 months. An unknown or
+     * zero date is sent as null - the agent then never hides the document.
+     */
+    public function testEachDocumentCarriesItsUploadDateAsReceivedAt(): void
+    {
+        $repo = new FakeProcessingRepository();
+        $repo->records[5] = ['received_at' => '2025-01-10 14:22:00'] + self::record(5, 'extracted', '{"document_id":5,"results":[{"test_name":"A"}]}');
+        $repo->records[6] = ['received_at' => '0000-00-00 00:00:00'] + self::record(6, 'extracted', '{"document_id":6,"results":[{"test_name":"A"}]}');
+        $repo->records[7] = self::record(7, 'extracted', '{"document_id":7,"results":[{"test_name":"A"}]}');
+        $repo->waiting(5, 6, 7);
+        $agent = new FakeAgentClient();
+
+        $this->controller($repo, $agent, [])->handleForSession(['authUserID' => self::USER, 'authUser' => 'dr_smith', 'pid' => self::PID], self::PID);
+
+        $sent = $agent->documentPosts[0]['request']['documents'];
+        self::assertSame(['2025-01-10', null, null], array_column($sent, 'received_at'));
+    }
+
     public function testNothingLeftOutWhenEveryWaitingDocumentFits(): void
     {
         $repo = new FakeProcessingRepository();

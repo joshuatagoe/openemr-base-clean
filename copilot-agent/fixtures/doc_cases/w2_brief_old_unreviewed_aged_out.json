@@ -1,0 +1,44 @@
+{
+  "case_id": "w2_brief_old_unreviewed_aged_out",
+  "kind": "briefing",
+  "source": "hand-authored 2026-09-26 (Week 2 final: 12-month age-out); replays existing extraction recordings - no new model calls",
+  "rubric": "citation_present",
+  "test_class": "stored_briefing",
+  "guards": "A stored document whose unreviewed values are more than 12 months older than the briefing date (UNREVIEWED_MAX_AGE_MONTHS) is not briefed as new facts: it is cited once, by a single Needs attention line, and never by What changed or a consideration. The recent document is briefed as before. Rubric citation_present: which lines may cite the old document is the point.",
+  "briefing_date": "2027-03-10",
+  "documents": [
+    {
+      "from_case": "gen_psa_in_range"
+    },
+    {
+      "from_case": "lab_clean_hba1c"
+    }
+  ],
+  "expect": {
+    "status": "ok",
+    "lines": [
+      {
+        "section": "needs_attention",
+        "tier": "document_stated",
+        "count": 1,
+        "text_contains": [
+          "An older document (collected 2026-03-03) has 1 value(s) nobody has reviewed"
+        ],
+        "document_source": "315",
+        "not_yet_in_chart": true
+      },
+      {
+        "document_source": "315",
+        "count": 1
+      },
+      {
+        "section": "what_changed",
+        "text_contains": [
+          "Hemoglobin A1c 8.9"
+        ],
+        "document_source": "101"
+      }
+    ],
+    "considerations_exclude_source": "315"
+  }
+}

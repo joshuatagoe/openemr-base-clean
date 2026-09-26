@@ -194,7 +194,7 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
                     $reviewed[] = (int) $v['result_index'];
                 }
             }
-            $out[] = ['document_id' => $id, 'doc_type' => $this->records[$id]['doc_type'], 'extraction_json' => $this->records[$id]['extraction_json'], 'reviewed_indices' => $reviewed];
+            $out[] = ['document_id' => $id, 'doc_type' => $this->records[$id]['doc_type'], 'extraction_json' => $this->records[$id]['extraction_json'], 'reviewed_indices' => $reviewed, 'received_at' => $this->records[$id]['received_at'] ?? null];
         }
         return $out;
     }

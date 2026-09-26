@@ -188,7 +188,7 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
         // more than the limit, returned oldest first: a fully reviewed document takes no slot.
         // Lab and intake extractions: the briefing contract accepts both (C4, ADR-010).
         $rows = array_reverse(QueryUtils::fetchRecords(
-            "SELECT d.document_id, d.doc_type, d.extraction_json
+            "SELECT d.document_id, d.doc_type, d.extraction_json, od.date AS received_at
                FROM copilot_document d
                JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
               WHERE d.pid = ? AND d.status = 'extracted' AND d.doc_type IN ('lab_pdf', 'intake_form') AND d.extraction_json IS NOT NULL
@@ -215,6 +215,7 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
             'doc_type' => Scalar::str($r['doc_type'] ?? null),
             'extraction_json' => Scalar::str($r['extraction_json'] ?? null),
             'reviewed_indices' => $reviewed[Scalar::int($r['document_id'] ?? null)] ?? [],
+            'received_at' => self::nullable($r['received_at'] ?? null),
         ], $rows);
     }
 

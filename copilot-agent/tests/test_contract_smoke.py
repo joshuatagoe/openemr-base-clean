@@ -184,6 +184,34 @@ def test_documents_left_out_at_the_cap_arrive_as_a_count_and_are_stated(fixture_
     assert want in b["briefing"]["limitations"] and want in b["rendered_text"]
 
 
+def test_an_old_undated_document_arrives_with_received_at_and_is_one_needs_attention_line(fixture_payload: dict) -> None:
+    """Milestone 4: the module sends each document's upload date; an unreviewed document more than
+    12 months old is one Needs attention line, not new facts. No collection date here, so the upload
+    date decides (a date years back, so the real clock cannot flip this test)."""
+    for client in _client_with(_ChartOpenProvider()):
+        body = extract_body("lab_hba1c_clean.pdf", document_id=201)
+        ex = client.post("/v1/documents/extract", content=body, headers=signed(body)).json()
+        extraction = {**ex["extraction"], "collection_date": None,
+                      "results": [{**r, "collection_date": None} for r in ex["extraction"]["results"]]}
+        payload = {
+            "correlation_id": fixture_payload["context"]["correlation_id"],
+            "patient_uuid": ex["patient_uuid"],
+            "documents": [{"document_id": 201, "doc_type": "lab_pdf", "extraction": extraction, "received_at": "2020-01-15"}],
+            "prior_facts": [],
+            "question": None,
+            "documents_not_included": 0,
+        }
+        body = json.dumps(payload).encode()
+        r = client.post("/v1/documents/briefing", content=body, headers=signed(body))
+    assert r.status_code == 200, r.text
+    b = r.json()["briefing"]
+    assert b["what_changed"] == []
+    n = len(extraction["results"])
+    assert [(ln["line_id"], ln["text"], ln["document_citation"]["source_id"]) for ln in b["needs_attention"]] == [
+        ("aged-201", f"An older document (received 2020-01-15) has {n} value(s) nobody has reviewed.", "201")
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Tracing: no new field leaks into a span
 # --------------------------------------------------------------------------- #

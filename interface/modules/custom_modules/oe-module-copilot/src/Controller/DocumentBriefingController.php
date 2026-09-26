@@ -263,7 +263,13 @@ final class DocumentBriefingController
                 }
                 $extraction['results'] = $kept;
             }
-            $documents[] = ['document_id' => $row['document_id'], 'doc_type' => $row['doc_type'], 'extraction' => $extraction];
+            $documents[] = [
+                'document_id' => $row['document_id'],
+                'doc_type' => $row['doc_type'],
+                'extraction' => $extraction,
+                // The upload date: the agent dates a document by it when no collection date was read.
+                'received_at' => self::uploadDate($row['received_at'] ?? null),
+            ];
         }
         if ($documents === []) {
             // "Nothing read" only when that is true: documents that were read and fully reviewed are a different
@@ -310,6 +316,15 @@ final class DocumentBriefingController
             ]);
             return [self::degraded($correlationId, $patientUuid, null, self::DEGRADED_AGENT_UNAVAILABLE), $e->getReason()];
         }
+    }
+
+    /** `Y-m-d` from a stored datetime; null when unknown or a zero date (the agent never hides an undated document). */
+    private static function uploadDate(mixed $stored): ?string
+    {
+        if (!is_string($stored) || preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $stored, $m) !== 1) {
+            return null;
+        }
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
     }
 
     /**

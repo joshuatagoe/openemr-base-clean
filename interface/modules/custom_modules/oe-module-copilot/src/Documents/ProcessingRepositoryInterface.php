@@ -93,8 +93,9 @@ interface ProcessingRepositoryInterface
      *
      * `reviewed_indices`: result positions whose value was filed, rejected or un-filed - the briefing
      * leaves them out (filed values reach it as chart history instead).
+     * `received_at`: the OpenEMR upload date (`documents.date`) as stored, or null.
      *
-     * @return list<array{document_id:int, doc_type:string, extraction_json:string, reviewed_indices:list<int>}>
+     * @return list<array{document_id:int, doc_type:string, extraction_json:string, reviewed_indices:list<int>, received_at?:?string}>
      */
     public function listExtractions(int $pid, int $limit): array;
 

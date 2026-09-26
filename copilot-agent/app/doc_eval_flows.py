@@ -32,6 +32,7 @@ import os
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,10 @@ ROOT = Path(__file__).resolve().parent.parent
 DOC_CASES_DIR = ROOT / "fixtures" / "doc_cases"
 DOCUMENTS_DIR = ROOT / "fixtures" / "documents"
 FOLLOWUP_BUNDLE = ROOT / "fixtures" / "lab_followup.json"
+
+#: The briefing date every briefing case runs on unless it sets ``briefing_date``: the fixtures'
+#: collection dates are fixed, so a real clock would age them out of the briefing a year on.
+EVAL_BRIEFING_DATE = "2026-09-26"
 
 #: A synthetic patient uuid; a canary in every flow case.
 PATIENT_UUID = "a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7"
@@ -312,7 +317,10 @@ async def _run_briefing(case: dict[str, Any], model: str) -> tuple[Any, Any, _An
         src = _source_case(spec["from_case"])
         document = await _replayed(src, model)
         canaries |= _document_canaries(src, document)
-        documents.append(_stored(spec, document))
+        stored = _stored(spec, document)
+        if spec.get("received_at") is not None:
+            stored["received_at"] = spec["received_at"]
+        documents.append(stored)
     chart_meds = case.get("chart_medications")
     canaries |= {m["drug_name"] for m in chart_meds or []}
     request = DocumentBriefingRequest.model_validate({
@@ -334,6 +342,7 @@ async def _run_briefing(case: dict[str, Any], model: str) -> tuple[Any, Any, _An
             reranker=build_reranker("fake", region="us-east-1"),
             budget_seconds=case.get("budget_seconds", DOCUMENT_BRIEFING_BUDGET_SECONDS),
             max_steps=case.get("max_steps", MAX_ROUTING_STEPS),
+            as_of=date.fromisoformat(case.get("briefing_date", EVAL_BRIEFING_DATE)),
         )
     return request, response, provider, canaries, known_records
 
@@ -406,6 +415,13 @@ def score_briefing_case(case: dict[str, Any], *, model: str) -> Any:
         rendered = response.rendered_text.casefold()
         for s in expect.get("never_shown", []):
             checks.expect(s.casefold() not in shown and s.casefold() not in rendered, f"{s!r} reached the briefing")
+        if "considerations_exclude_source" in expect:
+            excluded = expect["considerations_exclude_source"]
+            for c in briefing.what_to_consider:
+                checks.expect(
+                    all(f.document_citation is None or f.document_citation.source_id != excluded for f in c.facts),
+                    f"consideration {c.consideration_id} draws on document {excluded}",
+                )
         for s in expect.get("limitations_contain", []):
             checks.expect(any(s in lim for lim in briefing.limitations), f"no limitation mentions {s!r}")
         if "refusal" in expect:
