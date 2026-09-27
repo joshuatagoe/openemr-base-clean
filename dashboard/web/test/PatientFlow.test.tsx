@@ -96,13 +96,13 @@ describe('patient search (mode A)', () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     await userEvent.click(await screen.findByRole('button', { name: 'Search' }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(window.location.search).toBe('');
     await userEvent.type(screen.getByLabelText('Name'), '<b>x');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Names may contain letters, spaces, apostrophes, hyphens and dots.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Use only letters, spaces, apostrophes, hyphens and dots in the name.');
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
     // Only the landing list was requested.
     expect(search.seen).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('patient search (mode A)', () => {
     const search = patientSearch(searchset());
     server.use(signedIn, search.handler);
     renderAt('/dashboard?name=Nobody');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients found.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients match.'));
     expect(screen.getByLabelText('Name')).toHaveValue('Nobody');
   });
 
@@ -127,7 +127,7 @@ describe('patient search (mode A)', () => {
       }),
     );
     renderAt('/dashboard?name=Sample');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Patient search failed');
+    expect(await screen.findByRole('alert')).toHaveTextContent('OpenEMR returned an error.');
     expect(calls).toBe(3);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
