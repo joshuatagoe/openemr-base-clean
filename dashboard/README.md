@@ -222,7 +222,7 @@ Verified on the dev stack (2026-09-27, `drdash`, pid 7): the menu entry and the 
 1. *Administration → Config → Connectors*: **Site Address Override** (`site_addr_oath`) = `https://<openemr-host>`. Behind Railway's TLS proxy Apache sees plain http, so an empty value makes the issuer and every OAuth redirect `http://…` and the `Secure` OAuth cookie is dropped (A3 §0). Also on: **Enable OpenEMR Standard FHIR REST API** and **Enable OpenEMR Standard REST API** (the medication split uses one standard-API route). Password grant can stay off; nothing here uses it.
 2. Check discovery; all three values must start with `https://<openemr-host>`:
    ```sh
-   curl -s https://<openemr-host>/oauth2/default/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'
+   curl -s https://<openemr-host>/oauth2/default/.well-known/openid-configuration | grep -o '"issuer": *"[^"]*"'
    curl -s https://<openemr-host>/apis/default/fhir/.well-known/smart-configuration | grep -o '"\(authorization\|token\)_endpoint":"[^"]*"'
    ```
 
