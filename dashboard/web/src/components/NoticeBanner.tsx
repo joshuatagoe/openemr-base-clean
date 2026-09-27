@@ -10,7 +10,7 @@ export function NoticeBanner() {
       </p>
     );
   }
-  const text = notice.kind === 'session_expired' ? 'Your session has expired. Please sign in again.' : notice.message;
+  const text = notice.kind === 'session_expired' ? 'Your session expired. Sign in again to continue.' : notice.message;
   return (
     <p className="notice notice-warning" role="alert">
       {text}

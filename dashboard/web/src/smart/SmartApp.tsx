@@ -11,6 +11,7 @@ import { DataSourceContext, useDataSource } from '../data/DataSourceContext';
 import { createQueryClient } from '../data/queryClient';
 import { SmartDataSource } from '../data/SmartDataSource';
 import { beginLaunch, completeLaunch, parseLaunchParams, SmartLaunchError } from './launch';
+import { Spinner } from '../components/Card';
 import { SmartPatientView } from './SmartPatientView';
 
 type Phase =
@@ -25,35 +26,39 @@ type Phase =
 
 const RELAUNCH = "Open the dashboard again from the patient's chart in OpenEMR.";
 
-const OAUTH_REASONS: Readonly<Record<string, string>> = {
-  access_denied: 'access was denied',
-  invalid_scope: 'OpenEMR did not accept the requested access',
-  invalid_client: 'the dashboard is not registered or not enabled in OpenEMR',
-  unauthorized_client: 'the dashboard is not registered or not enabled in OpenEMR',
-  login_required: 'you are not signed in to OpenEMR',
+const ASK_ADMIN = 'Ask your OpenEMR administrator';
+
+// Each reason says what happened; the sentence after it says what to do: a
+// relaunch when trying again can help, the administrator when it can't.
+const OAUTH_REASONS: Readonly<Record<string, { reason: string; next: string }>> = {
+  access_denied: { reason: 'access was denied', next: RELAUNCH },
+  invalid_scope: { reason: "OpenEMR didn't accept the requested access", next: `${ASK_ADMIN} to check the dashboard's API client.` },
+  invalid_client: { reason: "the dashboard isn't registered or enabled in OpenEMR", next: `${ASK_ADMIN} to enable the dashboard's API client.` },
+  unauthorized_client: { reason: "the dashboard isn't registered or enabled in OpenEMR", next: `${ASK_ADMIN} to enable the dashboard's API client.` },
+  login_required: { reason: "you're not signed in to OpenEMR", next: `Sign in to OpenEMR, then ${RELAUNCH.charAt(0).toLowerCase()}${RELAUNCH.slice(1)}` },
 };
 
 function describeOAuthError(code: string): string {
-  const reason = Object.hasOwn(OAUTH_REASONS, code) ? OAUTH_REASONS[code] : undefined;
-  return `Sign-in did not complete: ${reason ?? 'an unexpected error occurred'}.`;
+  const known = Object.hasOwn(OAUTH_REASONS, code) ? OAUTH_REASONS[code] : undefined;
+  return known ? `Sign-in didn't complete: ${known.reason}. ${known.next}` : `Sign-in didn't complete: an unexpected error occurred. ${RELAUNCH}`;
 }
 
 function describeLaunchError(e: unknown): string {
-  if (!(e instanceof SmartLaunchError)) return 'Sign-in did not complete: an unexpected error occurred.';
+  if (!(e instanceof SmartLaunchError)) return `Sign-in didn't complete: an unexpected error occurred. ${RELAUNCH}`;
   switch (e.code) {
     case 'bad_issuer':
-      return 'The launch did not come from this OpenEMR server.';
+      return `The launch didn't come from this OpenEMR server. ${RELAUNCH}`;
     case 'not_configured':
-      return 'The dashboard is not configured: its SMART client id is missing. See the dashboard README.';
+      return `The dashboard isn't set up yet (no SMART client ID). ${ASK_ADMIN}.`;
     case 'bad_configuration':
     case 'discovery_failed':
-      return "OpenEMR's SMART configuration could not be used.";
+      return `Couldn't use OpenEMR's SMART configuration, so sign-in didn't start. ${ASK_ADMIN} to check the SMART on FHIR settings.`;
     case 'state_mismatch':
-      return 'Sign-in did not complete: the sign-in link expired or was already used.';
+      return `Sign-in didn't complete: the sign-in link expired or was already used. ${RELAUNCH}`;
     case 'token_failed':
-      return 'Sign-in did not complete: OpenEMR did not issue a token (is the dashboard client enabled?).';
+      return `Sign-in didn't complete: OpenEMR didn't issue a token. ${ASK_ADMIN} to check that the dashboard's API client is enabled.`;
     case 'no_patient':
-      return 'OpenEMR did not say which patient to show. Open the dashboard from a patient chart.';
+      return "OpenEMR didn't say which patient to show. Open the dashboard from a patient's chart.";
   }
 }
 
@@ -138,14 +143,19 @@ export function SmartApp({ navigate = (url) => window.location.assign(url), quer
     <QueryClientProvider client={qc}>
       {phase.s === 'ready' ? (
         <DataSourceContext.Provider value={phase.ds}>
-          <AppBanner>
-            <SignedInAs practitionerId={phase.practitionerId} />
-            <button type="button" className="btn btn-secondary" onClick={phase.signOut}>
-              Sign out
-            </button>
-          </AppBanner>
+          {/* OpenEMR's tab bar is already above the app: no title row (plan L5). */}
           <main className="app-main">
-            <SmartPatientView patientId={phase.patientId} />
+            <SmartPatientView
+              patientId={phase.patientId}
+              account={
+                <div className="bar-account">
+                  <SignedInAs practitionerId={phase.practitionerId} />
+                  <button type="button" className="btn btn-secondary" onClick={phase.signOut}>
+                    Sign out
+                  </button>
+                </div>
+              }
+            />
           </main>
         </DataSourceContext.Provider>
       ) : (
@@ -192,7 +202,8 @@ function PhaseView({ phase }: { phase: Phase }) {
     case 'redirecting':
       return (
         <p className="muted" role="status">
-          Signing in with OpenEMR...
+          <Spinner />
+          Signing in with OpenEMR…
         </p>
       );
     case 'needs_launch':
@@ -205,7 +216,7 @@ function PhaseView({ phase }: { phase: Phase }) {
     case 'expired':
       return (
         <p className="notice notice-warning" role="alert">
-          Your session has expired. {RELAUNCH}
+          Your session expired. {RELAUNCH}
         </p>
       );
     case 'signed_out':

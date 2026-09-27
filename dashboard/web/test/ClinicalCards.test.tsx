@@ -148,7 +148,7 @@ describe('Allergies card', () => {
   it('403: permission message, no retry button', async () => {
     const { ds, search } = fakeSource({ search: { AllergyIntolerance: () => Promise.reject(forbidden()) } });
     renderCards(ds);
-    expect(await within(card('Allergies')).findByText("You don't have permission to view allergies.")).toBeInTheDocument();
+    expect(await within(card('Allergies')).findByText("Your OpenEMR role can't view allergies. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
     expect(within(card('Allergies')).queryByRole('button', { name: 'Try again' })).toBeNull();
     expect(search.mock.calls.filter(([t]) => t === 'AllergyIntolerance')).toHaveLength(1);
   });
@@ -160,7 +160,7 @@ describe('Allergies card', () => {
     });
     renderCards(ds);
     const retry = await within(card('Allergies')).findByRole('button', { name: 'Try again' });
-    expect(within(card('Allergies')).getByText('Allergies could not be loaded.')).toBeInTheDocument();
+    expect(within(card('Allergies')).getByText("Couldn't load allergies: OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.")).toBeInTheDocument();
     fail = false;
     await userEvent.click(retry);
     expect(await within(card('Allergies')).findByText(/Latex/)).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe('Medical Problems card', () => {
       search: { Condition: (p) => (p.category === 'encounter-diagnosis' ? Promise.reject(forbidden()) : Promise.resolve(bundle())) },
     });
     renderCards(ds);
-    expect(await within(card('Medical Problems')).findByText("You don't have permission to view medical problems.")).toBeInTheDocument();
+    expect(await within(card('Medical Problems')).findByText("Your OpenEMR role can't view medical problems. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
   });
 });
 
@@ -250,7 +250,11 @@ describe('Medications and Prescriptions cards (uuid split)', () => {
     const cells = within(rows[0] as HTMLElement).getAllByRole('cell');
     expect(cells.map((c) => c.textContent)).toEqual(['Metformin HCl 500 mg', '1 tab BID', '60', '—', '2026-01-15 09:00:00']);
     // Refills: OpenEMR's FHIR always says 0, so the number is not shown (gap G8).
-    expect(cells[3]).toHaveAttribute('title', expect.stringContaining('not available'));
+    // One visible footnote explains the "—" (no hover-only tooltip); the column header points to it.
+    expect(cells[3]).not.toHaveAttribute('title');
+    const refills = within(table).getByRole('columnheader', { name: 'Refills' });
+    expect(refills).toHaveAccessibleDescription("Refills aren't available from OpenEMR's FHIR API.");
+    expect(within(card('Prescriptions')).getAllByText("Refills aren't available from OpenEMR's FHIR API.")).toHaveLength(1);
     expect(screen.queryByText('Stopped Rx')).toBeNull();
     expect(ds.patientMedicationList).toHaveBeenCalledWith(PID_A, expect.anything());
   });
@@ -283,7 +287,7 @@ describe('Medications and Prescriptions cards (uuid split)', () => {
     });
     renderCards(ds);
     const combined = await screen.findByRole('region', { name: 'Medications and prescriptions (combined)' });
-    expect(within(combined).getByText(/cannot be told apart/)).toBeInTheDocument();
+    expect(within(combined).getByText("This sign-in can't read OpenEMR's medication list, so medications and prescriptions are shown together, each order once.")).toBeInTheDocument();
     expect(within(combined).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Lisinopril 20 mg 1 tab daily', 'Metformin HCl 500 mg 1 tab BID']);
     expect(screen.queryByRole('region', { name: 'Medications' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Prescriptions' })).toBeNull();
@@ -299,8 +303,8 @@ describe('Medications and Prescriptions cards (uuid split)', () => {
   it('MedicationRequest forbidden: permission message on both cards', async () => {
     const { ds } = fakeSource({ search: { MedicationRequest: () => Promise.reject(forbidden()) } });
     renderCards(ds);
-    expect(await within(card('Medications')).findByText("You don't have permission to view medications.")).toBeInTheDocument();
-    expect(within(card('Prescriptions')).getByText("You don't have permission to view prescriptions.")).toBeInTheDocument();
+    expect(await within(card('Medications')).findByText("Your OpenEMR role can't view medications. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
+    expect(within(card('Prescriptions')).getByText("Your OpenEMR role can't view prescriptions. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
   });
 
   it('subject guard on both sources: other patients\' MedicationRequests and list rows are dropped', async () => {
@@ -337,7 +341,9 @@ describe('Care Team card', () => {
     expect(btn).toHaveAttribute('aria-expanded', 'true');
   }
 
-  it('team name + status badge; one row per person; Role / Facility / Since from FHIR; names 403 → "Name not available (permission)"', async () => {
+  const HIDDEN_NOTE = "Member and facility names are hidden: your OpenEMR role can't read provider or facility records.";
+
+  it('team name + status badge; one row per person; Role / Facility / Since from FHIR; names 403 → "—" and one note for the card', async () => {
     const { ds, read } = fakeSource({
       search: { CareTeam: () => Promise.resolve(bundle(team())) },
       read: (type, id) =>
@@ -349,11 +355,16 @@ describe('Care Team card', () => {
     expect(await within(c).findByRole('heading', { name: /Primary team/ })).toHaveTextContent('Primary team Active');
     const table = within(c).getByRole('table');
     expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Type', 'Member', 'Role', 'Facility', 'Since', 'Status', 'Note']);
-    await waitFor(() => expect(within(table).getAllByText('Name not available (permission)')).toHaveLength(2));
+    // The permission is explained once, under the team name, not in every row.
+    expect(await within(c).findByText(HIDDEN_NOTE)).toBeInTheDocument();
+    expect(within(c).getAllByText(HIDDEN_NOTE)).toHaveLength(1);
+    expect(within(c).queryByText(/Name not available \(permission\)/)).toBeNull();
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(3);
     const first = within(rows[0] as HTMLElement).getAllByRole('cell').map((td) => td.textContent);
-    expect(first.slice(0, 5)).toEqual(['Provider', 'Name not available (permission)', 'Family medicine', 'Synthetic Clinic', '2024-03-01']);
+    expect(first.slice(0, 5)).toEqual(['Provider', '—', 'Family medicine', 'Synthetic Clinic', '2024-03-01']);
+    expect(within(table).getByRole('columnheader', { name: 'Member' })).toHaveAccessibleDescription(HIDDEN_NOTE);
+    expect(within(table).getByRole('columnheader', { name: 'Facility' })).toHaveAccessibleDescription(HIDDEN_NOTE);
     const related = within(rows[2] as HTMLElement).getAllByRole('cell').map((td) => td.textContent);
     expect(related.slice(0, 4)).toEqual(['Related Person', 'Name not available', 'Mother', '']);
     // The facility is read once for both members.
@@ -373,17 +384,41 @@ describe('Care Team card', () => {
     await openCareTeam();
     expect(await within(card('Care Team')).findByText('Synthdoc, Dana')).toBeInTheDocument();
     expect(within(card('Care Team')).getByText('Heartwell, Lee')).toBeInTheDocument();
-    expect(within(card('Care Team')).getAllByText('Name not available (permission)')).toHaveLength(2); // the facility
+    // The facility is still forbidden, so the note stays.
+    expect(await within(card('Care Team')).findByText(HIDDEN_NOTE)).toBeInTheDocument();
   });
 
-  it('member Status and Note are not in OpenEMR FHIR: shown as not available', async () => {
+  it('no permission note when every name is readable', async () => {
+    const { ds } = fakeSource({
+      search: { CareTeam: () => Promise.resolve(bundle(team())) },
+      read: (type, id) => {
+        if (type === 'Practitioner') return Promise.resolve(practitioner(id, 'Dana', id === PRACT_1 ? 'Synthdoc' : 'Heartwell'));
+        return Promise.resolve(organization(id, 'Synthetic Clinic'));
+      },
+    });
+    renderCards(ds);
+    await openCareTeam();
+    expect(await within(card('Care Team')).findByText('Heartwell, Dana')).toBeInTheDocument();
+    await waitFor(() => expect(within(card('Care Team')).getAllByText('Synthetic Clinic')).toHaveLength(2));
+    expect(within(card('Care Team')).queryByText(HIDDEN_NOTE)).toBeNull();
+    const member = within(card('Care Team')).getByRole('columnheader', { name: 'Member' });
+    expect(member).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('member Status and Note are not in OpenEMR FHIR: "—", explained by one footnote', async () => {
     const { ds } = fakeSource({ search: { CareTeam: () => Promise.resolve(bundle(team())) } });
     renderCards(ds);
     await openCareTeam();
-    const rows = within(await within(card('Care Team')).findByRole('table')).getAllByRole('row').slice(1);
+    const table = await within(card('Care Team')).findByRole('table');
+    const rows = within(table).getAllByRole('row').slice(1);
     const cells = within(rows[0] as HTMLElement).getAllByRole('cell');
     expect(cells[5]).toHaveTextContent('—');
     expect(cells[6]).toHaveTextContent('—');
+    expect(cells[5]).not.toHaveAttribute('title');
+    const footnote = "Status and note aren't available from OpenEMR's FHIR API.";
+    expect(within(card('Care Team')).getAllByText(footnote)).toHaveLength(1);
+    expect(within(table).getByRole('columnheader', { name: 'Status' })).toHaveAccessibleDescription(footnote);
+    expect(within(table).getByRole('columnheader', { name: 'Note' })).toHaveAccessibleDescription(footnote);
   });
 
   it('empty: "Nothing Recorded"; 403: permission message', async () => {
@@ -396,7 +431,7 @@ describe('Care Team card', () => {
     const { ds } = fakeSource({ search: { CareTeam: () => Promise.reject(forbidden()) } });
     renderCards(ds);
     await openCareTeam();
-    expect(await within(card('Care Team')).findByText("You don't have permission to view the care team.")).toBeInTheDocument();
+    expect(await within(card('Care Team')).findByText("Your OpenEMR role can't view the care team. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
   });
 
   it('drops a care team that belongs to another patient', async () => {
@@ -439,7 +474,10 @@ describe('Labs card (PHP labdata_fragment.php parity)', () => {
     expect(within(c).getByText('Tests: Hemoglobin A1c (2026-09-12 09:15:00)')).toBeInTheDocument();
     const enc = within(c).getByText('—');
     expect(enc.parentElement).toHaveTextContent('Encounter: —');
-    expect(enc).toHaveAttribute('title', expect.stringContaining('not available'));
+    expect(enc).not.toHaveAttribute('title');
+    const footnote = "The encounter isn't available from OpenEMR's FHIR API.";
+    expect(within(c).getByText(footnote)).toBeInTheDocument();
+    expect(enc).toHaveAccessibleDescription(footnote);
     // Parity card only: no values table.
     expect(within(c).queryByRole('table')).toBeNull();
     expect(within(c).queryByText(/8\.9/)).toBeNull();
@@ -465,7 +503,7 @@ describe('Labs card (PHP labdata_fragment.php parity)', () => {
     const { ds, search } = fakeSource({ search: { Observation: () => Promise.reject(forbidden()) } });
     renderCards(ds);
     await openLabs();
-    expect(await within(card('Labs')).findByText("You don't have permission to view lab data.")).toBeInTheDocument();
+    expect(await within(card('Labs')).findByText("Your OpenEMR role can't view lab data. If you need it, ask your OpenEMR administrator for access.")).toBeInTheDocument();
     expect(within(card('Labs')).queryByRole('button', { name: 'Try again' })).toBeNull();
     expect(search.mock.calls.filter(([t]) => t === 'Observation')).toHaveLength(1);
   });
@@ -476,7 +514,7 @@ describe('Labs card (PHP labdata_fragment.php parity)', () => {
     renderCards(ds);
     await openLabs();
     const retry = await within(card('Labs')).findByRole('button', { name: 'Try again' });
-    expect(within(card('Labs')).getByText('Lab data could not be loaded.')).toBeInTheDocument();
+    expect(within(card('Labs')).getByText(/^Couldn't load lab data: OpenEMR returned an error\./)).toBeInTheDocument();
     fail = false;
     await userEvent.click(retry);
     expect(await within(card('Labs')).findByText(/Hemoglobin A1c/)).toBeInTheDocument();
