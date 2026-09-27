@@ -101,6 +101,15 @@ final class GuzzleAgentClient implements AgentClientInterface
         return $decoded;
     }
 
+    public function refreshBundle(string $bundleId, array $request): array
+    {
+        if (preg_match('/^[0-9a-f-]{36}$/', $bundleId) !== 1) {
+            throw new AgentUnavailableException(AgentUnavailableException::REASON_BAD_RESPONSE);
+        }
+        // The bundle's own correlation id: the agent echoes it, and it ties this call to that bundle's trace.
+        return $this->postSignedJson('/v1/bundles/' . $bundleId . '/refresh', $request, Scalar::str($request['correlation_id'] ?? null), $this->config->agentTimeoutSeconds);
+    }
+
     /**
      * Sign and POST a JSON request, require 200, decode, and check the agent
      * echoes this request's correlation id and patient uuid.

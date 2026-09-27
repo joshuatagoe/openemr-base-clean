@@ -151,9 +151,11 @@ final class BriefingTicketController
      * @param int|null $requestedPid  the pid the panel was rendered with, if it sent one
      * @param string|null $refreshBundleId  an existing bundle id to re-ticket, or null for a new briefing
      * @param string|null $refreshCorrelationId  that bundle's original correlation id (the agent requires it to match)
+     * @param bool $refreshPendingFacts  with a refresh: also re-read this patient's pending document facts and lab
+     *                                   results and replace them in the agent's bundle (no briefing re-run, no model call)
      * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
      */
-    public function handleForSession(array $session, ?int $requestedPid = null, ?string $refreshBundleId = null, ?string $refreshCorrelationId = null): array
+    public function handleForSession(array $session, ?int $requestedPid = null, ?string $refreshBundleId = null, ?string $refreshCorrelationId = null, bool $refreshPendingFacts = false): array
     {
         $correlationId = Uuid::uuid4()->toString();
         $headers = self::RESPONSE_HEADERS + [self::CORRELATION_HEADER => $correlationId];
@@ -183,7 +185,7 @@ final class BriefingTicketController
         }
 
         if ($refreshBundleId !== null) {
-            return $this->refreshTicket($refreshBundleId, $refreshCorrelationId ?? '', $correlationId, $headers, $userId, $username, $pid, $decision['basis']);
+            return $this->refreshTicket($refreshBundleId, $refreshCorrelationId ?? '', $correlationId, $headers, $userId, $username, $pid, $decision['basis'], $refreshPendingFacts ? $encounter : false);
         }
 
         try {
@@ -316,6 +318,7 @@ final class BriefingTicketController
         $requestedPid = null;
         $refreshBundleId = null;
         $refreshCorrelationId = null;
+        $refreshPendingFacts = false;
         $json = json_decode($request->getContent(), true, 4);
         if (is_array($json)) {
             $requestedPid = Scalar::positiveIntOrNull($json['pid'] ?? null);
@@ -323,8 +326,9 @@ final class BriefingTicketController
             $refreshBundleId = is_string($raw) && $raw !== '' ? $raw : null;
             $rawCid = $json['refresh_correlation_id'] ?? null;
             $refreshCorrelationId = is_string($rawCid) && $rawCid !== '' ? $rawCid : null;
+            $refreshPendingFacts = ($json['refresh_pending_facts'] ?? null) === true;
         }
-        $result = $this->handleForSession($session, $requestedPid, $refreshBundleId, $refreshCorrelationId);
+        $result = $this->handleForSession($session, $requestedPid, $refreshBundleId, $refreshCorrelationId, $refreshPendingFacts);
         if (!headers_sent()) {
             // PHP's session cache limiter pre-sets a weaker Cache-Control; ensure no-store is the only one sent.
             header_remove('Cache-Control');
@@ -335,10 +339,15 @@ final class BriefingTicketController
     /**
      * Mint a fresh ticket for an existing bundle (authorization already passed).
      *
+     * With `$pendingEncounter` other than false (the session's encounter, or null), first replace the
+     * bundle's pending document facts and lab results at the agent (refreshFollowUpContext). That
+     * failing never fails the refresh: the ticket is still issued, with a `pending_facts_not_refreshed`
+     * warning, and follow-ups answer from the facts they had.
+     *
      * @param array<string,string> $headers
      * @return array{status:int, body:array<string,mixed>, headers:array<string,string>}
      */
-    private function refreshTicket(string $bundleId, string $bundleCid, string $correlationId, array $headers, int $userId, string $username, int $pid, ?string $basis): array
+    private function refreshTicket(string $bundleId, string $bundleCid, string $correlationId, array $headers, int $userId, string $username, int $pid, ?string $basis, int|null|false $pendingEncounter = false): array
     {
         if (!preg_match('/^[0-9a-f-]{36}$/', $bundleId) || !preg_match('/^[0-9a-f-]{36}$/', $bundleCid)) {
             return $this->error('invalid_bundle_id', $correlationId, $headers);
@@ -357,6 +366,15 @@ final class BriefingTicketController
             $this->logger->error('copilot source unavailable', ['cid' => $correlationId, 'source' => $e->getSource()]);
             return $this->error('source_unavailable', $correlationId, $headers);
         }
+        $warnings = [];
+        $outcome = 'ticket_refresh';
+        if ($pendingEncounter !== false) {
+            $sent = $this->refreshFollowUpContext($bundleId, $bundleCid, $correlationId, $patient, $userUuid, $pid, $pendingEncounter, $username);
+            $outcome = $sent === null ? 'pending_refresh; refreshed=no' : "pending_refresh; pending={$sent}";
+            if ($sent === null) {
+                $warnings[] = 'pending_facts_not_refreshed';
+            }
+        }
         $issuedAt = $this->issuedAt();
         // The ticket carries the bundle's original cid (supplied by the panel); the agent binds tickets by
         // bundle + patient + user and checks that cid against the stored bundle, so a wrong pair fails there.
@@ -369,7 +387,7 @@ final class BriefingTicketController
             $issuedAt,
             $this->config->ticketTtlSeconds,
         );
-        ($this->auditWriter)(self::AUDIT_EVENT, $username, true, "cid={$correlationId}; basis={$basis}; outcome=ticket_refresh; bundle_cid={$bundleCid}", $pid);
+        ($this->auditWriter)(self::AUDIT_EVENT, $username, true, "cid={$correlationId}; basis={$basis}; outcome={$outcome}; bundle_cid={$bundleCid}", $pid);
         $this->reporter->report($correlationId, TicketOutcomeReporterInterface::OUTCOME_TICKET_REFRESH);
         $this->logger->info('copilot ticket refreshed', ['cid' => $correlationId, 'basis' => $basis]);
         return ['status' => 200, 'body' => [
@@ -382,8 +400,53 @@ final class BriefingTicketController
             'ticket_expires_at' => gmdate(UtcDate::FORMAT, $issuedAt + $this->config->ticketTtlSeconds),
             'sections' => null,
             'degraded' => null,
-            'warnings' => [],
+            'warnings' => $warnings,
         ], 'headers' => $headers];
+    }
+
+    /**
+     * Re-read this patient's pending document facts and interval lab results (the same reads, limits,
+     * access filter and mapping as a new bundle) and replace them in the agent's bundle. The patient
+     * uuid and user uuid come from the session; the agent refuses the call unless they, the bundle's
+     * correlation id and (with lab results) the baseline note id match the bundle it holds. Lab results
+     * are sent only when the baseline note and the lab source could be read, so a failed read never
+     * empties them. Returns the number of pending facts sent, or null when the agent did not take them.
+     *
+     * @param array{pid:int, uuid:string} $patient
+     */
+    private function refreshFollowUpContext(string $bundleId, string $bundleCid, string $correlationId, array $patient, ?string $userUuid, int $pid, ?int $encounter, string $username): ?int
+    {
+        $request = [
+            'correlation_id' => $bundleCid,
+            'patient_uuid' => $patient['uuid'],
+        ];
+        if ($userUuid !== null) {
+            $request['user_uuid'] = $userUuid;
+        }
+        try {
+            [$asOf] = $this->resolveAsOf($pid, $encounter);
+            $note = $this->reader->findLatestSoapPlanBefore($pid, $asOf);
+            if ($note !== null) {
+                $labs = $this->reader->listLabResults($pid, $note['note_date'], self::LAB_RESULT_LIMIT);
+                $request += [
+                    'prior_note_id' => 'form_soap:' . Scalar::int($note['form_soap_id']),
+                    'lab_results' => $this->builder->mapLabResults($labs),
+                ];
+            }
+        } catch (SourceUnavailableException | InvalidArgumentException | RuntimeException $e) {
+            // The chart side could not be re-read: send the pending facts alone and keep the bundle's lab results.
+            $this->logger->warning('copilot refresh kept lab results', ['cid' => $correlationId, 'type' => $e::class]);
+        }
+        $request['pending_document_facts'] = $this->builder->mapPendingFacts($this->readPendingFacts($correlationId, $pid, $username));
+        try {
+            $this->agent->refreshBundle($bundleId, $request);
+        } catch (AgentUnavailableException $e) {
+            $this->logger->warning('copilot pending facts not refreshed', ['cid' => $correlationId, 'reason' => $e->getReason(), 'http_status' => $e->getHttpStatus()]);
+            return null;
+        }
+        $count = count($request['pending_document_facts']);
+        $this->logger->info('copilot pending facts refreshed', ['cid' => $correlationId, 'pending_facts' => $count, 'lab_results' => isset($request['lab_results']) ? count($request['lab_results']) : null]);
+        return $count;
     }
 
     /**

@@ -46,6 +46,8 @@ from app.contracts import (
     BriefingRequest,
     BriefingResponse,
     BundleAccepted,
+    BundleRefresh,
+    BundleRefreshed,
     CommitmentEvent,
     CompleteEvent,
     ContextBundle,
@@ -485,6 +487,56 @@ async def store_bundle(
         correlation_id=bundle.correlation_id,
         patient_uuid=bundle.patient_uuid,
         expires_at=stored.expires_at_datetime,
+    )
+
+
+@app.post(
+    "/v1/bundles/{bundle_id}/refresh",
+    response_model=BundleRefreshed,
+    tags=["bundles"],
+    responses={401: {"model": ErrorDetail}, 403: {"model": ErrorDetail}, 404: {"model": ErrorDetail}, 409: {"model": ErrorDetail}, 422: {"description": "Refresh failed contract validation"}, 503: {"model": ErrorDetail}},
+    openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/BundleRefresh"}}}, "required": True}},
+)
+async def refresh_bundle(
+    bundle_id: UUID,
+    response: Response,
+    body: bytes = Depends(require_signed_body),
+    store: BundleStore = Depends(get_store),
+) -> BundleRefreshed:
+    """Replace a stored bundle's pending document facts (and lab results) so follow-ups see the chart as it is now.
+
+    Module-signed. No model call and no briefing: the verified plan check and
+    the conversation stay. Fails closed on any disagreement with the stored
+    bundle, changing nothing.
+    """
+    try:
+        update = BundleRefresh.model_validate_json(body)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from None
+    cid = update.correlation_id
+    current = await store.get(bundle_id)
+    if current is None:
+        raise _error(status.HTTP_404_NOT_FOUND, "bundle_not_found", "The bundle has expired or was deleted; request a new briefing.", correlation_id=cid)
+    bundle = current.bundle
+    if bundle.patient_uuid != update.patient_uuid:
+        raise _error(status.HTTP_403_FORBIDDEN, "patient_mismatch", "The refresh does not match the bundle's patient.", correlation_id=cid)
+    if bundle.correlation_id != update.correlation_id:
+        raise _error(status.HTTP_403_FORBIDDEN, "correlation_mismatch", "The refresh does not match the bundle's correlation id.", correlation_id=cid)
+    if bundle.user_uuid is not None and bundle.user_uuid != update.user_uuid:
+        raise _error(status.HTTP_403_FORBIDDEN, "user_mismatch", "The refresh was not made for the bundle's user.", correlation_id=cid)
+    if update.lab_results is not None and update.prior_note_id != bundle.prior_note.note_id:
+        raise _error(status.HTTP_409_CONFLICT, "baseline_note_changed", "The lab results are for a different baseline note; request a new briefing.", correlation_id=cid)
+    stored = await store.replace_document_context(bundle_id, update.pending_document_facts, update.lab_results)
+    if stored is None:
+        raise _error(status.HTTP_404_NOT_FOUND, "bundle_not_found", "The bundle has expired or was deleted; request a new briefing.", correlation_id=cid)
+    response.headers[CORRELATION_HEADER] = str(cid)
+    log_event("bundle.refreshed", cid=cid, bundle_id=bundle_id, pending_facts=len(update.pending_document_facts), lab_results=None if update.lab_results is None else len(update.lab_results))
+    return BundleRefreshed(
+        bundle_id=bundle_id,
+        correlation_id=cid,
+        patient_uuid=update.patient_uuid,
+        pending_facts=len(update.pending_document_facts),
+        lab_results=None if update.lab_results is None else len(update.lab_results),
     )
 
 

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from app.contracts import ContextBundle, EvidenceMatch
+from app.contracts import ContextBundle, EvidenceMatch, LabResult, PendingDocumentFact
 from app.followup import MAX_HISTORY_TURNS, ConversationTurn
 
 
@@ -73,6 +73,29 @@ class BundleStore:
             now = self._now()
             self._sweep(now)
             return self._bundles.get(bundle_id)
+
+    async def replace_document_context(
+        self,
+        bundle_id: UUID,
+        pending_document_facts: list[PendingDocumentFact],
+        lab_results: list[LabResult] | None,
+    ) -> StoredBundle | None:
+        """Swap the bundle's pending facts (and lab results, when given) in place.
+
+        The bundle id, expiry, verified plan check and conversation are kept;
+        the caller has already checked the new context belongs to this bundle.
+        """
+        async with self._lock:
+            now = self._now()
+            self._sweep(now)
+            stored = self._bundles.get(bundle_id)
+            if stored is None:
+                return None
+            update: dict[str, object] = {"pending_document_facts": list(pending_document_facts)}
+            if lab_results is not None:
+                update["lab_results"] = list(lab_results)
+            stored.bundle = stored.bundle.model_copy(update=update)
+            return stored
 
     async def delete(self, bundle_id: UUID) -> bool:
         async with self._lock:

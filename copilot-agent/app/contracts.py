@@ -449,6 +449,42 @@ class ReadyResponse(StrictModel):
 # --------------------------------------------------------------------------- #
 
 
+class BundleRefresh(StrictModel):
+    """``POST /v1/bundles/{bundle_id}/refresh``: the module replaces a stored bundle's document context.
+
+    Sent after the panel's chart-open processing reads a document, or after a
+    value is filed, rejected or un-filed, so follow-ups see the chart as it is
+    now without a new bundle, a new briefing or any model call. Signed like
+    ``POST /v1/bundles``. Refused unless ``correlation_id``, ``patient_uuid``
+    and ``user_uuid`` match the stored bundle; ``lab_results`` (optional) must
+    come with the ``prior_note_id`` of the bundle's baseline note, because they
+    are windowed from it.
+    """
+
+    correlation_id: UUID
+    patient_uuid: UUID
+    user_uuid: UUID | None = None
+    pending_document_facts: list[PendingDocumentFact] = Field(default_factory=list, max_length=500)
+    prior_note_id: str | None = Field(default=None, min_length=1, description="The baseline note the lab results are windowed from; required with lab_results.")
+    lab_results: list[LabResult] | None = Field(default=None, description="The chart's interval lab results now; null keeps the bundle's.")
+
+    @model_validator(mode="after")
+    def _labs_name_their_window(self) -> BundleRefresh:
+        if self.lab_results is not None and self.prior_note_id is None:
+            raise ValueError("lab_results require prior_note_id")
+        return self
+
+
+class BundleRefreshed(StrictModel):
+    """Response to a bundle refresh: the ids echoed and counts only (never content)."""
+
+    bundle_id: UUID
+    correlation_id: UUID
+    patient_uuid: UUID
+    pending_facts: int = Field(ge=0)
+    lab_results: int | None = Field(default=None, ge=0, description="Lab results now in the bundle; null when they were kept.")
+
+
 class BundleAccepted(StrictModel):
     """Response to ``POST /v1/bundles``: the id the module binds into the ticket."""
 
@@ -592,6 +628,8 @@ __all__ = [
     "BriefingRequest",
     "BriefingResponse",
     "BundleAccepted",
+    "BundleRefresh",
+    "BundleRefreshed",
     "Citation",
     "CommitmentEvent",
     "CommitmentKind",
