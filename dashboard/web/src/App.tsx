@@ -8,6 +8,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { useFocusOnChange } from './components/useFocusOnChange';
 import { DataSourceProvider } from './data/DataSourceProvider';
 import { QueryProvider } from './data/QueryProvider';
+import { FinderMemoryProvider } from './pages/FinderMemoryProvider';
 import { HomePage } from './pages/HomePage';
 import { PatientPage } from './pages/PatientPage';
 import { PatientSearchPage } from './pages/PatientSearchPage';
@@ -39,35 +40,37 @@ export function App({ extraRoutes = [], queryClient }: AppProps) {
       <QueryProvider client={queryClient}>
         <DataSourceProvider>
           <RecentPatientsProvider>
-            <BrowserRouter>
-              <AppHeader />
-              <main className="app-main">
-                <NoticeBanner />
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <RequireAuth>
-                        <PatientSearchPage />
-                      </RequireAuth>
-                    }
-                  />
-                  <Route
-                    path="/patient/:id"
-                    element={
-                      <RequireAuth>
-                        <PatientPage />
-                      </RequireAuth>
-                    }
-                  />
-                  {extraRoutes.map((r) => (
-                    <Route key={r.path} path={r.path} element={r.element} />
-                  ))}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-            </BrowserRouter>
+            <FinderMemoryProvider>
+              <BrowserRouter>
+                <AppHeader />
+                <main className="app-main">
+                  <NoticeBanner />
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <RequireAuth>
+                          <PatientSearchPage />
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path="/patient/:id"
+                      element={
+                        <RequireAuth>
+                          <PatientPage />
+                        </RequireAuth>
+                      }
+                    />
+                    {extraRoutes.map((r) => (
+                      <Route key={r.path} path={r.path} element={r.element} />
+                    ))}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+              </BrowserRouter>
+            </FinderMemoryProvider>
           </RecentPatientsProvider>
         </DataSourceProvider>
       </QueryProvider>

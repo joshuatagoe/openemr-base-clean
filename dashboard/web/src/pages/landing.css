@@ -1,92 +1,133 @@
-/* Landing page (/dashboard): the search form, Recent patients and All
-   patients. OpenEMR style_light language (DASHBOARD_UX_PLAN.md §3, M3): the
-   dashboard's square card with a plain title, table-sm / striped / hover
-   tables with a grey head. Uses the --oe-* tokens, .card / .btn / .notice /
-   .spinner / .visually-hidden and the input focus ring from styles.css;
-   everything here is prefixed landing- so it can't collide with the patient
-   page. */
+/* Landing page (/dashboard): OpenEMR's Patient Finder (dynamic_finder.php,
+   finder.html.twig) in its style_light look, not a redesign: Bootstrap 4
+   nav-tabs, DataTables' "Show N entries" and "Search:" row, a thead-light
+   table with the "Search by …" filter row above the column titles, the
+   "Showing x to y" line and Previous / Next under it. Uses the --oe-* tokens,
+   .btn / .notice / .spinner / .visually-hidden and the focus ring from
+   styles.css; everything here is prefixed finder- so it can't collide with the
+   patient page. */
 
-/* A readable column: the form fits on one line and a name sits close to its
-   DOB, instead of spreading four columns across 1200px. */
-.landing { max-width: 55rem; }
+/* Five columns need more room than the old four-column list; still a column
+   the eye can cross, not the full 1920px. */
+.finder { max-width: 75rem; }
 
-/* Search form: labels above fields, buttons on the fields' baseline. */
-.landing-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
-.landing-field { display: grid; gap: 0.25rem; min-width: 0; }
-.landing-field input {
+/* Nav tabs (BS4 .nav-tabs): grey rule under the row, the active tab a white
+   folder tab joined to the content. */
+.finder-tabs { display: flex; flex-wrap: wrap; gap: 0; margin-top: 0.75rem; border-bottom: 1px solid var(--oe-table-rule); }
+.finder-tab {
+  margin-bottom: -1px;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem 0.25rem 0 0;
+  background: none;
+  color: var(--oe-link);
+  font: inherit;
+  cursor: pointer;
+}
+.finder-tab:hover { border-color: #e9ecef #e9ecef var(--oe-table-rule); }
+.finder-tab.active { color: #495057; background: var(--oe-surface); border-color: var(--oe-table-rule) var(--oe-table-rule) var(--oe-surface); }
+.finder-tab:focus-visible { outline: var(--oe-focus-ring); outline-offset: -3px; }
+.finder-panel { padding-top: 0.75rem; }
+
+/* DataTables' top row: length menu on the left, search box on the right. */
+.finder-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.5rem; }
+.finder-length,
+.finder-search { display: flex; align-items: center; gap: 0.375rem; }
+.finder-length select,
+.finder-search input,
+.finder-filter {
   box-sizing: border-box;
-  width: 100%;
-  height: calc(1.5em + 0.6rem + 2px); /* same height as .btn */
-  line-height: 1.5;
-  padding: 0.3rem 0.5rem;
+  height: calc(1.5em + 0.5rem + 2px); /* BS4 form-control-sm */
+  padding: 0.25rem 0.5rem;
   border: 1px solid #adb5bd;
-  border-radius: 0.25rem;
+  border-radius: 0.2rem;
   background: var(--oe-surface);
   color: var(--oe-text);
   font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
-.landing-field-name { width: 16rem; }
-.landing-field-birthdate { width: 10.5rem; }
-.landing-field-identifier { width: 10rem; }
-.landing-field input[aria-invalid='true'] { border-color: var(--oe-danger); }
-.landing-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.landing-problem { margin: 0.75rem 0 0; }
+.finder-length select { width: 4.5rem; }
+.finder-search input { width: 14rem; }
+.finder-filter { width: 100%; min-width: 7.5rem; }
+.finder-filter-name { min-width: 10rem; }
+.finder-filter-birthdate { min-width: 9.5rem; }
+:is(.finder-length select, .finder-search input, .finder-filter):focus-visible,
+.finder-check input:focus-visible { outline: var(--oe-focus-ring); outline-offset: var(--oe-focus-offset); }
+:is(.finder-search input, .finder-filter)[aria-invalid='true'] { border-color: var(--oe-danger); }
+.finder-problem { margin: 0 0 0.5rem; }
 
-/* Cards. .card gives the border, square corners, 1px shadow and 0.25rem
-   padding; the title is plain (not a toggle), so it is dark, not link blue. */
-.landing-card { margin-top: 1.25rem; }
-.landing-card + .landing-card { margin-top: 0.5rem; } /* the dashboard's card gap */
-.landing-card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.25rem 0.75rem;
-  min-height: 1.875rem;
-  padding: 0.25rem;
-}
-.landing-card-head h2 { margin: 0; font-size: 1rem; font-weight: 700; line-height: 1.5; }
-.landing-count { color: var(--oe-muted); font-size: 0.875rem; }
-.landing-card-body { padding: 0.25rem 0 0; }
-.landing-message { margin: 0.25rem 0.25rem 0.5rem; }
-.landing-error { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.25rem 0.25rem 0.5rem; }
-.landing-error .notice { margin: 0; }
-
-/* Tables: BS4 table-sm table-striped table-hover, style_light head. */
-.landing-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-.landing-table th,
-.landing-table td { padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; border-top: 1px solid var(--oe-table-rule); }
-.landing-table thead th { background: var(--oe-table-head); border-bottom: 2px solid var(--oe-table-rule); font-weight: 700; }
-.landing-table td:first-child { overflow-wrap: anywhere; }
-.landing-table td:nth-child(2),
-.landing-table td:nth-child(3) { white-space: nowrap; }
-.landing-table td:nth-child(4) { overflow-wrap: anywhere; }
-.landing-table tbody tr:nth-of-type(odd) { background: var(--oe-stripe); }
-.landing-table tbody tr:hover { background: var(--oe-hover); }
-.landing-table:focus-visible { outline: var(--oe-focus-ring); outline-offset: var(--oe-focus-offset); }
+/* The table: BS4 table-sm with a thead-light head, striped, hover (the
+   Finder's DataTables overrides). */
+.finder-scroll { margin: 0; }
+.finder-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.finder-table th,
+.finder-table td { padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; border-top: 1px solid var(--oe-table-rule); }
+.finder-table thead th,
+.finder-table thead td { background: var(--oe-table-head); }
+.finder-table thead tr:last-child th { border-bottom: 1px solid var(--oe-text); font-weight: 700; }
+.finder-table tbody td { overflow-wrap: anywhere; }
+.finder-table tbody tr:last-child td { border-bottom: 1px solid var(--oe-text); }
+.finder-table tbody tr:nth-of-type(odd) { background: var(--oe-stripe); }
+.finder-table tbody tr.row-link:hover { background: var(--oe-hover); }
+.finder-table:focus-visible { outline: var(--oe-focus-ring); outline-offset: var(--oe-focus-offset); }
+.finder-empty-cell { text-align: center; }
+.finder-table tbody tr:has(.finder-empty-cell) { background: none; }
 @media (min-width: 768px) {
-  .landing-table { table-layout: fixed; }
-  .landing-table th:nth-child(2) { width: 9rem; }
-  .landing-table th:nth-child(3) { width: 6rem; }
-  .landing-table th:nth-child(4) { width: 8rem; }
+  .finder-table:not(.finder-recent) td:nth-child(n + 2) { white-space: nowrap; }
 }
+
+/* Sortable column titles look like titles (the Finder hides DataTables'
+   arrows); a small arrow marks the sorted column only. */
+.finder-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.finder-sort:hover { color: var(--oe-link-hover); }
+.finder-sort:focus-visible { outline: var(--oe-focus-ring); outline-offset: var(--oe-focus-offset); }
+.finder-sort.sorted-asc::after,
+.finder-sort.sorted-desc::after { content: ''; border: 0.3rem solid transparent; }
+.finder-sort.sorted-asc::after { border-bottom-color: currentColor; margin-top: -0.3rem; }
+.finder-sort.sorted-desc::after { border-top-color: currentColor; margin-top: 0.3rem; }
 
 /* The whole row opens the chart (Bootstrap stretched-link): the name stays
    the only link, its ::after covers the row; the focus ring goes on the row. */
 .row-link { position: relative; cursor: pointer; }
 .stretched-link::after { content: ''; position: absolute; inset: 0; }
-.landing-table .stretched-link:focus-visible { outline: none; }
+.finder-table .stretched-link:focus-visible { outline: none; }
 .row-link:has(.stretched-link:focus-visible) { outline: var(--oe-focus-ring); outline-offset: -3px; }
 
-.landing-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.75rem 0; }
+/* Under the table: the Finder's check boxes, then info on the left and the
+   pager on the right, then the two notes on how matching works. */
+.finder-options { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.5rem; }
+.finder-checks { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.finder-check { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; }
+.finder-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.5rem; }
+.finder-info { margin: 0; min-height: 1.5em; }
+.finder-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.finder-notes { margin-top: 0.75rem; color: var(--oe-muted); font-size: 0.875rem; }
+.finder-notes p { margin: 0.125rem 0; max-width: 80ch; }
+.finder-note { margin: 0.5rem 0 0; font-size: 0.875rem; }
+.finder-error { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin-top: 0.5rem; }
+.finder-error .notice { margin: 0; }
+.finder-message { margin: 0.25rem 0 0.5rem; }
+/* The Finder's "No recent patients" (text-center bg-light p-5). */
+.finder-empty { margin: 0; padding: 3rem 1rem; text-align: center; background: var(--oe-surface); }
 
-/* Phones: name across the top, DOB and MRN side by side, buttons below. */
+/* Phones: the toolbar stacks; the table scrolls sideways inside its region. */
 @media (max-width: 575.98px) {
-  .landing-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem 0.75rem; }
-  .landing-field { width: auto; }
-  .landing-field-name,
-  .landing-actions { grid-column: 1 / -1; }
-  .landing-card { margin-top: 1rem; }
-  .landing-table th,
-  .landing-table td { padding: 0.3rem 0.375rem; }
+  .finder-toolbar { flex-direction: column; align-items: stretch; }
+  .finder-search input { flex: 1; width: auto; min-width: 0; }
+  .finder-tab { padding: 0.5rem 0.75rem; }
+  .finder-table th,
+  .finder-table td { padding: 0.3rem 0.375rem; }
 }

@@ -91,7 +91,7 @@ export function searchErrorMessage(error: DataSourceError, { filtered = true }: 
     case 'timeout':
       return 'OpenEMR took too long to answer. Try again.';
     case 'bad_request':
-      return "OpenEMR didn't accept these search terms. Check the name, date of birth and MRN.";
+      return "OpenEMR didn't accept these search terms. Check the name, phone number, SSN, date of birth and External ID.";
     case 'forbidden':
     case 'not_accessible':
       return "Your OpenEMR role can't search patients. If you need to, ask your OpenEMR administrator for access.";
