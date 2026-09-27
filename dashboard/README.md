@@ -13,7 +13,7 @@ Three hosting modes, one React app:
 
 | Mode | Where | Login | Patient |
 |---|---|---|---|
-| **A** standalone | own origin, served by the BFF | BFF, confidential client, `user/` scopes | in-app search and switching |
+| **A** standalone | own origin, served by the BFF | BFF, confidential client, `user/` scopes | patient list, search, recent patients, switching |
 | **B** inside OpenEMR | same origin, `/interface/modules/custom_modules/oe-module-copilot/public/dashboard/` | SMART EHR launch from the Patient menu entry "Patient Dashboard (React)", public client, `patient/` scopes | the open chart |
 | **C** SMART app | the same build, launched from the patient dashboard's *SMART Enabled Apps* card | same as B | the open chart |
 
@@ -79,9 +79,11 @@ Scopes are read-only, with no `offline_access`, so no refresh token is issued. A
 ## Web app
 
 - **Data layer**: TanStack Query hooks (`web/src/data/hooks.ts`) over the `DataSource` interface, typed with `@types/fhir` R4. Components receive the state as data (`idle` / `loading` / `error` / `empty` / `ready`, `web/src/data/queryView.ts`). Only transient failures (502/5xx, 504, network) are retried, twice; 400/401/403/404 never are. A 401 ends the session ("Your session has expired"), and the query cache is cleared whenever the user is signed out.
-- **Patient search** (`/dashboard`): name, date of birth and/or MRN, checked in the browser against the same patterns the BFF allow-lists. Criteria live in the URL (`/dashboard?name=Demo`), so Back returns to the results. The results table shows name, DOB, sex and MRN, and each name links to `/patient/:id`. Switching patients keeps the session. OpenEMR's `identifier` search also matches SSNs; the SSN is never displayed.
-- **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)`, then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`. The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
-- **Deliberate differences from the PHP bar**: sex and active status are not shown (the PHP bar shows neither; OpenEMR's FHIR `active` is hard-coded `true`). The photo, encounter controls and the close icon are not ported ("Find another patient" replaces the close icon). `age_display_format = 1` (`#y #m #d`) is not supported. For an age at death under 24 months the PHP prints `11months` (an operator-precedence slip); the port prints `11 months`.
+- **Patient list** (`/dashboard`, the landing page; like OpenEMR's Patient Finder): every patient the user can see, **20 per page**, sorted by last name then first and middle name (`_sort=family,given`), with Previous / Next and "Page N". The page lives in the URL (`?page=2`). The app asks for 21 rows (`_count=21&_offset=…`) and enables Next only when the 21st arrives: OpenEMR's Patient Bundle has only a `self` link and its `total` is the number of entries returned, so there is no overall count. After paging, focus moves to the new page's table. Measured on the dev stack: `_count`, `_offset` and `_sort` (`family`, `-family`, `family,given`, `birthdate`) all take effect on Patient searches; ties on the full name have no further tie-break.
+- **Patient search**: name, date of birth and/or MRN narrow the same list (same paging and sort), checked in the browser against the same patterns the BFF allow-lists. Criteria live in the URL (`/dashboard?name=Demo`), so Back returns to the results; an empty search (or *Show all patients*) returns to the whole list. The table shows name, DOB, sex and MRN (the `PT` identifier), and each name links to `/patient/:id`. Switching patients keeps the session. OpenEMR's `identifier` search also matches SSNs; the SSN and phone numbers are never displayed.
+- **Recent patients** (on the landing page, above the list; `web/src/recent/`): OpenEMR keeps a per-user list server-side (`recent_patients`, shown by the Patient Finder), but no REST or FHIR route exposes it. The app therefore keeps its own, in `localStorage` under `dash.recentPatients.v1.<SHA-256 of the user's fhirUser>`, holding **FHIR patient ids only** (never names, DOBs or other PHI): at most 10, most recent first, updated when a patient's page opens. Names, DOB and MRN are read live through the BFF; a patient that answers 404 or 403 is dropped silently (and from storage). *Clear* empties it. Every storage access is wrapped: with storage blocked, or no `fhirUser`, the list lives in memory for the session.
+- **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)`, then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`, then **`Birth Sex: <Male | Female | Other | Unknown>`** from FHIR `Patient.gender` (asked for by the challenge; OpenEMR fills `gender` from `patient_data.sex`, which its Demographics card labels "Birth Sex"; left out when absent). The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
+- **Deliberate differences from the PHP bar**: sex is shown (the PHP bar does not show it; the challenge asks for it). Active status is not shown: OpenEMR's FHIR `active` is hard-coded `true`, and the PHP dashboard does not show it. The photo, encounter controls and the close icon are not ported ("Find another patient" replaces the close icon). `age_display_format = 1` (`#y #m #d`) is not supported. For an age at death under 24 months the PHP prints `11months` (an operator-precedence slip); the port prints `11 months`.
 
 ## Clinical cards (C3, C4)
 
@@ -149,7 +151,7 @@ G-numbers refer to `DASHBOARD_ANALYSIS_A2_FHIR.md` §6; G21 is new in C3, G22–
   | BFF route | OpenEMR | Parameters |
   |---|---|---|
   | `/api/fhir/Patient/:id` | FHIR read | none |
-  | `/api/fhir/Patient` | FHIR search | `name`, `birthdate`, `identifier` (at least one) |
+  | `/api/fhir/Patient` | FHIR search | `name`, `birthdate`, `identifier`, `_count` (1–50), `_offset` (0–999999), `_sort` ∈ family, -family, family,given, -family,-given, birthdate, -birthdate. At least one of `name`, `birthdate`, `identifier`, `_count`: a list without criteria is always bounded |
   | `/api/fhir/AllergyIntolerance`, `MedicationRequest`, `CareTeam` | FHIR search | `patient` (required) |
   | `/api/fhir/Condition` | FHIR search | `patient` (required), `category` ∈ problem-list-item, encounter-diagnosis, health-concern |
   | `/api/fhir/Observation` | FHIR search | `patient` (required), `category=laboratory` (required) |
@@ -176,7 +178,7 @@ The same React app, built with `npm run build:smart`, runs on OpenEMR's own orig
 4. On return (`?code&state`, same URL) the `state` must match the stored one (single use, 10 minutes). The code goes to the token endpoint as a form POST with the verifier and no cookies. The patient comes from the token response's `patient`.
 5. Only the verifier, state and the two URLs are kept in `sessionStorage`, and only across the redirect. The **access token is kept in memory only** (a closure inside the data source): a reload or a new tab needs a new launch. The id_token is read only for `fhirUser`, for the "Signed in as" name.
 
-The patient is fixed to the launch context: there is no search, and the header says to change the chart in OpenEMR to see another patient. A 401 (the token lasts 1 h) or *Sign out* drops the token and the cached data and asks for a relaunch from the chart.
+The patient is fixed to the launch context: there is no patient list, search or recent-patients list (the app makes no Patient search), and the header says to change the chart in OpenEMR to see another patient. A 401 (the token lasts 1 h) or *Sign out* drops the token and the cached data and asks for a relaunch from the chart.
 
 Differences from mode A, all caused by the patient-context token:
 
@@ -185,7 +187,7 @@ Differences from mode A, all caused by the patient-context token:
 | Care Team member and facility names | "Name not available (permission)" for the Physicians group | resolved (`Practitioner`/`Organization` reads are allowed in patient context) |
 | Medications / Prescriptions | split with the standard API's medication list | OpenEMR's standard API answers 403 to patient tokens, so no request is made and one **"Medications and prescriptions (combined)"** card lists every current order, with the reason |
 | Edit links | with `VITE_OPENEMR_WEB_URL` | none: they need the numeric pid, which only the standard API gives (the user is in the chart already) |
-| Patient | search and switch | the launched chart |
+| Patient | list, search, recent patients, switch | the launched chart |
 
 The subject guard stays on: OpenEMR's lab search ignores the `patient` parameter under a patient token (Phase B), so every result is still checked against the launched patient.
 
@@ -273,6 +275,6 @@ The app ships inside the OpenEMR image (root `Dockerfile`), so it is already the
 
 ## Tests and quality checks
 
-- `npm test`: **358 tests**. BFF 142 (config validation, login/callback/state/nonce/PKCE, session cookie, allow-list and query validation, upstream error mapping, headers, logs) and web 216 (FHIR models per card, subject guard, date/age formatting, both data sources, SMART launch, search/patient/cards flows with MSW, axe-core on the rendered pages).
-- `web/test/a11y.test.tsx`: axe-core on the signed-out page, search results and the full patient page (jsdom; colour contrast is checked in a real browser instead).
+- `npm test`: **431 tests**. BFF 179 (config validation, login/callback/state/nonce/PKCE, session cookie, allow-list and query validation including the bounded patient list, upstream error mapping, headers, logs) and web 252 (FHIR models per card, subject guard, date/age formatting, both data sources, SMART launch, list/paging/search/recent-patients/patient/cards flows with MSW, recent-patients storage (ids only, per user, storage blocked), axe-core on the rendered pages).
+- `web/test/a11y.test.tsx`: axe-core on the signed-out page, search results, the landing page (list, pager, recent patients) and the full patient page (jsdom; colour contrast is checked in a real browser instead).
 - Parity evidence, the real-browser axe run, the keyboard walkthrough and the phone-width check: `docs/dashboard-parity/PARITY.md`.

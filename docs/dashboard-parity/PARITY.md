@@ -19,7 +19,8 @@ Status: **match** = same content (styling may differ). **gap G#** = a documented
 | Name + (pubpid) | Evelyn Demo (7) / Thomas Reyes (10) | same | match |
 | DOB + age | DOB: 1958-04-12 Age: 68 / DOB: 1957-11-30 Age: 68 | same | match |
 | Age at death (deceased patient) | `oeFormatAge` | same rule (unit-tested) | match. An age at death under 24 months prints `11 months`, where PHP prints `11months` |
-| Sex, active status | not shown | not shown | match. The challenge text lists both, but PHP shows neither, and OpenEMR's FHIR `active` is hard-coded `true` |
+| Sex | not in the bar; the Demographics card shows it as **Birth Sex** (`patient_data.sex`) | `Birth Sex: Female` / `Birth Sex: Male` (FHIR `Patient.gender`, which OpenEMR fills from `patient_data.sex`) | by design: matches the challenge, which asks for sex in the header; worded as OpenEMR's Demographics card. Re-captured 2026-09-27 (`pid*_header_port.png`) |
+| Active status | not shown | not shown | match, and intentionally omitted: the challenge lists it, but OpenEMR's FHIR `active` is hard-coded `true` for every patient and the PHP dashboard does not show it |
 | Photo, encounter selector, "Open Encounter" | shown | not ported | by design (not part of the summary cards; this app is read-only) |
 | Close icon (×) | closes the chart | "Find another patient" | by design (mode A has in-app search) |
 | Sticky while scrolling | yes (top frame) | yes | match |
@@ -90,21 +91,34 @@ Status: **match** = same content (styling may differ). **gap G#** = a documented
 
 ## Summary
 
-Across the two patients, the tables above have **41 rows: 23 match and 18 differ**. Of the 18, 13 are FHIR gaps and 5 are design choices. Each one is documented in the README, and no difference is unexplained. (A row counts as "differ" if any part of it differs.) The differences a clinician would notice first:
+Across the two patients, the tables above have **42 rows: 23 match and 19 differ**. Of the 19, 13 are FHIR gaps and 6 are design choices (the sixth: sex in the header, added for the challenge). The patient list and recent patients below are not counted: the PHP dashboard has no counterpart. Each one is documented in the README, and no difference is unexplained. (A row counts as "differ" if any part of it differs.) The differences a clinician would notice first:
 
 - the allergy severity wording (G4)
 - refills "—" (G8)
 - care-team names in mode A (G9)
 - the labs line (G16/G17)
 
+## Patient list and recent patients (mode A, beyond the challenge; `list_landing_port.png`)
+
+Added after the parity capture, on the same dev stack as `drdash` (2026-09-27). They mirror OpenEMR's **Patient Finder** (`interface/main/finder/dynamic_finder.php`) and its **recent patients** list; the challenge does not ask for either.
+
+| Feature | OpenEMR | Port | Status |
+|---|---|---|---|
+| Patient list without a search term | Patient Finder: paged list of all patients | landing page `/dashboard`: 20 per page, Previous / Next, "Page N", page in the URL | mirrors. Live: 14 synthetic patients, one page, sorted Demo … Walsh; `?page=2` says "No patients on this page." |
+| Sort | Finder's saved column order | last name, then first and middle name (`_sort=family,given`) | mirrors. OpenEMR honours `_count`, `_offset` and `_sort` on Patient searches (checked live with `_count=5`: pages 1 and 2 follow on; `-family,-given` and `birthdate` sort as expected). Ties on the full name have no further tie-break (OpenEMR's sort whitelist has no FHIR key for the uuid) |
+| Total / next page | Finder shows "x of N" | no total; "Showing patients 21–40" and Next enabled only when a 21st row came back | OpenEMR's Bundle has only a `self` link and `total` = the entries returned, so the overall count is unknown |
+| Columns | configurable (name, phone, SSN, DOB, …) | Name, DOB, Sex, MRN (`PT` identifier) | by design: never SSN, never phone |
+| Search box | Finder's column filters | the existing name / DOB / MRN search narrows the same list, with the same paging | mirrors |
+| Recent patients | per user, server-side (`recent_patients`, updated when the PHP dashboard opens a chart, default 20) | per user **in this browser** (hashed `fhirUser` key), **ids only**, max 10, most recent first, updated when a patient opens; names / DOB / MRN read live; gone or forbidden patients dropped silently; Clear button | by design: no REST or FHIR route exposes OpenEMR's list, and the app is read-only. Live: opening Evelyn Demo then Thomas Reyes listed Reyes, Demo; storage held the two uuids only; Clear removed the entry |
+
 ## Accessibility and layout (port)
 
 - **axe-core in a real browser** (Chrome, all rules including colour contrast):
-  - pages checked: patient search with results; patient page with every card expanded; phone width (390 px).
+  - pages checked: patient search with results; patient page with every card expanded; phone width (390 px); the patient-list landing page, with and without the recent-patients list (2026-09-27: 0 violations; at 390 px no horizontal page scroll).
   - result: **0 violations** after two fixes made in C6. The muted text colour was changed from `#6c757d` to `#5c636a` (it measured below 4.5:1 on striped rows and on the page background). The wide table wrappers became focusable regions, so they can be scrolled from the keyboard.
 - **PHP page for comparison** (`demographics.php?set_pid=7`, loaded as a top-level page): **34 serious or critical nodes in 7 rules** (`link-name` 17, `color-contrast` 11, `aria-required-parent` 2, `aria-hidden-focus`, `aria-valid-attr-value`, `html-has-lang`, `list`), plus 4 moderate rules.
-- **Unit test**: `dashboard/web/test/a11y.test.tsx` runs axe on the signed-out, search and patient pages in jsdom. jsdom cannot check colour contrast.
-- **Keyboard only**, mode A, every step passed:
+- **Unit test**: `dashboard/web/test/a11y.test.tsx` runs axe on the signed-out, search, landing (list + pager + recent patients) and patient pages in jsdom. jsdom cannot check colour contrast.
+- **Keyboard only**, mode A, every step passed (C6, before the patient list was added; tab counts have changed since). Paging with Previous / Next by keyboard, with focus moving to the new page's table, is covered by `web/test/PatientListFlow.test.tsx`; the dev stack has too few patients for a second page:
   1. Tab reaches the name field; type a name, Enter.
   2. Tab reaches the result link (7 tabs); Enter.
   3. Focus moves to the patient's name heading.

@@ -18,10 +18,11 @@ Every number here was measured on the dev stack (`docker/development-easy`) on 2
 | Challenge requirement | Where |
 |---|---|
 | OAuth2 / OpenID Connect login | Mode A: authorization code + PKCE (S256) + client secret, run by the BFF (`dashboard/bff/src/app.ts`). Modes B/C: SMART EHR launch, code + PKCE as a public client (`dashboard/web/src/smart/launch.ts`). The id_token's `iss`, `aud`, `exp` and `nonce` are checked. No password grant, no refresh tokens |
-| Patient header | `PatientHeader.tsx` / `fhir/patient.ts`: name, `(pubpid)`, DOB and age (or age at death), following PHP's own age rules |
+| Patient header | `PatientHeader.tsx` / `fhir/patient.ts`: name, `(pubpid)`, DOB and age (or age at death), following PHP's own age rules, and sex ("Birth Sex: Female", from FHIR `Patient.gender`; see §4 for why active status is left out) |
 | Allergies, Problem List, Medications, Prescriptions, Care Team | `components/ClinicalCards.tsx`, one model per card in `web/src/fhir/*.ts`, all from live FHIR (plus one standard-API route for the medication list) |
 | One additional section | **Labs**: the PHP "Most recent lab data" card, rebuilt from FHIR `Observation?category=laboratory` (`fhir/lab.ts`) |
 | Feature parity | Card titles, order, empty texts, columns, sort orders, collapse defaults and the responsive layout follow the PHP page. The checklist is in `docs/dashboard-parity/PARITY.md` |
+| Beyond the challenge (mode A) | **Patient list** as the landing page, like OpenEMR's Patient Finder: 20 per page, sorted by last name, Previous/Next, the search box narrows it (`pages/PatientSearchPage.tsx`). **Recent patients** above it, like the Finder's recent list (`web/src/recent/`) |
 
 Nothing in OpenEMR's PHP core or database was changed. The only server-side OpenEMR code added is packaging inside our own Co-Pilot module:
 
@@ -33,7 +34,7 @@ Nothing in OpenEMR's PHP core or database was changed. The only server-side Open
 
 | Mode | How to open it | Login and data path |
 |---|---|---|
-| **A: standalone** | [`https://dashboard-production-cf2f.up.railway.app/`](https://dashboard-production-cf2f.up.railway.app/) (Railway service built from `dashboard/Dockerfile`); locally `npm run dev` in `dashboard/`, then http://localhost:5173 | The clinician signs in on OpenEMR's login page through the BFF (confidential client, `user/` scopes). They can search patients and switch between them in the app. The token never reaches the browser |
+| **A: standalone** | [`https://dashboard-production-cf2f.up.railway.app/`](https://dashboard-production-cf2f.up.railway.app/) (Railway service built from `dashboard/Dockerfile`); locally `npm run dev` in `dashboard/`, then http://localhost:5173 | The clinician signs in on OpenEMR's login page through the BFF (confidential client, `user/` scopes). They pick a patient from a paged patient list (or narrow it with the search box, or from their recent patients) and switch between them in the app. The token never reaches the browser |
 | **B: inside OpenEMR** | [`https://openemr-base-clean-production.up.railway.app/`](https://openemr-base-clean-production.up.railway.app/): open a chart → *Patient → Patient Dashboard (React)* | SMART EHR launch for the open chart. The same React build is served by OpenEMR's Apache from the module's `public/dashboard/`. A public client with `patient/` scopes; the token is held in memory only |
 | **C: SMART app** | The patient dashboard's *SMART Enabled Apps* card → *Launch* | Same as B |
 
@@ -93,7 +94,7 @@ An example: Physicians get 403 on `Practitioner` and `Organization`, so mode A s
 
 ### 3.2 Tests
 
-`npm test` runs **358 tests**: 142 for the BFF and 216 for the web app. They run in CI with no OpenEMR, network or secret: the BFF tests use a mock OpenEMR on a loopback port, and the web tests use MSW.
+`npm test` runs **431 tests**: 179 for the BFF and 252 for the web app. They run in CI with no OpenEMR, network or secret: the BFF tests use a mock OpenEMR on a loopback port, and the web tests use MSW.
 
 - **BFF**:
   - config validation: it refuses write scopes, `offline_access`, non-https issuers and short session secrets
@@ -108,7 +109,7 @@ An example: Physicians get 403 on `Practitioner` and `Organization`, so mode A s
   - the subject guard
   - both data sources
   - the SMART launch (origin checks, state expiry, token kept in memory)
-  - full search → patient → cards flows
+  - full list / search → patient → cards flows, paging, and the recent-patients list (including that storage holds patient ids only and works when storage is blocked)
   - axe-core accessibility checks on the rendered pages (`web/test/a11y.test.tsx`)
 - **Module (PHPUnit)**: the Co-Pilot module's suite covers the menu entry, the launch page's decisions and the start script.
 
@@ -132,13 +133,15 @@ The guard was written because of a measured bug: under a patient-context token, 
 | Where the access token lives | n/a (PHP session) | **server-side only**; the browser has an HttpOnly, SameSite=Lax, signed `__Host-` cookie | in a JavaScript closure: never in `localStorage` or `sessionStorage`, gone on reload |
 | Writes possible | yes (same page edits) | no: read-only scopes, and the BFF proxies GET only | no: read-only scopes |
 
-The BFF also narrows what it passes on. OpenEMR's `/api/patient/:puuid` returns the whole `patient_data` row, SSN included. The BFF answers only `{pid, uuid}`, the one mapping the medication route needs.
+The BFF also narrows what it passes on. OpenEMR's `/api/patient/:puuid` returns the whole `patient_data` row, SSN included. The BFF answers only `{pid, uuid}`, the one mapping the medication route needs. The patient list is always bounded: a Patient search without a name, DOB or MRN must carry `_count` (at most 50), and only `_count`, `_offset` and a fixed set of `_sort` values are accepted.
+
+The only thing mode A keeps in the browser about patients is the recent-patients list, and it holds **FHIR patient ids only** (never a name, DOB, MRN or other PHI), under a key derived from a SHA-256 hash of the user's `fhirUser`. Names are read live through the BFF each time the list is shown.
 
 ### 3.5 Accessibility
 
 We ran axe-core in Chrome with all rules, including colour contrast. Details are in `docs/dashboard-parity/PARITY.md`.
 
-- **Port: 0 violations** on the search page, on the patient page with every card expanded, and at phone width. The first run found two serious issues:
+- **Port: 0 violations** on the search page, on the patient page with every card expanded, at phone width, and (added later) on the patient-list landing page with the recent-patients list. The first run found two serious issues:
   - muted grey text below 4.5:1 contrast
   - wide tables that could not be scrolled from the keyboard on a phone
 
@@ -197,7 +200,7 @@ How to read the numbers:
    - enable it in *API Clients*
 
    The PHP page needs none of this.
-4. **Parity limited by what OpenEMR's FHIR exposes.** The full list is the gaps table in `dashboard/README.md` (G2–G24) and the row-by-row checklist in `docs/dashboard-parity/PARITY.md`. On the two compared patients, 23 of 41 rows match. The other 18 are 13 FHIR gaps and 5 design choices, all documented. The ones a clinician notices:
+4. **Parity limited by what OpenEMR's FHIR exposes.** The full list is the gaps table in `dashboard/README.md` (G2–G24) and the row-by-row checklist in `docs/dashboard-parity/PARITY.md`. On the two compared patients, 23 of 42 rows match. The other 19 are 13 FHIR gaps and 6 design choices (one is sex in the header, added for the challenge), all documented. The ones a clinician notices:
    - **Allergy severity (G4).** FHIR only has `criticality`, so "Moderate" shows as "Low Risk". Moderate-to-severe and worse show as "High Risk" and stay highlighted, erring on the safe side.
    - **Refills (G8).** OpenEMR always sends `numberOfRepeatsAllowed: 0`, so the port shows "—" rather than a wrong 0.
    - **Care-team names in mode A (G9).** Physicians get 403 on `Practitioner`/`Organization`, so names show as "Name not available (permission)". In modes B/C they resolve. Member status and note are not in FHIR at all (G11/G12), so inactive members are listed.
@@ -205,10 +208,12 @@ How to read the numbers:
      - the port shows result names ("Tests: …") where PHP shows the procedure name
      - it shows the report date where PHP shows the collection date
      - it shows no encounter number (G16/G17/G22–G24)
-   - **No "active" status in the header.** The challenge lists sex and active status, but the PHP header shows neither. OpenEMR's FHIR `Patient.active` is also hard-coded `true`, so showing it would claim something the data does not know. We matched the PHP header and documented the difference.
+   - **Sex is shown, active status is not.** The challenge lists both; the PHP header shows neither. The header now shows sex as "Birth Sex: Female": FHIR `Patient.gender` is filled from `patient_data.sex`, the field OpenEMR's Demographics card labels "Birth Sex". Active status stays out: OpenEMR's FHIR `Patient.active` is hard-coded `true`, so showing it would claim something the data does not know, and the PHP dashboard does not show it either.
    - **"No Known Allergies" is never shown.** FHIR cannot say whether the list was reviewed.
    - **Medications vs prescriptions in modes B/C.** The split needs the standard API's medication list, which refuses patient tokens. Modes B/C therefore show one clearly labelled combined card rather than guess a split from `intent`.
-5. **Collapse state is per browser, not per user.** PHP saves each card's expanded or collapsed state in the user's server-side settings. The read-only port keeps it in `localStorage`, under the same setting names.
+5. **Collapse state and recent patients are per browser, not per server-side user.** PHP saves each card's expanded or collapsed state in the user's server-side settings. The read-only port keeps it in `localStorage`, under the same setting names.
+
+   OpenEMR also keeps a per-user recent-patients list (`recent_patients`, updated when the PHP dashboard opens a chart and shown by the Patient Finder), but no REST or FHIR route exposes it and the port does not write to OpenEMR. The port therefore keeps its own list in the browser: at most 10 patients, most recent first, per signed-in user (the key is a hash of `fhirUser`, so it does not name the user). It stores **ids only**, so a shared or lost machine reveals no names, and a patient the user can no longer open simply disappears from the list. The cost: the list does not follow the user to another browser and is separate from OpenEMR's own list.
 6. **No deep links back into OpenEMR's tabbed UI.** OpenEMR has no URL that opens a given patient's edit screen inside its tab frame. The pencil links (when `VITE_OPENEMR_WEB_URL` is set) therefore open the PHP dashboard with `set_pid` in a new tab, and editing continues there. Linking straight to `stats_full.php` could open whichever patient the OpenEMR session last had.
 7. **Scope.** The photo, the encounter selector and the other PHP cards (vitals, notes, appointments, the Co-Pilot panel, and so on) are not ported. The challenge asks for the header, the five cards and one more section.
 
@@ -231,7 +236,7 @@ These are behaviours of this OpenEMR build (8.2.0-dev), measured on the dev stac
 - **Tests**: in `dashboard/`, `npm ci && npm run lint && npm run typecheck && npm test && npm run build && npm run build:smart`. This is the same as the CI job.
 - **Live, mode A**:
   1. Register the confidential client and put its values in `dashboard/.env`.
-  2. `npm run dev`, open http://localhost:5173, sign in as a clinician and search "Demo".
+  2. `npm run dev`, open http://localhost:5173 and sign in as a clinician. The landing page lists patients by last name; search "Demo" to narrow it; open two patients and they appear under *Recent patients*.
   3. Compare with the PHP dashboard for the same patient using `docs/dashboard-parity/PARITY.md`.
 - **Live, modes B/C**: `npm run build:smart`, register the SMART client, then *Patient → Patient Dashboard (React)*.
 - **Images**:
