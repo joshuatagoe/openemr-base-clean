@@ -111,6 +111,8 @@ The panel shows the same definitions on hover (`HELP` in
 | `evidence_ready` | Evidence found → `answer` proposes considerations; the critic screen drops unsupported ones. |
 | `briefing_complete` | Finished normally. |
 | `worker_failed` | A worker failed; the run stops and the briefing is marked degraded with a reason. |
+| `iteration_limit` | The supervisor reached its step cap (6 decisions) before finishing; the run stops and the briefing is marked degraded with this reason. |
+| `budget_exhausted` | The briefing's time budget (75 s, below the module's 90 s timeout) ran out; the run stops and the briefing is marked degraded with this reason. |
 
 **Degraded reasons** (the panel names the reason when a briefing cannot be produced in full)
 
@@ -119,8 +121,8 @@ The panel shows the same definitions on hover (`HELP` in
 | `no_extracted_documents` | No lab document has been read yet for this patient (see the document list). |
 | `all_values_reviewed` | Documents were read, and every value read from them has been filed, rejected or un-filed. Filed values are part of the chart's lab history; there is nothing new from documents to brief. |
 | `no_document_on_file` | No PDF, PNG or JPEG in the patient's Documents. |
-| `document_unavailable` | The newest document could not be read from OpenEMR. |
-| `document_too_large` | The newest document is over 10 MB. |
+| `document_unavailable` | A document could not be read from OpenEMR. In the document list this is per document; as a briefing reason it means a stored source could not be read, or (on the fallback path used only when the module's tables are missing) the newest document could not be read. |
+| `document_too_large` | A document is over 10 MB, the largest the Co-Pilot reads. Per document in the document list; as a briefing reason it applies to the fallback path's newest document. |
 | `agent_unavailable` | The Co-Pilot agent could not be reached. |
 | `document_not_decodable` / `document_not_readable` | The file bytes are corrupt, or the model could read nothing from it. |
 | `extraction_unavailable` / `answer_model_unavailable` | A model call failed. After an answer-model failure the record lines still show, without guidance. |
@@ -187,7 +189,7 @@ for a clinician to compare it with its highlighted source and **Verify and file*
 | unreadable (intake item) | The entry could not be read. Nothing was guessed; open the form to read it yourself. |
 | — patient-reported, intake form (follow-up source) | A follow-up answer cites an item the patient wrote on an intake form. The answer says it is "patient-reported (from the intake form), not in the chart"; it is never a lab value or chart record. A reported medication that differs from the chart may be stated as a discrepancy citing both. |
 | from an older document (collected / received <date>) that was never reviewed | A follow-up answer cites a value or intake item from a document dated more than 12 months ago (latest collection date, else upload date) that nobody has reviewed. Same 12-month rule as the document briefing's "An older document" line. |
-| [patient-reported] line in the briefing | An intake item in the document briefing, citing the form. Unreadable entries are listed under *Needs attention*. A blank allergy or medication section is stated as a limitation ("not a statement of no known allergies"). Reported medications are not compared with the chart's medication list in the briefing, and the briefing says so. |
+| [patient-reported] line in the briefing | An intake item in the document briefing, citing the form. Unreadable entries are listed under *Needs attention*. A blank allergy or medication section is stated as a limitation ("not a statement of no known allergies"). Reported medications are compared with the chart's medication list when the module sends it: a medication not on the list, or the same drug at a different dose, is shown under *Needs attention*. When the list was not sent, the briefing says the medications were not compared. |
 
 ---
 
@@ -201,7 +203,8 @@ patient identifier is exported — a test fails the build if one is.
 | `briefing` → `extract` | Week 1 note briefing; `extract` is the model reading the plan. |
 | `turn` → `turn_step` → `tool` | Week 1 follow-up question. |
 | `ticket.*` | Week 1 panel requests, from the OpenEMR module. |
-| `document_briefing` | Week 2 root. Contains `supervisor` decisions and the workers `intake-extractor` (→ `lab_extract`), `evidence-retriever` (→ `retrieval.hybrid`, `rerank`) and `answer` (→ `answer_considerations`). |
+| `document_extract` | Week 2: reading one document on chart open. Contains `lab_extract` (lab reports) or `intake_extract` (intake forms), both generations, and `verify_document` (the matcher checking each value against the page). |
+| `document_briefing` | Week 2 root. Contains `supervisor` decisions and the workers `intake-extractor` (→ `lab_extract`; skipped when the briefing uses stored documents), `evidence-retriever` (→ `retrieval.hybrid`, `rerank`) and `answer` (→ `answer_considerations`). |
 
 Week 2 scores on the trace: `extraction_results`, `extraction_verified_fraction` (share of values
 found verbatim on the page), `extraction_unreadable`, `retrieval_candidates`, `evidence_snippets`,

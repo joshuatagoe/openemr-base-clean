@@ -27,16 +27,17 @@ This fork adds a Clinical Co-Pilot for a primary-care physician's 90 seconds bef
 | OpenEMR with the Co-Pilot panel (Patient Summary) | https://openemr-base-clean-production.up.railway.app/ |
 | Co-Pilot agent ([`/health`](https://copilot-agent-production-0395.up.railway.app/health), [`/ready`](https://copilot-agent-production-0395.up.railway.app/ready) — checks the ticket secret, model provider, bundle store, OpenEMR and Langfuse, [`/docs`](https://copilot-agent-production-0395.up.railway.app/docs)) | https://copilot-agent-production-0395.up.railway.app/ |
 | Langfuse (self-hosted; traces, scores, cost — PHI masked at the agent) | https://langfuse-web-production-818f.up.railway.app/ (login required) — [Clinical Co-Pilot dashboard](https://langfuse-web-production-818f.up.railway.app/project/cmu8ny4ie0006ok02zd0nib5e/dashboards/cmu8tudy10001ql02y7yb0i7r) |
+| Patient dashboard (React port, Week 2 surprise challenge; mode A, standalone — sign in with an OpenEMR clinician account) | https://dashboard-production-cf2f.up.railway.app/ (mode B: open a chart in OpenEMR → *Patient → Patient Dashboard (React)*) |
 
 **Documents**
 
 | Document | Purpose |
 |---|---|
 | [AUDIT.md](AUDIT.md) | Audit of OpenEMR as found, before any Co-Pilot changes |
-| [USER.md](USER.md) | Target user, workflow and use cases |
+| [USER.md](USER.md) | Target user, workflow and use cases (§9, Week 2 scoped extensions, was added on 2026-09-23) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the Co-Pilot is built: summary, glossary, end-to-end flow, verification, tradeoffs, status |
 | [KEY_METRICS.md](KEY_METRICS.md) | What success means and how each metric is measured |
-| [EVAL.md](EVAL.md) | The evaluation dataset: every case, its class and the failure mode it guards, with deterministic and live results |
+| [EVAL.md](EVAL.md) | The Week 1 evaluation dataset (24 note cases): each case, its class and the failure mode it guards, with deterministic and live results. The Week 2 golden set (74 cases) is in [EVAL_GATE.md](EVAL_GATE.md) |
 | [COST_ANALYSIS.md](COST_ANALYSIS.md) | Measured unit costs, development spend, projections at 100 / 1K / 10K / 100K physicians and the architectural changes each level needs |
 
 **Where the code lives**
@@ -66,7 +67,7 @@ Tests: `uv run pytest` in `copilot-agent/`; module PHPUnit inside the container 
 
 **Changes since the Week 1 submission (2026-09-21, before Week 2 work)**
 
-Everything above is the Week 1 baseline as submitted on 2026-09-20. The items below are **not Week 1 results and not Week 2 work**: they were made on 2026-09-21, after the Week 1 submission and before any Week 2 (multimodal / multi-agent) surface was added, so graders can separate all three. Each is small and is covered by the suites named. Week 2 work begins after commit `e80e740` and is described in `W2_ARCHITECTURE.md` once it exists.
+Everything above is the Week 1 baseline as submitted on 2026-09-20. The items below are **not Week 1 results and not Week 2 work**: they were made on 2026-09-21, after the Week 1 submission and before any Week 2 (multimodal / multi-agent) surface was added, so graders can separate all three. Each is small and is covered by the suites named. Week 2 work begins after commit `e80e740` and is described in the *Week 2* section below and in `W2_ARCHITECTURE.md`.
 
 | Change | Why | Where |
 |---|---|---|
@@ -109,18 +110,19 @@ A document whose printed name or date of birth does not match the chart is **hel
 | `COPILOT_MAX_SIGNED_BODY_BYTES` | `15728640` (15 MiB) | Signed request bodies over this are refused with 413 while being read, before the signature is checked. Fits the 10 MiB document cap after base64 |
 | `ANTHROPIC_TIMEOUT_SECONDS` | `20` | Per model call. Set `40` in production: the briefing makes two sequential calls (~18 s total), and 2 × 40 s stays inside the module's 90 s round-trip timeout |
 
-No new variable is needed on the OpenEMR side — the document route reuses `COPILOT_AGENT_URL` and `COPILOT_TICKET_SECRET`.
+No new variable is needed on the OpenEMR side for the documents — the document route reuses `COPILOT_AGENT_URL` and `COPILOT_TICKET_SECRET`. (The patient dashboard's modes B/C add `DASHBOARD_SMART_CLIENT_ID` on OpenEMR; see [`dashboard/README.md`](dashboard/README.md).)
 
 **The eval gate** — [EVAL_GATE.md](EVAL_GATE.md)
 
 - Run it from a fresh clone, no key needed: `cd copilot-agent && uv sync && uv run python scripts/eval_gate.py`
 - CI job `eval-gate` in [`.gitlab-ci.yml`](.gitlab-ci.yml) runs on every push and merge request
 - Block commits locally too (hooks do not come with a clone): `git config core.hooksPath .githooks`
-- The regression it blocked: [merge request !1](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/1)
+- The regressions it blocked: [merge request !1](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/1) (Week 1: the hallucination guard removed) and [merge request !2](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/2) (Week 2: computed abnormal flags reported as printed). Both pipelines are red and both merges are blocked by *Pipelines must succeed*
+- CI also has a second job, `dashboard` (the patient dashboard's lint, type check, tests and build). If a pipeline sits in *pending*, the self-hosted runner is offline; run the gate locally with the command above
 
 **Supervisor and workers.** The document briefing runs as a LangGraph graph ([`app/workflow.py`](copilot-agent/app/workflow.py)): a supervisor routes to `intake-extractor`, then `evidence-retriever`, then the answer step, and logs every handoff with its reason; the panel footer shows the route.
 
-**Observability.** Reading a document is one trace (`document_extract`, with `lab_extract` or the intake extraction and `verify_document`). Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and the workers, with `lab_extract` (generation) under `intake-extractor`, `retrieval.hybrid` and `rerank` under `evidence-retriever`, and `answer_considerations` (generation) under `answer`. Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
+**Observability.** Reading a document is one trace (`document_extract`, with `lab_extract` or `intake_extract` and `verify_document`). Each document briefing is one Langfuse trace: `document_briefing` (root, trace id = correlation id) → `supervisor` decisions and the workers, with `lab_extract` (generation) under `intake-extractor`, `retrieval.hybrid` and `rerank` under `evidence-retriever`, and `answer_considerations` (generation) under `answer`. Both model calls carry tokens and cost; the trace also carries per-encounter scores (extraction verified fraction, retrieval candidates, evidence snippets, considerations shown, claims withheld, degraded). No document text or extracted value is exported — `tests/test_tracing.py` fails the build if one is.
 
 **Week 2 documents**
 
@@ -134,7 +136,9 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 
 **Surprise challenge — the patient dashboard in React.** [`PATIENT_DASHBOARD_MIGRATION.md`](PATIENT_DASHBOARD_MIGRATION.md) is the defense (why React + TypeScript, what was gained over PHP, tradeoffs, OpenEMR API gaps found). The app is in [`dashboard/`](dashboard/README.md) — run, test and Railway deployment steps there — in three modes: **A** standalone behind a thin login/proxy server (OAuth2/OIDC, confidential client), **B** inside OpenEMR from *Patient → Patient Dashboard (React)*, **C** from the patient summary's *SMART Enabled Apps* card. Parity evidence: [`docs/dashboard-parity/PARITY.md`](docs/dashboard-parity/PARITY.md).
 
-**Tests.** Agent: `uv run pytest` in `copilot-agent/` — 860 passed, 7 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 260 / 260 PHPUnit, up from 57; panel: 117 / 117 jest. Golden set: 74 cases, all five rubrics at 1.00.
+**Tests** (measured 2026-09-27 on `main` at `0cfa450`). Agent: `uv run pytest` in `copilot-agent/` — 868 tests, up from 308 at the end of Week 1. The eval gate runs 867 of them as its first stage (860 passed, 7 skipped: the opt-in live tiers); the other, `tests/test_api_collection.py`, needs the Bruno CLI. Module: 272 / 272 PHPUnit, up from 57; panel: 117 / 117 jest. Patient dashboard: `npm test` in `dashboard/` — 549 (BFF 211, web 338). Golden set: 74 cases (24 note + 50 document), all five rubrics at 1.00.
+
+**Demo video:** (link added at submission)
 
 ---
 

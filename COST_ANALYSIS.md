@@ -24,7 +24,8 @@ arithmetic. Usage assumptions come from the persona in USER.md.
   price, an upper bound since cached prefix tokens bill at a tenth), **$200 / month of Claude Code** (Max plan, used
   to build the project; ≈ $40 prorated to the six-day build), **$20 / month of ChatGPT Plus** (supporting research
   and writing; ≈ $4 prorated), and **$20 / month Railway** (Pro plan; the three
-  services and the six-service Langfuse stack run inside the plan's included usage). Most of the API tokens were
+  services and the six-service Langfuse stack run inside the plan's included usage; since 2026-09-27 a
+  fourth application service, the patient dashboard's BFF, runs on the same plan). Most of the API tokens were
   spent on 2026-09-20 on the deployed load tests, the live evaluation run and the API-collection checks — the unit
   suite, the deterministic eval tier and the load baseline all run on the stub provider.
 
@@ -35,7 +36,7 @@ arithmetic. Usage assumptions come from the persona in USER.md.
 | Anthropic API — the agent's model calls during development, evaluation, load tests and verification (Sept 15–20) | ≈ $13 (2,069,958 input + 111,743 output tokens, Opus 5; list price, upper bound) | console.anthropic.com → Usage, last 30 days |
 | Claude Code — AI-assisted development of the module, agent, tests and documents | $200 / month plan (≈ $40 prorated to the six-day build) | Max plan; usage not itemised by the plan |
 | ChatGPT Plus — supporting research and writing during the build week | $20 / month plan (≈ $4 prorated to the six-day build) | Plan is not metered per project; the usage page shows peak activity in the build week |
-| Railway: OpenEMR + agent + Langfuse (postgres, clickhouse, redis, minio, web, worker) | $20 / month | Railway Pro plan; usage within the included credit |
+| Railway: OpenEMR + agent + Langfuse (postgres, clickhouse, redis, minio, web, worker); since 2026-09-27 also the patient dashboard's BFF | $20 / month | Railway Pro plan; usage within the included credit |
 | Traced model calls since Langfuse went live (2026-09-19) | $0.11 | Langfuse: 9 production generations $0.034; earlier v3-era traces $0.075 |
 | One 18-case eval run, live tier | ≈ $0.08 | 18 extractions × $0.0042 |
 | One Bruno collection run against the deployed agent | ≈ $0.02 | 10 + 21 + 22 (three model calls) |

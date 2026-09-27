@@ -14,7 +14,8 @@ never queries the database.
 cp .env.example .env            # fill in ANTHROPIC_API_KEY and COPILOT_TICKET_SECRET
 uv sync
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-uv run pytest                   # 270+ tests, no network
+uv run pytest                   # 868 tests, no network (the opt-in live ones skip)
+uv run python scripts/eval_gate.py   # the Week 2 eval gate: tests + 74 golden cases (EVAL_GATE.md)
 RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live   # opt-in live extraction eval (spends money)
 ```
 
@@ -29,6 +30,9 @@ RUN_ANTHROPIC_INTEGRATION_TEST=1 uv run pytest -k live   # opt-in live extractio
 | `GET /v1/briefings/{bundle_id}` | panel | single-use ticket (`Authorization: Bearer`) | SSE: `commitment`*, `interval_annotation`, then `complete` or `degraded` |
 | `POST /v1/conversations/{bundle_id}/turns` | panel | ticket (bound, not consumed) | One verified follow-up turn |
 | `DELETE /v1/bundles/{bundle_id}` | panel | ticket (expiry ignored) | Drop bundle and conversation |
+| `POST /v1/bundles/{bundle_id}/refresh` | module | HMAC | Week 2: swap the pending document facts and lab results in a stored bundle after a document is read or a value is filed, rejected or un-filed (same bundle and conversation; no model call) |
+| `POST /v1/documents/extract` | module | HMAC | Week 2: read one stored lab report or intake form (on chart open) and return the validated extraction with a page and box per value |
+| `POST /v1/documents/briefing` | module | HMAC | Week 2: the document briefing (supervisor graph: retrieval, rerank, answer) over the stored extractions |
 | `POST /v1/briefings` | eval, load tests | none | Synchronous briefing over an inline bundle |
 | `GET /health`, `GET /ready`, `GET /metrics` | ops | none | Liveness; per-dependency readiness; process metrics |
 
@@ -49,6 +53,9 @@ Model: `MODEL_PROVIDER` (`anthropic` | `stub`), `ANTHROPIC_API_KEY`,
 (`low`|`medium`|`high`), `EXTRACTION_MAX_OUTPUT_TOKENS`, `TURN_MAX_OUTPUT_TOKENS`,
 `PRICE_INPUT_PER_MTOK` / `PRICE_CACHED_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK`
 (override the built-in cost table).
+
+Week 2 variables (OCR, reranker, AWS, signed body size, model timeout) are listed in the root
+README, *Environment variables added in Week 2*, and in `.env.example`.
 
 `MODEL_PROVIDER=stub` makes no model calls (deterministic extraction from the
 curated test table, refusal answers for turns) and is reported as `degraded`
@@ -204,3 +211,11 @@ Projections and the architectural changes per scale tier are in
 `eval.py` (fixture tier; cases under `fixtures/cases/`), `providers/`
 (`base.py` port, `anthropic_provider.py`, `stub_provider.py`, `prompt.py`),
 `loadtest/` (runner, k6 script, `BASELINE.md`).
+
+Week 2 (W2_ARCHITECTURE.md): `documents.py` and `intake.py` (strict document
+schemas), `lab_extractor.py`, `intake_extractor.py`, `page_text.py` (text layer
+and OCR), `verification.py` (the matcher), `document_briefing.py` (document
+routes), `workflow.py` (supervisor graph), `retrieval.py`, `reranker.py`,
+`corpus.py`, `briefing.py` (grounded document briefing), `ageing.py`,
+`recording.py`, `doc_eval.py` / `doc_eval_flows.py` / `rubrics.py` (golden-set
+scoring), `scripts/eval_gate.py` (the gate).

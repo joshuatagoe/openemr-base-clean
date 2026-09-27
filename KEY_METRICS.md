@@ -157,7 +157,7 @@ grep '"event": "span.turn"' <agent stderr log> | jq '{outcome, statements, rejec
 
 ## 12. Week 2 — the document briefing
 
-Everything above is the Week 1 metric set, still in force for the Week 1 briefing. This section adds the metrics for the Week 2 promise: **a physician can file a lab report and, in the time it takes to open the chart, see what it says, what needs attention, and what guidance applies — with every value traceable to the printed page and nothing invented.**
+Everything above is the Week 1 metric set, still in force for the Week 1 briefing. This section adds the metrics for the Week 2 promise: **a physician can file a lab report or an intake form and, in the time it takes to open the chart, see what it says, what needs attention, and what guidance applies — with every value traceable to the printed page and nothing invented.**
 
 ### 12.1 North star — Grounded Document Briefing Rate
 
@@ -177,7 +177,7 @@ Everything above is the Week 1 metric set, still in force for the Week 1 briefin
 | **Tier-inadmissible claims shown** | 0 threshold claims resting only on Tier B guidance | Patient-education content is not clinical authority (ADR-006) |
 | **Document content in logs** | 0 | `§HP-HIPAA`; exact-string test per case |
 
-Four of the five rubric categories sit at a floor of 1.00 for a reason worth stating: the PRD's 5-point regression tolerance cannot catch a single-case regression at this set size (one case of 70 is 1.4 points). The floors are what catch it. See `EVAL_GATE.md`.
+Four of the five rubric categories sit at a floor of 1.00 for a reason worth stating: the PRD's 5-point regression tolerance cannot catch a single-case regression at this set size (one case of 74 is 1.4 points). The floors are what catch it. See `EVAL_GATE.md`.
 
 ### 12.3 Operational metrics — measured, not projected
 
@@ -213,9 +213,9 @@ end to end 15.0 s, $0.039 — agrees with these numbers.)*
 |---|---|---|
 | Golden cases | 74 — 24 Week 1 note cases; 50 Week 2: 26 lab extraction (21 auto-generated 2026-09-23, not yet reviewed), 3 intake, 21 briefing/routing/follow-up/safety/PHI/ageing flow cases | `copilot-agent/fixtures/cases/`, `fixtures/doc_cases/` |
 | Rubric pass rate, all five categories | 1.00 | `scripts/eval_gate.py` |
-| Document cases on **real recorded model output** | 5 of 5 | `fixtures/recordings/` |
-| Test suite (gate stage 1) | 860 passed, 7 skipped; module PHPUnit 260; panel jest 117 | `uv run pytest` |
-| Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule; a changed extraction prompt | `EVAL_GATE.md` |
+| Document cases on **real recorded model output** | 29 of 29 extraction cases (26 lab, 3 intake); the 21 flow cases replay them | `fixtures/recordings/` |
+| Test suites (the agent suite is gate stage 1) | agent 868 tests, of which the gate runs 867: 860 passed, 7 skipped (opt-in live tests); module PHPUnit 272 / 272; panel jest 117 / 117; patient dashboard 549 (BFF 211, web 338) | `uv run python scripts/eval_gate.py`; PHPUnit per the module README; `npm test` in `dashboard/` |
+| Regressions demonstrated blocked | Week 1 hallucination guard (MR !1); Week 2 computed-flag rule (MR !2); a changed extraction prompt | `EVAL_GATE.md` |
 
 ### 12.5 What is not yet measured
 

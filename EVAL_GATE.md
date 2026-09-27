@@ -14,9 +14,12 @@ All three are committed. Nothing is fetched at runtime.
 
 | Artifact | Path |
 |---|---|
-| **Prompts** | [`copilot-agent/app/providers/prompt.py`](copilot-agent/app/providers/prompt.py) — extraction system prompt and user-content builder |
+| **Prompts** (Week 1) | [`copilot-agent/app/providers/prompt.py`](copilot-agent/app/providers/prompt.py) — `EXTRACTION_SYSTEM_PROMPT` (note plan extraction), `FOLLOWUP_SYSTEM_PROMPT` and the user-content builder |
+| **Prompts** (Week 2) | the same file — `LAB_EXTRACTION_SYSTEM_PROMPT` (lab reports) and `INTAKE_EXTRACTION_SYSTEM_PROMPT` (intake forms). Each recording is keyed to the prompt, so changing either one makes its cases stale and fails the gate |
 | **Schemas** (model-facing) | [`copilot-agent/app/providers/base.py`](copilot-agent/app/providers/base.py) — `ModelCommitment`, `ModelExtractionOutput`, `ModelStatement`, `ModelTurnAnswer` |
 | **Schemas** (domain) | [`copilot-agent/app/contracts.py`](copilot-agent/app/contracts.py) — `ContextBundle`, `Citation`, `EvidenceMatch`, all `StrictModel` with `extra="forbid"` |
+| **Schemas** (Week 2 documents) | [`copilot-agent/app/documents.py`](copilot-agent/app/documents.py) — `LabDocument`, `LabResult` (test name, value, unit, reference range, collection date, abnormal flag and its source, citation), `DocumentCitation` (`source_type`, `source_id`, `page_or_section`, `field_or_chunk_id`, `quote_or_value`, `page`, `bbox`); [`copilot-agent/app/intake.py`](copilot-agent/app/intake.py) — `IntakeForm` (demographics, chief concern, medications, allergies, family history, each item cited). All `StrictModel` |
+| **Schema validation tests** | `tests/test_intake_schema.py`, `tests/test_lab_extraction_acceptance.py`, `tests/test_stored_documents.py` (in `copilot-agent/`); run as the gate's stage 1 |
 | **Golden set — Week 1 notes** | [`copilot-agent/fixtures/cases/`](copilot-agent/fixtures/cases/) — one JSON file per case, schema `EvalCase` in [`app/eval.py`](copilot-agent/app/eval.py) |
 | **Golden set — Week 2 documents** | [`copilot-agent/fixtures/doc_cases/`](copilot-agent/fixtures/doc_cases/) — one JSON per case, scored by [`app/doc_eval.py`](copilot-agent/app/doc_eval.py); the PDFs are in [`fixtures/documents/`](copilot-agent/fixtures/documents/) |
 | **Recorded model responses** | [`copilot-agent/fixtures/recordings/`](copilot-agent/fixtures/recordings/) — real `claude-opus-5` output, one per document case, replayed by [`app/recording.py`](copilot-agent/app/recording.py) |
@@ -24,8 +27,9 @@ All three are committed. Nothing is fetched at runtime.
 | **Gate** | [`copilot-agent/scripts/eval_gate.py`](copilot-agent/scripts/eval_gate.py) |
 | **Baseline** | [`copilot-agent/evals/baseline.json`](copilot-agent/evals/baseline.json) |
 
-**Case count: 74** — 21 of them auto-generated on 2026-09-23 and **not yet
-reviewed by a human**.
+**Case count: 74** (24 note cases + 50 document cases: 26 lab extraction, 3
+intake, 21 flow) — 21 of the lab cases auto-generated on 2026-09-23 and **not
+yet reviewed by a human**.
 
 - **24 Week 1 note cases:** boundary (12), missing/conflicting (7), regression
   (2), adversarial (2), invariant (1). Scripted model output; they test our
@@ -42,9 +46,38 @@ reviewed by a human**.
   Regenerate with `uv run python fixtures/doc_cases/_generate.py`, then record
   new cases with `uv run python scripts/record_evals.py --missing`.
 
-The remaining cases — intake forms, wrong-patient upload, repeat upload — land
-with the features they exercise. Supervisor handoffs are covered by stage-1
-tests (`tests/test_workflow.py`) and have no golden case yet.
+Wrong-patient and repeat upload are covered by module PHPUnit tests, not golden
+cases. Supervisor routing is covered by stage-1 tests (`tests/test_workflow.py`,
+`tests/test_workflow_budget.py`) and by the flow cases
+`w2_brief_stored_skips_extraction`, `w2_brief_step_cap_reason_code` and
+`w2_brief_budget_reason_code`.
+
+### Latest results
+
+Run on 2026-09-27 on `main` at `0cfa450`, with
+`uv run python scripts/eval_gate.py`:
+
+```
+  868 tests collected; stage 1 runs 867 of them (the Bruno collection test needs the Bruno CLI)
+  860 passed, 7 skipped in 137.03s          (the 7 are the opt-in live tests)
+  stage 1/2 passed
+
+  golden cases: 74  (24 Week 1 note cases + 50 Week 2 document cases on recorded model output)
+
+  category                  rate    base   floor   n
+  ------------------------------------------------------
+  schema_valid              1.00    1.00    1.00  74   ok
+  citation_present          1.00    1.00    1.00  74   ok
+  factually_consistent      1.00    1.00    0.95  74   ok
+  safe_refusal              1.00    1.00    1.00  28   ok
+  no_phi_in_logs            1.00    1.00    1.00  74   ok
+
+  GATE PASSED
+```
+
+CI: the latest `main` pipeline on GitLab (31317, at `4e409e7`, 2026-09-27)
+passed both jobs, `eval-gate` and `dashboard`. The committed baseline
+(`evals/baseline.json`) holds the same counts.
 
 ## 2. How to install and trigger it
 
@@ -68,7 +101,12 @@ Runs on every push and merge request. Writes `eval-results.json` as a build
 artifact (retained 30 days) so a run can be inspected without re-running it.
 
 The runner is self-hosted (Windows, shell executor, LocalSystem) because
-`labs.gauntletai.com` provides no shared runners.
+`labs.gauntletai.com` provides no shared runners. **If a pipeline sits in
+*pending*, that runner is offline**; run the gate locally with the command
+above instead: it is the same script.
+
+The same file has a second job, **`dashboard`**, for the patient-dashboard
+port (lint, type check, tests, build). It is separate from this gate.
 
 ### Git hook — install command
 
@@ -98,7 +136,8 @@ server-side. The two invoke one script, so they cannot drift apart.
 
 ### What runs — two stages, one command
 
-**Stage 1 — the full test suite** (`pytest`, ~870 tests, ~2.5 min). Any failure fails
+**Stage 1 — the test suite** (`pytest`, 867 tests, about 2¼ min on the
+self-hosted runner's machine). Any failure fails
 the gate and the golden set is not scored.
 
 This stage was added on 2026-09-23 after a proof that the golden set alone could
@@ -209,7 +248,7 @@ For completeness, the wider application uses:
 The Anthropic SDK import is deferred, so the offline tier does not require the
 vendor SDK to be installed, importable or licensed.
 
-## 5. The blocked merge request
+## 5. The blocked merge requests
 
 **MR: [!1 — DO NOT MERGE — demonstrate eval gate blocking a regression](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/1)**
 
@@ -265,6 +304,19 @@ Exit code `1`, pipeline red, merge request blocked.
 Note that the gate names the failing case and the specific defect. A gate that
 only reports a number tells you something broke; this one tells you what.
 
+### The Week 2 regression: MR !2
+
+**MR: [!2 — DEMO REGRESSION (do not merge): computed abnormal flags reported as printed](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/2)**
+(branch `demo/w2-flag-regression`, commit `48adddb`).
+
+**The regression:** in `copilot-agent/app/lab_extractor.py`, a flag the system
+*computed* from the reference range is labelled as if the lab *printed* it —
+the most consequential display error the document briefing could make.
+
+**What the pipeline reports:** pipeline 27010 (2026-09-24), job `eval-gate`
+**failed**, so the merge request is blocked by *Pipelines must succeed*, as
+MR !1 is. The MR is left open on purpose, as evidence.
+
 ---
 
 ## 6. What this gate does and does not test
@@ -274,14 +326,16 @@ it in two questions.
 
 **What it tests:** our deterministic code — grounding, citation resolution,
 tier admissibility, refusal rules, log safety. When it goes red, something *we
-wrote* broke. It runs in under a minute (about 30 s of tests, then the golden
-set), costs nothing, needs no key, and does not flake.
+wrote* broke. It runs in about 2½ minutes (about 2¼ minutes of tests, then the
+golden set), costs nothing, needs no key, and does not flake.
 
 **Two further regressions shown blocked on 2026-09-23**, beyond MR !1:
 
 - *Week 2 logic.* Making the lab extractor report its own computed comparison as
   a flag the lab printed: `GATE FAILED` at stage 1 (2 failed). Before the test
-  stage was added this passed the gate — which is why it was added.
+  stage was added this passed the gate — which is why it was added. The same
+  regression is kept open as [merge request !2](https://labs.gauntletai.com/calebtagoe/openemr-base-clean/-/merge_requests/2)
+  (§5).
 - *A changed prompt.* One sentence added to the lab extraction prompt: all five
   document cases go stale, `schema_valid` 0.83 against its 1.00 floor,
   `GATE FAILED`.
@@ -312,8 +366,9 @@ Six tests cover each invalidation axis and need no key
 
 ### Current status — the document tier is in the gate
 
-**Recordings are made, committed, and scored by the gate** (the five Week 2
-document cases above). Getting there hit `400 'Schema is too complex.'` — the
+**Recordings are made, committed, and scored by the gate** (29 recordings: the
+26 lab and 3 intake extraction cases above; the 21 flow cases replay them).
+The paragraphs below describe the first five, recorded on 2026-09-23. Getting there hit `400 'Schema is too complex.'` — the
 strict `LabDocument` nests too much for structured output — which was fixed by
 having the model return a flat draft and building the strict type in code. That
 is better design regardless: the model no longer produces bounding boxes,
@@ -330,8 +385,9 @@ prompt and running the gate:
   GATE FAILED
 ```
 
-All five document cases go stale together, so a prompt change cannot pass
-without someone re-recording and looking at what the model now does.
+All the document cases recorded with that prompt go stale together (five on
+2026-09-23; all 26 lab cases today), so a prompt change cannot pass without
+someone re-recording and looking at what the model now does.
 
 **What the recordings show.** On the image-only degraded scan (S03), the model
 read the correct value, 8.2 %. On the project fixture printing `8.#`, it reported
@@ -367,7 +423,7 @@ Each flow case names the one rubric its expectations answer to (`rubric` in the
 case file); the other categories are scored generically as in the last column.
 A single failing case also fails stage 1, because `tests/test_doc_eval.py`
 asserts every document and flow case passes on its recording — which matters for
-`factually_consistent`, whose 0.95 floor tolerates one case in 70.
+`factually_consistent`, whose 0.95 floor tolerates one case in 74.
 
 **Semantic criteria a judge would cover later — not enabled:**
 
