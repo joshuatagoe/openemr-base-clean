@@ -132,6 +132,8 @@ No new variable is needed on the OpenEMR side — the document route reuses `COP
 | [KEY_METRICS.md §12](KEY_METRICS.md) | Week 2 metrics: document-briefing correctness, measured latency and cost per step, the bottleneck |
 | [COST_ANALYSIS.md §8](COST_ANALYSIS.md) | Week 2 cost and latency report: measured p50/p95 per step, cost per document, projection to 100K physicians, what binds first |
 
+**Surprise challenge — the patient dashboard in React.** [`PATIENT_DASHBOARD_MIGRATION.md`](PATIENT_DASHBOARD_MIGRATION.md) is the defense (why React + TypeScript, what was gained over PHP, tradeoffs, OpenEMR API gaps found). The app is in [`dashboard/`](dashboard/README.md) — run, test and Railway deployment steps there — in three modes: **A** standalone behind a thin login/proxy server (OAuth2/OIDC, confidential client), **B** inside OpenEMR from *Patient → Patient Dashboard (React)*, **C** from the patient summary's *SMART Enabled Apps* card. Parity evidence: [`docs/dashboard-parity/PARITY.md`](docs/dashboard-parity/PARITY.md).
+
 **Tests.** Agent: `uv run pytest` in `copilot-agent/` — 860 passed, 7 skipped (the opt-in live tiers), up from 302 at the end of Week 1. The eval gate runs this suite as its first stage; `tests/test_api_collection.py` needs the Bruno CLI. Module: 260 / 260 PHPUnit, up from 57; panel: 117 / 117 jest. Golden set: 74 cases, all five rubrics at 1.00.
 
 ---
