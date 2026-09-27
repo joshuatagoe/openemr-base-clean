@@ -1,0 +1,36 @@
+/* Minimal shell styling; the dashboard layout follows the PHP summary page from C2 on. */
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: #212529;
+  background: #f8f9fa;
+}
+body { margin: 0; }
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+}
+.app-title { font-weight: 600; font-size: 1.1rem; }
+.app-auth { display: flex; align-items: center; gap: 0.75rem; }
+.app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+.btn {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-primary { background: #0d6efd; color: #fff; }
+.btn-secondary { background: #fff; color: #495057; border-color: #adb5bd; }
+.btn:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.notice { padding: 0.5rem 0.75rem; border-radius: 0.25rem; border: 1px solid; }
+.notice-info { background: #cff4fc; border-color: #9eeaf9; }
+.notice-warning { background: #fff3cd; border-color: #ffe69c; }
+.muted { color: #6c757d; }
+.signed-out { display: grid; gap: 0.75rem; justify-items: start; }
