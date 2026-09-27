@@ -43,3 +43,21 @@ eval-gate:
     expire_in: 30 days
     paths:
       - eval-results.json
+
+# Patient-dashboard port (dashboard/web SPA + dashboard/bff server). Offline:
+# the BFF tests run against a mock OpenEMR on a loopback port, the web tests
+# against MSW, so no OpenEMR, network or secret is needed.
+dashboard:
+  stage: gate
+  before_script:
+    # Node is a machine-wide install; put it first for the LocalSystem runner.
+    - $env:PATH = "C:\Program Files\nodejs;$env:PATH"
+  script:
+    - cd dashboard
+    - npm ci --no-audit --no-fund
+    - npm run lint
+    - npm run typecheck
+    - npm test
+    - npm run build
+    # Modes B/C build (the root Dockerfile runs the same script into the module folder).
+    - $env:DASHBOARD_OUT_DIR = "$env:TEMP\dashboard-smart-ci"; npm run build:smart

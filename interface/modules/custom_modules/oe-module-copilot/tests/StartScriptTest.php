@@ -41,8 +41,11 @@ final class StartScriptTest extends TestCase
         return $path;
     }
 
-    /** @return array{int, string, string} exit code, stdout, the call trace */
-    private function runScript(string $setupBody, string $migrateBody, int $timeout = 30): array
+    /**
+     * @param array<string, string> $extraEnv
+     * @return array{int, string, string} exit code, stdout, the call trace
+     */
+    private function runScript(string $setupBody, string $migrateBody, int $timeout = 30, array $extraEnv = []): array
     {
         $trace = $this->dir . '/trace';
         file_put_contents($trace, '');
@@ -52,7 +55,8 @@ final class StartScriptTest extends TestCase
             'COPILOT_MIGRATE_CMD' => $this->stub('migrate', 'echo migrate >> ' . $trace . "\n" . $migrateBody),
             'COPILOT_HTTPD_CMD' => $this->stub('httpd', 'echo "httpd $*" >> ' . $trace),
             'COPILOT_MIGRATE_TIMEOUT' => (string) $timeout,
-        ];
+            'COPILOT_DASHBOARD_CONFIG' => $this->dir . '/dashboard.config.json',
+        ] + $extraEnv;
         $proc = proc_open(['/bin/sh', $this->script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->dir, $env);
         self::assertIsResource($proc);
         $out = (string) stream_get_contents($pipes[1]);
@@ -85,6 +89,34 @@ final class StartScriptTest extends TestCase
         self::assertSame(0, $code);
         self::assertStringEndsWith("httpd -D FOREGROUND\n", $trace);
         self::assertStringContainsString('copilot-start: migrate_exit_', $out);
+    }
+
+    public function testWritesTheDashboardClientConfigFromTheEnvironment(): void
+    {
+        [$code, $out, $trace] = $this->runScript('exit 0', 'exit 0', 30, ['DASHBOARD_SMART_CLIENT_ID' => 'V9cjUfOKg7MB1YPgfnZGBntpRRNwPSZVB7jLiQjUVGQ']);
+        self::assertSame(0, $code);
+        self::assertStringEndsWith("httpd -D FOREGROUND\n", $trace);
+        self::assertStringContainsString('copilot-start: dashboard_config_written', $out);
+        self::assertStringNotContainsString('V9cj', $out, 'fixed codes only');
+        self::assertSame('{"clientId":"V9cjUfOKg7MB1YPgfnZGBntpRRNwPSZVB7jLiQjUVGQ"}' . "\n", file_get_contents($this->dir . '/dashboard.config.json'));
+    }
+
+    public function testRefusesAMalformedDashboardClientIdAndStillStartsApache(): void
+    {
+        foreach (['x"},"evil":{"a', 'short', str_repeat('a', 129)] as $bad) {
+            [$code, $out, $trace] = $this->runScript('exit 0', 'exit 0', 30, ['DASHBOARD_SMART_CLIENT_ID' => $bad]);
+            self::assertSame(0, $code);
+            self::assertStringEndsWith("httpd -D FOREGROUND\n", $trace);
+            self::assertStringContainsString('copilot-start: dashboard_client_id_invalid', $out, $bad);
+            self::assertFileDoesNotExist($this->dir . '/dashboard.config.json');
+        }
+    }
+
+    public function testWithoutADashboardClientIdNoConfigIsWritten(): void
+    {
+        [, $out] = $this->runScript('exit 0', 'exit 0');
+        self::assertStringNotContainsString('dashboard', $out);
+        self::assertFileDoesNotExist($this->dir . '/dashboard.config.json');
     }
 
     public function testASetupFailureStopsTheContainerAsBefore(): void

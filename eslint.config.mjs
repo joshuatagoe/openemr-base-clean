@@ -16,6 +16,7 @@ const compat = new FlatCompat({
 export default [{
     ignores: [
         "**/node_modules",
+        "dashboard/**",
         "interface/forms/eye_mag/js",
         "interface/forms/questionnaire_assessments/lforms",
         "interface/main/calendar/modules/PostCalendar/pnincludes/*.js",

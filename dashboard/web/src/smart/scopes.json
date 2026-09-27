@@ -1,0 +1,13 @@
+[
+  "openid",
+  "fhirUser",
+  "launch",
+  "patient/Patient.rs",
+  "patient/AllergyIntolerance.rs",
+  "patient/Condition.rs",
+  "patient/MedicationRequest.rs",
+  "patient/CareTeam.rs",
+  "patient/Observation.rs",
+  "patient/Practitioner.rs",
+  "patient/Organization.rs"
+]

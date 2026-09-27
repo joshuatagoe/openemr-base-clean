@@ -38,6 +38,17 @@ One module global exists (Administration → Globals → Clinical Co-Pilot):
 users without a care relationship read a context; every such read is audited
 with basis `admin_override`.
 
+## Patient dashboard (React), modes B/C
+
+The module also hosts the React port of the patient dashboard (`dashboard/` at the
+repository root; see `dashboard/README.md`, *Modes B and C*). Packaging only: a
+*Patient → Patient Dashboard (React)* menu entry, `public/dashboard-launch.php`
+(redirects to OpenEMR's own SMART EHR launch for the open chart) and the static
+build in `public/dashboard/` (gitignored; built by the root `Dockerfile`, or
+`npm run build:smart` in `dashboard/`). The SMART client id is read from
+`public/dashboard.config.json`, which the start script writes from
+`DASHBOARD_SMART_CLIENT_ID`.
+
 ## Demo data
 
 `dev/seed_evelyn_demo.php --confirm-local` seeds the tracer-bullet patient;

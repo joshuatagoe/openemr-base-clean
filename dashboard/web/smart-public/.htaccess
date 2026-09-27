@@ -1,0 +1,23 @@
+# Patient dashboard (React), modes B/C: static files served by OpenEMR's Apache
+# from the Co-Pilot module's public folder. Copied into the build by
+# `npm run build:smart` (Vite publicDir). OpenEMR's <Directory> allows only
+# `AllowOverride FileInfo`, so only FileInfo directives are used here
+# (Header, Files, RedirectMatch); `Options` would be a 500.
+
+# CSP: only this origin's own files and API. frame-ancestors 'self' lets the
+# app run inside OpenEMR's tab frame (menu entry) and the SMART apps card's
+# dialog iframe, which are both on this origin; no other site may frame it.
+Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "no-referrer"
+
+# index.html must be revalidated so a new build is picked up; assets are
+# content-hashed and can be cached.
+<Files "index.html">
+    Header set Cache-Control "no-cache"
+</Files>
+
+# No directory listing. OpenEMR's Apache already sets `Options -Indexes`; this
+# also answers 404 for the assets folder itself, whatever the server config.
+RedirectMatch 404 "/assets/?$"

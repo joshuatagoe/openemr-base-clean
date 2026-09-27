@@ -1,0 +1,118 @@
+/* Minimal shell styling; the dashboard layout follows the PHP summary page from C2 on. */
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: #212529;
+  background: #f8f9fa;
+}
+body { margin: 0; }
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+}
+.app-title { font-weight: 600; font-size: 1.1rem; }
+.app-auth { display: flex; align-items: center; gap: 0.75rem; }
+.app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+.btn {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-primary { background: #0d6efd; color: #fff; }
+.btn-secondary { background: #fff; color: #495057; border-color: #adb5bd; }
+.btn:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.notice { padding: 0.5rem 0.75rem; border-radius: 0.25rem; border: 1px solid; }
+.notice-info { background: #cff4fc; border-color: #9eeaf9; }
+.notice-warning { background: #fff3cd; border-color: #ffe69c; }
+/* #5c636a: at least 4.5:1 (WCAG AA) on the page background and on striped table rows (axe, C6). */
+.muted { color: #5c636a; }
+.signed-out { display: grid; gap: 0.75rem; justify-items: start; }
+
+/* Patient search (C2). */
+.patient-search h1, .patient-name { margin: 0 0 0.5rem; }
+h1:focus { outline: none; }
+h1:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.search-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
+.form-field { display: grid; gap: 0.25rem; }
+.form-field input { font: inherit; padding: 0.3rem 0.5rem; border: 1px solid #adb5bd; border-radius: 0.25rem; }
+.form-field input:focus-visible, .results a:focus-visible { outline: 3px solid #86b7fe; outline-offset: 1px; }
+.form-field input[aria-invalid='true'] { border-color: #dc3545; }
+.results { border-collapse: collapse; width: 100%; background: #fff; }
+.results caption { text-align: left; font-weight: 600; padding: 0.25rem 0; }
+.results th, .results td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #dee2e6; }
+.page-state, .page-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+
+/* Persistent patient bar: mirrors OpenEMR's tab-frame patient bar
+   (name as large text, "(pubpid)" small + muted, "DOB: ... Age: ..." below). */
+.patient-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin: 0 -1rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+.patient-name { display: inline; font-size: 1.75rem; font-weight: 500; }
+.patient-mrn { font-size: 1.4rem; } /* <small> inside the PHP h3: 80% of the name size */
+.patient-dob { margin-top: 0.5rem; }
+
+/* Clinical cards (C3). Mirrors demographics.php: page background hsl(0 0% 90%),
+   white cards with a 1px shadow and no radius; row 1 = Allergies, Medical
+   Problems, Medications (col-md-4 each); Prescriptions and Care Team full width;
+   everything stacks below Bootstrap's md breakpoint (768px). */
+.clinical-cards { display: grid; gap: 0.5rem; background: hsl(0 0% 90%); margin: 0 -1rem; padding: 0.5rem; }
+.cards-row { display: grid; gap: 0.5rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 768px) {
+  .cards-row-pami { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  /* Labs sits in the PHP left column (col-md-8). */
+  .cards-row-left { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+.labdata { margin: 0 0.6rem; }
+.labdata p { margin: 0 0 0.75rem; }
+.card { background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 12%); padding: 0.25rem; min-width: 0; }
+.card-title { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 0.25rem; font-size: 1rem; }
+.card-toggle {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #0d6efd; cursor: pointer; text-align: left;
+}
+.card-toggle:focus-visible, .card-edit:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.card-edit { color: #495057; padding: 0 0.25rem; }
+.card-body { padding: 0.5rem 0.25rem 0.25rem; }
+.card-state { padding: 0 0.25rem; }
+.card-error { margin: 0 0 0.5rem; color: #842029; }
+.card-note { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.pami-list { list-style: none; margin: 0; padding: 0; }
+.pami-list li { padding: 0.25rem; border-bottom: 1px solid rgb(0 0 0 / 12.5%); overflow-wrap: anywhere; }
+.pami-list li:last-child { border-bottom: 0; }
+/* PHP: bg-warning font-weight-bold px-1 on severe / life threatening / fatal. */
+.severity-alert { background: #ffc107; font-weight: 700; padding: 0 0.25rem; }
+.table-responsive { overflow-x: auto; }
+/* Focusable so a keyboard user can scroll a wide table on a phone (axe scrollable-region-focusable). */
+.table-responsive:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.card-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.card-table th, .card-table td { text-align: left; padding: 0.3rem; border-top: 1px solid #dee2e6; vertical-align: top; }
+.card-table thead th { border-bottom: 2px solid #dee2e6; background: #f8f9fa; }
+.card-table tbody tr:nth-of-type(odd) { background: rgb(0 0 0 / 5%); }
+.care-team-name { font-size: 1.1rem; font-weight: 500; margin: 0.25rem 0 0.5rem; }
+.badge { display: inline-block; padding: 0.2em 0.45em; font-size: 75%; font-weight: 700; line-height: 1; border-radius: 0.25rem; color: #fff; vertical-align: baseline; }
+.badge-primary { background: #0d6efd; }
+.badge-info { background: #0dcaf0; color: #000; }
+.badge-success { background: #198754; }
+.badge-warning { background: #ffc107; color: #000; }
+.badge-danger { background: #dc3545; }
+.badge-secondary { background: #6c757d; }
+.btn-sm { padding: 0.15rem 0.5rem; font-size: 0.875rem; }

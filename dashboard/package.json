@@ -1,0 +1,33 @@
+{
+  "name": "openemr-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Patient dashboard port: React SPA (web) + Fastify backend-for-frontend (bff).",
+  "workspaces": [
+    "web",
+    "bff"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n bff,web -c blue,magenta \"npm run dev -w bff\" \"npm run dev -w web\"",
+    "build": "npm run build -w web && npm run build -w bff",
+    "build:smart": "npm run build:smart -w web",
+    "register:smart": "node scripts/register-smart-client.mjs",
+    "start": "npm run start -w bff",
+    "test": "npm run test -w bff && npm run test -w web",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck -w bff && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1"
+  }
+}
