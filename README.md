@@ -138,7 +138,7 @@ No new variable is needed on the OpenEMR side for the documents — the document
 
 **Tests** (measured 2026-09-27 on `main` at `0cfa450`). Agent: `uv run pytest` in `copilot-agent/` — 868 tests, up from 308 at the end of Week 1. The eval gate runs 867 of them as its first stage (860 passed, 7 skipped: the opt-in live tiers); the other, `tests/test_api_collection.py`, needs the Bruno CLI. Module: 272 / 272 PHPUnit, up from 57; panel: 117 / 117 jest. Patient dashboard: `npm test` in `dashboard/` — 549 (BFF 211, web 338). Golden set: 74 cases (24 note + 50 document), all five rubrics at 1.00.
 
-**Demo video:** (link added at submission)
+**Demo video (Week 2 Final):** https://www.youtube.com/watch?v=GDqRqiXJi8A
 
 ---
 
