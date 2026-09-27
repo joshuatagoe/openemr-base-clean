@@ -7,6 +7,7 @@ A React + TypeScript port of OpenEMR's patient summary dashboard, reading OpenEM
 | `web/` | Vite + React + TypeScript SPA. Data access goes through a `DataSource` interface with two transports: `BffDataSource` (mode A) and `SmartDataSource` (modes B/C, see *Modes B and C*). |
 | `bff/` | Fastify + TypeScript backend-for-frontend: serves the built SPA, runs the OAuth login as a **confidential client**, keeps tokens server-side, and proxies an allow-list of read-only GET routes. |
 | `scripts/` | `register-smart-client.mjs`: registers the SMART client for modes B/C. |
+| `Dockerfile` | Mode A image: builds the web app and the BFF, then runs the BFF as a non-root user on `$PORT` with a `/healthz` healthcheck (see *Deploying on Railway*). |
 
 Three hosting modes, one React app:
 
@@ -192,7 +193,7 @@ The subject guard stays on: OpenEMR's lab search ignores the `patient` parameter
 
 - `npm run build:smart` = `vite build --mode smart`: sets `VITE_TRANSPORT=smart`, base path `/interface/modules/custom_modules/oe-module-copilot/public/dashboard/` (`DASHBOARD_BASE` for an OpenEMR webroot other than `/`), output into that folder (`DASHBOARD_OUT_DIR` to write elsewhere). The folder is gitignored and emptied on each build.
 - Dev stack: the container serves the mounted tree, so a local `npm run build:smart` is enough.
-- Image: the root `Dockerfile` runs `npm ci && npm run build:smart` in `dashboard/` with the Flex image's Node (24) and removes `node_modules`. `.dockerignore` keeps local builds and `node_modules` out of the context.
+- Image: the root `Dockerfile` runs `npm ci && npm run build:smart` in `dashboard/` with the Flex image's Node (24). It then removes `node_modules` and the step's own npm cache, so the dashboard layer is about 3 MB. `.dockerignore` keeps local builds and `node_modules` out of the context. Checked on a full local build of the root image from the committed tree (2026-09-27): the build succeeds, and the container starts with `DASHBOARD_SMART_CLIENT_ID` unset. OpenEMR installs and Apache serves the app with the CSP above. The launch page answers *"The patient dashboard is not configured: its SMART client is not registered"* (503), and the app itself says *"The dashboard is not configured: its SMART client id is missing"*. The module's migration runner still runs at start.
 - `web/smart-public/.htaccess` is copied into the folder: CSP `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; object-src 'none'`, `X-Frame-Options: SAMEORIGIN`, `nosniff`, `Referrer-Policy: no-referrer`, `index.html` revalidated, 404 for the `assets/` folder itself. `frame-ancestors 'self'` allows OpenEMR's tab frame and the SMART card's dialog, which are on the same origin, and nothing else. OpenEMR's `<Directory>` allows only `AllowOverride FileInfo`, so the file uses only FileInfo directives; directory listing is already off server-wide (`Options -Indexes`).
 
 ### Register the SMART client (one-time admin step, same client for B and C)
@@ -211,3 +212,67 @@ The subject guard stays on: OpenEMR's lab search ignores the `patient` parameter
 4. Check: open a patient's dashboard; the *SMART Enabled Apps* card lists "Patient Dashboard (React, SMART)" (the card only appears while the FHIR API is on).
 
 Verified on the dev stack (2026-09-27, `drdash`, pid 7): the menu entry and the card's *Launch* both open the app for Evelyn Demo with no second login (skip on), "Signed in as Dana Dashboard", care-team member and facility names resolved, the combined medications card, labs; no token in `sessionStorage`/`localStorage`; served with the CSP above and no CSP violations. A care-team member who is not a FHIR Practitioner (the `admin` user, no NPI) shows "Name not available".
+
+## Deploying on Railway
+
+`<openemr-host>` is the OpenEMR service's public host (today `openemr-base-clean-production.up.railway.app`); `<dash-host>` is the dashboard service's host, known after step A2. Every URL below is `https://` and has no trailing slash.
+
+### Once, on the OpenEMR service
+
+1. *Administration → Config → Connectors*: **Site Address Override** (`site_addr_oath`) = `https://<openemr-host>`. Behind Railway's TLS proxy Apache sees plain http, so an empty value makes the issuer and every OAuth redirect `http://…` and the `Secure` OAuth cookie is dropped (A3 §0). Also on: **Enable OpenEMR Standard FHIR REST API** and **Enable OpenEMR Standard REST API** (the medication split uses one standard-API route). Password grant can stay off; nothing here uses it.
+2. Check discovery; all three values must start with `https://<openemr-host>`:
+   ```sh
+   curl -s https://<openemr-host>/oauth2/default/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'
+   curl -s https://<openemr-host>/apis/default/fhir/.well-known/smart-configuration | grep -o '"\(authorization\|token\)_endpoint":"[^"]*"'
+   ```
+
+### Mode A: the BFF as its own Railway service
+
+1. *New → GitHub Repo* → this repository. In the service's *Settings*: **Root Directory** `dashboard` (Railway then builds `dashboard/Dockerfile`), **Watch Paths** `dashboard/**`, **Healthcheck Path** `/healthz`, **one replica** (sessions live in the BFF's memory; a second replica would not know the first one's sessions, and a redeploy signs everyone out).
+2. *Settings → Networking → Generate Domain* → `https://<dash-host>`. The first deploy fails its healthcheck until step 4: the BFF refuses to start without its variables, by design.
+3. Register the confidential client on the **Railway** OpenEMR (the dev client does not exist there):
+   ```sh
+   curl -s -H 'Content-Type: application/json' https://<openemr-host>/oauth2/default/registration -d '{
+     "application_type": "private",
+     "token_endpoint_auth_method": "client_secret_post",
+     "client_name": "Patient Dashboard BFF",
+     "redirect_uris": ["https://<dash-host>/auth/callback"],
+     "post_logout_redirect_uris": ["https://<dash-host>/"],
+     "contacts": ["admin@example.org"],
+     "scope": "openid fhirUser api:oemr api:fhir user/Patient.rs user/AllergyIntolerance.rs user/Condition.rs user/MedicationRequest.rs user/CareTeam.rs user/Observation.rs user/Practitioner.rs user/Organization.rs user/medication.rs user/patient.rs"
+   }'
+   ```
+   Copy `client_id` and `client_secret` from the response straight into the Railway variables (next step); do not paste them anywhere else. Then *Administration → System → API Clients → Edit → **Enable Client*** (created disabled).
+4. Dashboard service *Variables*:
+
+   | Variable | Value |
+   |---|---|
+   | `OPENEMR_BASE_URL` | `https://<openemr-host>` |
+   | `OAUTH_ISSUER` | `https://<openemr-host>/oauth2/default` |
+   | `CLIENT_ID` / `CLIENT_SECRET` | from step 3 (mark the secret *sealed*) |
+   | `REDIRECT_URI` | `https://<dash-host>/auth/callback` (exactly as registered) |
+   | `SESSION_SECRET` | 32+ random characters, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
+   | `VITE_OPENEMR_WEB_URL` | optional, `https://<openemr-host>`: turns on the cards' edit links (a build argument, so it takes effect on the next build) |
+
+   Leave `COOKIE_SECURE` unset (default `true`: `__Host-` cookies and HSTS). `PORT` comes from Railway and `HOST=0.0.0.0` from the image. Redeploy.
+5. Check: `curl https://<dash-host>/healthz` → `{"status":"ok"}`; open `https://<dash-host>/`, *Sign in* with a clinician account (not `admin`), accept the consent page, search a demo patient. Physicians see care-team names as "Name not available (permission)" (G9).
+
+Verified locally: the image builds (`docker build -t dashboard-bff dashboard`), runs as user `node`, exits with a named-variable error when a required variable is missing or invalid (http issuer, write scopes, `offline_access`), and with dummy values serves the app on `$PORT`, answers `/healthz`, redirects `/auth/login` to `<issuer>/authorize`, and reports *healthy*.
+
+### Modes B and C on Railway
+
+The app ships inside the OpenEMR image (root `Dockerfile`), so it is already there after a deploy; until step 3 the menu entry answers "not configured".
+
+1. Register the SMART public client for the Railway origin (prints the `client_id` only):
+   ```sh
+   cd dashboard && npm run register:smart -- --openemr https://<openemr-host> --contact admin@example.org
+   ```
+2. *Administration → System → API Clients → Edit*: **Enable Client**, then **Disable EHR Launch Authorization Flow** (skips the second login; see *Register the SMART client*).
+3. OpenEMR service *Variables*: `DASHBOARD_SMART_CLIENT_ID=<client_id>`, then redeploy or restart. `copilot-start.sh` writes `public/dashboard.config.json` on every start (so Railway's ephemeral filesystem is fine) and logs `copilot-start: dashboard_config_written`; an unusable value logs `dashboard_client_id_invalid` and is skipped. It never blocks startup.
+4. Check: open a demo patient → *Patient → Patient Dashboard (React)* (mode B), and the *SMART Enabled Apps* card → *Launch* (mode C).
+
+## Tests and quality checks
+
+- `npm test`: **358 tests**. BFF 142 (config validation, login/callback/state/nonce/PKCE, session cookie, allow-list and query validation, upstream error mapping, headers, logs) and web 216 (FHIR models per card, subject guard, date/age formatting, both data sources, SMART launch, search/patient/cards flows with MSW, axe-core on the rendered pages).
+- `web/test/a11y.test.tsx`: axe-core on the signed-out page, search results and the full patient page (jsdom; colour contrast is checked in a real browser instead).
+- Parity evidence, the real-browser axe run, the keyboard walkthrough and the phone-width check: `docs/dashboard-parity/PARITY.md`.

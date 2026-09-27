@@ -25,11 +25,12 @@ RUN mkdir -p /couchdb/data \
 # module's public folder, where Apache serves it as static files under the
 # folder's own .htaccess (CSP). Uses the Flex image's Node (24; the dashboard
 # needs >= 22). The folder is gitignored and excluded from the build context, so
-# the image never ships a stale local build; node_modules are removed afterwards.
+# the image never ships a stale local build; node_modules and this step's own npm
+# cache (a throwaway folder, ~55 MB otherwise left in the layer) are removed afterwards.
 RUN cd /openemr/dashboard \
-    && npm ci --no-audit --no-fund \
+    && npm ci --no-audit --no-fund --cache /tmp/dashboard-npm-cache \
     && npm run build:smart \
-    && rm -rf node_modules web/node_modules bff/node_modules \
+    && rm -rf node_modules web/node_modules bff/node_modules /tmp/dashboard-npm-cache \
     && chown -R apache:apache /openemr/interface/modules/custom_modules/oe-module-copilot/public/dashboard
 
 # Skip the inherited Flex build steps on container start; everything is prebuilt above.
