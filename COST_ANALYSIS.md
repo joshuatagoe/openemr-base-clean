@@ -265,6 +265,7 @@ model calls — an Anthropic rate-limit tier question, not a code change.
 | This measurement run (34 documents, both routes) | $1.20 model + ≈ $0.07 rerank + < $0.01 Textract | Langfuse `measurement-w2`; call counts |
 | Production traffic since the Week 2 deploy | $0.37 model (39 calls) | Langfuse `production`, 2026-09-21 → 09-27 |
 | Development runs on the dev stack | $0.03 model (13 calls) | Langfuse `development`, same window |
+| **Anthropic API, Week 2 (authoritative)** | **$7.12** at list price: 451K uncached input ($2.26), 87K cache-write ($0.54), 1.05M cache-read ($0.53), 152K output ($3.80); all `claude-opus-5`, key `agentforge-local` | Anthropic console usage export, 2026-09-21 → 09-27, priced at Opus 5 list ($5 / $6.25 cache-write / $0.50 cache-read / $25 per MTok) |
 | **All traced model spend, Week 2** | **$1.60** (117 generations; 329K input + 52K output tokens, Opus 5 list price) | Langfuse metrics API, all environments, 2026-09-21 → 09-27 |
 | AWS: Textract (us-east-2) + Cohere Rerank on Bedrock (us-east-1) | **$0.00 billed**, month-end forecast **$0.01** | AWS Billing console, September 2026 bill, read 2026-09-27 |
 | Golden-set recordings (the replayed real-model responses) | recorded once, not traced; a few cents each | `fixtures/recordings/`; replays are free |
@@ -272,7 +273,9 @@ model calls — an Anthropic rate-limit tier question, not a code change.
 | Railway | $20 / month plan, unchanged from §2; now also runs the patient-dashboard BFF | Railway Pro plan |
 | Claude Code / ChatGPT | unchanged from §2 | plans, not metered per project |
 
-The traced $1.60 is a measured lower bound for the Week 2 Anthropic API spend: untraced calls
-(golden-set recordings, local live-test runs) are not in it. The Anthropic console total (§2's
-method) is the authoritative figure. Week 2's variable spend is therefore on the order of **$2–5**;
-the week's real cost is the fixed plans (Claude Code, Railway) and engineering time, as in Week 1.
+**Week 2 variable spend: ≈ $7.13** — $7.12 Anthropic API (console) + $0.01 AWS. The console figure
+is the authoritative one; the $1.60 traced in Langfuse is the part attributable to traced runs, and
+the difference is untraced calls (golden-set recordings, local live-test and debugging runs). Output
+tokens are over half the cost, which matches the measured bottleneck (the answer step's ~1,000 output
+tokens, §8.1). As in Week 1, the week's real cost is the fixed plans (Claude Code, Railway) and
+engineering time, not the tokens.
