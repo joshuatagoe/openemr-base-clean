@@ -276,6 +276,10 @@ class PendingDocumentFact(StrictModel):
     page: int | None = Field(default=None, ge=1)
     bbox: tuple[float, float, float, float] | None = Field(default=None, description="Normalised 0..1 (x0, y0, x1, y1), top-left origin.")
     status: Literal["candidate"]
+    received_at: date | None = Field(
+        default=None,
+        description="The date the document was uploaded to OpenEMR (documents.date). Dates the document when no collection date was read (the 12-month ageing rule, app.ageing).",
+    )
 
     @model_validator(mode="after")
     def _located(self) -> PendingDocumentFact:

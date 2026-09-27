@@ -5,7 +5,7 @@
  * values (`copilot_extracted_value`, ADR-009). Production: SqlProcessingRepository.
  *
  * @phpstan-type RecordRow array{document_id:int, pid:int, content_sha256:string, doc_type:string, status:string, prompt_version:?string, attempts:int, last_error_code:?string, identity_check:?string, created_at:string, updated_at:?string, pending_count:int}
- * @phpstan-type CandidateRow array{result_index:int, test_name:string, value_text:?string, unit:?string, reference_range:?string, abnormal_flag:?string, flag_source:?string, collection_date:?string, verification_status:string, page:?int, bbox:?string}
+ * @phpstan-type CandidateRow array{result_index:int, test_name:string, value_text:?string, unit:?string, reference_range:?string, abnormal_flag:?string, flag_source:?string, collection_date:?string, verification_status:string, page:?int, bbox:?string, received_at?:?string}
  * @phpstan-type PendingFactRow array{id:int, document_id:int, test_name:string, value_text:?string, unit:?string, reference_range:?string, abnormal_flag:?string, flag_source:?string, collection_date:?string, verification_status:string, page:?int, bbox:?string}
  *
  * @package   OpenEMR
@@ -110,7 +110,9 @@ interface ProcessingRepositoryInterface
 
     /**
      * `candidate` values of this patient's `extracted` lab documents (held and
-     * filed/rejected values excluded; intake items are patient-reported evidence, not pending lab facts).
+     * filed/rejected values excluded; intake items are patient-reported evidence, not pending lab facts),
+     * the newest documents first (document id descending, then result order), at most `$limit` (<= 500).
+     * `received_at`: the document's OpenEMR upload date (`documents.date`) as stored, or null.
      *
      * @return list<PendingFactRow>
      */

@@ -14,6 +14,7 @@ this module owns the loop, the tool execution and the transcript.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from app.contracts import ContextBundle, EvidenceMatch, ToolCallRecord, VerifiedStatement
@@ -70,8 +71,12 @@ async def run_turn(
     max_iterations: int = MAX_TOOL_ITERATIONS,
     max_attempts: int = 2,
     retry_budget_seconds: float = 2.0,
+    as_of: date | None = None,
 ) -> TurnOutcome:
-    """Run one turn. Raises ``ProviderError`` on model failure; tool failures are returned as errors, never raised."""
+    """Run one turn. Raises ``ProviderError`` on model failure; tool failures are returned as errors, never raised.
+
+    ``as_of`` is the date pending document values are aged against (the route passes today).
+    """
     transcript: list[Any] = [*_history_messages(history), {"role": "user", "content": build_question_content(question)}]
     tools = tool_definitions(include_pending=bool(bundle.pending_document_facts))
     outputs: list[ToolOutput] = []
@@ -100,7 +105,7 @@ async def run_turn(
         results: list[tuple[str, str]] = []
         for call in step.tool_calls:
             with span("tool", tool=call.name) as t:  # nests under the turn; arguments and records are never attached
-                output = run_tool(bundle, matches, call.name, call.arguments)
+                output = run_tool(bundle, matches, call.name, call.arguments, as_of=as_of)
                 t["records"] = len(output.records)
                 t["truncated"] = output.truncated
                 t["error"] = output.error

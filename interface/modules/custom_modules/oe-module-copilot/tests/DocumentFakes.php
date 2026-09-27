@@ -235,7 +235,9 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
     public function listPendingFacts(int $pid, int $limit): array
     {
         $out = [];
-        foreach ($this->values as $docId => $rows) {
+        $values = $this->values;
+        krsort($values); // like the SQL: newest document first
+        foreach ($values as $docId => $rows) {
             if (($this->records[$docId]['status'] ?? null) !== 'extracted' || ($this->records[$docId]['doc_type'] ?? 'lab_pdf') !== 'lab_pdf') {
                 continue; // like the SQL: only lab candidates are pending lab facts (intake is patient-reported evidence)
             }
@@ -246,6 +248,7 @@ final class FakeProcessingRepository implements ProcessingRepositoryInterface
                         'unit' => $v['unit'], 'reference_range' => $v['reference_range'], 'abnormal_flag' => $v['abnormal_flag'],
                         'flag_source' => $v['flag_source'], 'collection_date' => $v['collection_date'],
                         'verification_status' => $v['verification_status'], 'page' => $v['page'], 'bbox' => $v['bbox'],
+                        'received_at' => $this->records[$docId]['received_at'] ?? null,
                     ];
                 }
             }

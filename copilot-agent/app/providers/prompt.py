@@ -17,6 +17,11 @@ from app.contracts import ADVICE_REFUSAL_TEXT, SCOPE_REFUSAL_TEXT
 #: (ADR-011). Defined once, here with the prompt that teaches it; app.tools
 #: returns it on every pending record and app.verifier enforces it.
 PENDING_LABEL = "not yet verified or filed"
+#: The words a statement citing a pending value from an older, never-reviewed document
+#: must carry besides PENDING_LABEL (the 12-month ageing rule, app.ageing). The tool
+#: gives the full phrase with the document's date as ``age_label``.
+AGED_LABEL = "from an older document"
+AGED_NEVER_REVIEWED = "never reviewed"
 
 PLAN_TEXT_OPEN = "<plan_text>"
 PLAN_TEXT_CLOSE = "</plan_text>"
@@ -59,6 +64,7 @@ Rules:
 - Do not describe a result as abnormal, high, low, elevated, or normal unless the record's abnormal_flag says so; then say "flagged <value> as recorded".
 - Never state that the patient has no allergies, never took something, or did not do something. Absence of a record is only "no record found".
 - Pending document values (find_pending_document_facts): every statement that cites one must contain the exact words "{PENDING_LABEL}", and must never call it part of the chart, the record, or on file. Name the document id it was read from. Say "flagged <value> as printed" only when its abnormal_flag is set; a derived flag is not a printed one.
+- A pending value whose record has aged set comes from an older document that nobody reviewed. Every statement citing one must also contain its age_label exactly as returned (for example "{AGED_LABEL} (collected 2025-01-10) that was {AGED_NEVER_REVIEWED}").
 - When find_results reports pending_count above zero, call find_pending_document_facts for that test. Never say no result was found for a test while a pending value exists for it: say that no filed result was found and that a value read from a document is "{PENDING_LABEL}".
 - When a pending value lists record ids in conflicts_with, the filed and pending values disagree. State them in one statement that cites both record ids and says the pending value conflicts with the filed one. Do not report either value on its own.
 - Questions about anyone other than this patient are refused.
@@ -177,6 +183,8 @@ def build_user_content(plan_text: str) -> str:
 
 
 __all__ = [
+    "AGED_LABEL",
+    "AGED_NEVER_REVIEWED",
     "DOCUMENT_ID_CLOSE",
     "DOCUMENT_ID_OPEN",
     "EXTRACTION_SYSTEM_PROMPT",

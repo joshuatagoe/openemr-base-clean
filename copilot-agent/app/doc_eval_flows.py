@@ -532,7 +532,10 @@ def score_followup_case(case: dict[str, Any], *, model: str) -> Any:  # noqa: AR
     spans: list[Any] | None = None
     async def turn() -> Any:
         with span("turn", cid=bundle.correlation_id, turn_index=0):  # the route's span (app.main)
-            return await run_turn(ScriptedTurnProvider(case["script"]), bundle, [], [], case["question"])
+            return await run_turn(
+                ScriptedTurnProvider(case["script"]), bundle, [], [], case["question"],
+                as_of=date.fromisoformat(case.get("briefing_date", EVAL_BRIEFING_DATE)),  # ages pending values as the route does
+            )
 
     with capture_logs() as cap:
         if case.get("trace"):

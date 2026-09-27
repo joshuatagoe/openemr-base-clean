@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from pydantic import Field, ValidationError
 
+from app.ageing import DateKind, is_aged, latest_date
 from app.contracts import (
     ContextBundle,
     EvidenceMatch,
@@ -29,7 +31,7 @@ from app.contracts import (
     StrictModel,
 )
 from app.medications import ingredient_key
-from app.providers.prompt import PENDING_LABEL
+from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED, PENDING_LABEL
 from app.synonyms import normalize, resolve_commitment, resolve_record, resolve_record_panel
 
 MAX_RECORDS = 10
@@ -332,8 +334,38 @@ def _conflicts(fact: PendingDocumentFact, bundle: ContextBundle) -> list[str]:
     )
 
 
-def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], args: FindPendingArgs) -> ToolOutput:
-    """Pending document values, each labelled and located; never mixed into ``find_results``."""
+def aged_pending_documents(facts: list[PendingDocumentFact], as_of: date) -> dict[int, tuple[date, DateKind]]:
+    """Documents among ``facts`` older than the ageing rule (``app.ageing``), with their date.
+
+    A document is dated as the briefing dates it: its latest collection date
+    among the values sent, else the date it was received, else undated
+    (recent). Values of one document share its date.
+    """
+    by_document: dict[int, list[PendingDocumentFact]] = {}
+    for f in facts:
+        by_document.setdefault(f.document_id, []).append(f)
+    aged: dict[int, tuple[date, DateKind]] = {}
+    for document_id, rows in by_document.items():
+        received = next((r.received_at for r in rows if r.received_at is not None), None)
+        dated = latest_date((r.collection_date for r in rows), received)
+        if dated is not None and is_aged(dated[0], as_of=as_of):
+            aged[document_id] = dated
+    return aged
+
+
+def age_label(dated: tuple[date, DateKind]) -> str:
+    """The words a statement citing an aged value carries, e.g. 'from an older document (collected 2025-01-10) that was never reviewed'."""
+    return f"{AGED_LABEL} ({dated[1]} {dated[0].isoformat()}) that was {AGED_NEVER_REVIEWED}"
+
+
+def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], args: FindPendingArgs, *, as_of: date | None = None) -> ToolOutput:
+    """Pending document values, each labelled and located; never mixed into ``find_results``.
+
+    With ``as_of`` (the route passes today), a value whose document is older
+    than the ageing rule is still returned, marked ``aged`` with its
+    ``age_label``. Without it nothing is aged (pure callers and fixtures).
+    """
+    aged = {} if as_of is None else aged_pending_documents(bundle.pending_document_facts, as_of)
     facts = bundle.pending_document_facts
     if args.test_query is not None and args.test_query.strip():
         keys = _test_keys(args.test_query)
@@ -358,9 +390,16 @@ def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], a
             "verification_status": f.verification_status,
             "conflicts_with": _conflicts(f, bundle),
         }
+        | _age_fields(aged.get(f.document_id))
         for f in facts
     ]
     return ToolOutput(tool=PENDING_TOOL, records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
+
+
+def _age_fields(dated: tuple[date, DateKind] | None) -> dict[str, Any]:
+    if dated is None:
+        return {}  # a recent value's record is unchanged
+    return {"aged": True, "document_date": dated[0].isoformat(), "document_date_kind": dated[1], "age_label": age_label(dated)}
 
 
 TOOL_IMPLEMENTATIONS: dict[str, Callable[[ContextBundle, list[EvidenceMatch], Any], ToolOutput]] = {
@@ -374,8 +413,11 @@ TOOL_IMPLEMENTATIONS: dict[str, Callable[[ContextBundle, list[EvidenceMatch], An
 }
 
 
-def run_tool(bundle: ContextBundle, matches: list[EvidenceMatch], name: str, raw_args: dict[str, Any]) -> ToolOutput:
-    """Validate arguments strictly and run the tool; unknown tools and bad arguments are errors, never guesses."""
+def run_tool(bundle: ContextBundle, matches: list[EvidenceMatch], name: str, raw_args: dict[str, Any], *, as_of: date | None = None) -> ToolOutput:
+    """Validate arguments strictly and run the tool; unknown tools and bad arguments are errors, never guesses.
+
+    ``as_of`` is the date pending values are aged against (``find_pending_document_facts`` only).
+    """
     model = TOOL_ARGS.get(name)
     impl = TOOL_IMPLEMENTATIONS.get(name)
     if model is None or impl is None:
@@ -385,6 +427,8 @@ def run_tool(bundle: ContextBundle, matches: list[EvidenceMatch], name: str, raw
     except ValidationError:
         return ToolOutput(tool=name, error="invalid_arguments")
     try:
+        if name == PENDING_TOOL:
+            return find_pending_document_facts(bundle, matches, args, as_of=as_of)
         return impl(bundle, matches, args)
     except Exception:  # noqa: BLE001 - a tool failure must surface as an error, not a crash or an empty list
         return ToolOutput(tool=name, error="tool_failed")

@@ -237,14 +237,15 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
 
     public function listPendingFacts(int $pid, int $limit): array
     {
+        // The newest documents' values first (by document id, as listExtractions), so the bound drops the oldest.
         $rows = QueryUtils::fetchRecords(
             "SELECT v.id, v.document_id, v.test_name, v.value_text, v.unit, v.reference_range, v.abnormal_flag,
-                    v.flag_source, v.collection_date, v.verification_status, v.page, v.bbox
+                    v.flag_source, v.collection_date, v.verification_status, v.page, v.bbox, od.date AS received_at
                FROM copilot_extracted_value v
                JOIN copilot_document d ON d.document_id = v.document_id AND d.pid = v.pid
                JOIN documents od ON od.id = d.document_id AND od.foreign_id = d.pid AND od.deleted = 0
               WHERE v.pid = ? AND v.status = 'candidate' AND d.status = 'extracted' AND d.doc_type = 'lab_pdf'
-              ORDER BY v.document_id ASC, v.result_index ASC
+              ORDER BY v.document_id DESC, v.result_index ASC
               LIMIT " . max(1, min($limit, 500)),
             [$pid]
         );
@@ -261,6 +262,7 @@ final class SqlProcessingRepository implements ProcessingRepositoryInterface
             'verification_status' => Scalar::str($r['verification_status'] ?? null),
             'page' => ($r['page'] ?? null) === null ? null : Scalar::int($r['page']),
             'bbox' => self::nullable($r['bbox'] ?? null),
+            'received_at' => self::nullable($r['received_at'] ?? null),
         ], $rows);
     }
 

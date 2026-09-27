@@ -30,6 +30,7 @@ import logging
 from collections import Counter
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -655,7 +656,7 @@ async def conversation_turn(
     with span("turn", cid=claims.cid, bundle_id=str(stored.bundle_id), turn_index=turn_index) as attrs:
         try:
             outcome = await asyncio.wait_for(
-                run_turn(service.provider(), bundle, matches, list(stored.turns), request.question),
+                run_turn(service.provider(), bundle, matches, list(stored.turns), request.question, as_of=datetime.now(UTC).date()),
                 timeout=cfg.briefing_timeout_seconds,
             )
         except TimeoutError:

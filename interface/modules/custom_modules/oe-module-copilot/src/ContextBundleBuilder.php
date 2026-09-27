@@ -249,7 +249,7 @@ final class ContextBundleBuilder
             }
             $page = $r['page'] ?? null;
             $page = is_int($page) && $page > 0 ? $page : null;
-            $out[] = [
+            $fact = [
                 'fact_id' => 'copilot_extracted_value:' . $id,
                 'document_id' => Scalar::int($r['document_id'] ?? null),
                 'test_name' => $testName,
@@ -265,6 +265,13 @@ final class ContextBundleBuilder
                 'bbox' => $page === null ? null : CandidateMapper::bboxToList(self::nullableText($r['bbox'] ?? null)),
                 'status' => 'candidate',
             ];
+            // The upload date dates the document when no collection date was read (the agent's 12-month
+            // ageing rule). Sent only when known, so a bundle without it is unchanged.
+            $receivedAt = UtcDate::localDate($r['received_at'] ?? null);
+            if ($receivedAt !== null) {
+                $fact['received_at'] = $receivedAt;
+            }
+            $out[] = $fact;
         }
         return $out;
     }

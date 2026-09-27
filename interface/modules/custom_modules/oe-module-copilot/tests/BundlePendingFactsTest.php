@@ -142,4 +142,64 @@ final class BundlePendingFactsTest extends TestCase
         $controller->handleForSession(['authUserID' => 1, 'authUser' => 'dr_smith', 'pid' => 42]);
         self::assertArrayNotHasKey('pending_document_facts', $agent->posts[0]['bundle']);
     }
+
+    /** @param array<string,mixed> $over */
+    private static function waitingDocument(FakeProcessingRepository $repo, int $documentId, int $valueId, array $over = []): void
+    {
+        $repo->records[$documentId] = $over + ['document_id' => $documentId, 'pid' => 42, 'content_sha256' => str_repeat('a', 64), 'doc_type' => 'lab_pdf', 'status' => 'extracted', 'prompt_version' => 'v', 'attempts' => 1, 'last_error_code' => null, 'identity_check' => 'match', 'extraction_json' => '{}', 'created_at' => '', 'updated_at' => ''];
+        $repo->values[$documentId] = [['id' => $valueId, 'document_id' => $documentId, 'pid' => 42, 'status' => 'candidate', 'result_index' => 0] + self::pending($valueId)];
+    }
+
+    public function testPendingFactsComeNewestDocumentFirstAndCarryTheUploadDate(): void
+    {
+        $repo = new FakeProcessingRepository();
+        self::waitingDocument($repo, 913, 5, ['received_at' => '2025-01-04 10:30:00']);
+        self::waitingDocument($repo, 920, 9, ['received_at' => '2026-09-20 08:00:00']);
+        self::waitingDocument($repo, 915, 7);
+
+        $facts = $repo->listPendingFacts(42, 500);
+        self::assertSame([920, 915, 913], array_column($facts, 'document_id'), 'the newest documents first, so the cap drops the oldest');
+        self::assertSame([920], array_column($repo->listPendingFacts(42, 1), 'document_id'), 'a limit keeps the newest');
+
+        $builder = new ContextBundleBuilder(new DateTimeZone('UTC'));
+        $mapped = $builder->mapPendingFacts($facts);
+        self::assertSame('2026-09-20', $mapped[0]['received_at'], 'the upload date, as a date');
+        self::assertArrayNotHasKey('received_at', $mapped[1], 'unknown upload date: the field is left out, as C5 allows');
+        self::assertSame('2025-01-04', $mapped[2]['received_at']);
+    }
+
+    public function testFollowUpBundleSendsPendingFactsNewestFirst(): void
+    {
+        $repo = new FakeProcessingRepository();
+        self::waitingDocument($repo, 913, 5, ['received_at' => '2025-01-04 10:30:00']);
+        self::waitingDocument($repo, 920, 9);
+        $agent = new FakeAgentClient();
+        $controller = new BriefingTicketController(
+            new CopilotAuthorizer(new FakeAcl(['patients/demo' => true, 'encounters/auth_a' => true, 'encounters/notes' => true, 'patients/med' => true, 'patients/lab' => true, 'patients/appt' => true]), new FakeRelationships(['1:42' => 'primary_provider'])),
+            new FakeReader(patients: [42 => self::PATIENT], notes: [42 => [self::NOTE]]),
+            new ContextBundleBuilder(new DateTimeZone('UTC')),
+            $agent,
+            new CopilotConfig('http://agent.test:8000', 'test-only-shared-secret-0123456789abcdef'),
+            new CapturingLogger(),
+            new AuditCapture(),
+            pendingFacts: $repo,
+            schema: new FakeSchemaStatus(true),
+        );
+        $controller->handleForSession(['authUserID' => 1, 'authUser' => 'dr_smith', 'pid' => 42]);
+        $sent = $agent->posts[0]['bundle']['pending_document_facts'];
+        self::assertSame(['copilot_extracted_value:9', 'copilot_extracted_value:5'], array_column($sent, 'fact_id'));
+        self::assertSame('2025-01-04', $sent[1]['received_at']);
+    }
+
+    public function testTheSqlOrdersNewestDocumentFirstAndReadsTheUploadDate(): void
+    {
+        // The fake mirrors the SQL; this pins the SQL itself (no database in this suite).
+        $source = (string) file_get_contents(__DIR__ . '/../src/Documents/SqlProcessingRepository.php');
+        $start = strpos($source, 'public function listPendingFacts');
+        self::assertIsInt($start);
+        $body = substr($source, $start, 2500);
+        self::assertStringContainsString('ORDER BY v.document_id DESC, v.result_index ASC', $body);
+        self::assertStringContainsString('od.date AS received_at', $body);
+        self::assertStringContainsString('min($limit, 500)', $body, 'still bounded at 500');
+    }
 }

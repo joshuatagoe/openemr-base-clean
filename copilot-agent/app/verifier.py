@@ -38,6 +38,7 @@ from typing import Any
 
 from app.contracts import ADVICE_REFUSAL_TEXT, SCOPE_REFUSAL_TEXT, Citation, RecordType, StatementKind, VerifiedStatement
 from app.providers.base import ModelStatement, ModelTurnAnswer
+from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED
 from app.tools import PENDING_LABEL, ToolOutput
 
 # Modal / directive phrasing that would turn a record lookup into advice.
@@ -103,7 +104,7 @@ class TurnEvidence:
 
 def _record_numbers(record: dict[str, Any]) -> set[str]:
     numbers: set[str] = set()
-    for key in ("value", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span", "document_id", "page"):
+    for key in ("value", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span", "document_id", "page", "document_date"):
         v = record.get(key)
         if isinstance(v, (str, int, float)):
             numbers.update(_normalize_number(n) for n in _NUMBER.findall(str(v)))
@@ -171,11 +172,17 @@ def _pending_violation(text: str, cited_ids: list[str], evidence: TurnEvidence) 
     - A pending value and a filed value that disagree (same test, same day,
       both returned this turn) are shown together, cited both ways, and named
       as a conflict - neither side may be stated as if the other did not exist.
+    - A value from a document older than the ageing rule (its record is
+      ``aged``) must also be said to come from an older document that was
+      never reviewed.
     """
     if any(_is_pending(rid) for rid in cited_ids):
         lowered = text.lower()
         if PENDING_LABEL not in lowered:
             return "pending_label_missing"
+        records = evidence.records()
+        if any(records.get(rid, {}).get("aged") for rid in cited_ids) and not (AGED_LABEL in lowered and AGED_NEVER_REVIEWED in lowered):
+            return "aged_label_missing"
         if all(_is_pending(rid) for rid in cited_ids) and _CHART_CLAIM.search(lowered.replace(PENDING_LABEL, "")):
             return "pending_cited_as_chart"
     conflicts = evidence.conflicts()
