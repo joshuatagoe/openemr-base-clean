@@ -3,7 +3,7 @@ import { useAuth } from '../auth/authContext';
 import { BffDataSource } from './BffDataSource';
 import { DataSourceContext } from './DataSourceContext';
 
-/** Mode A: the BFF transport. Modes B/C will choose SmartDataSource here (C5). */
+/** Mode A: the BFF transport. Modes B/C provide SmartDataSource from smart/SmartApp instead. */
 export function DataSourceProvider({ children }: { children: ReactNode }) {
   const { markSessionExpired } = useAuth();
   const ds = useMemo(() => new BffDataSource({ onSessionExpired: markSessionExpired }), [markSessionExpired]);

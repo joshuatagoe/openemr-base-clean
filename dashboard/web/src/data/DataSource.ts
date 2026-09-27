@@ -5,7 +5,7 @@ import type { Bundle, FhirResource } from 'fhir/r4';
  * - 'bff'   (mode A, standalone): same-origin `/api/...` on the BFF, cookie
  *           session, tokens never in the browser.
  * - 'smart' (modes B/C, served same-origin by OpenEMR or SMART-launched):
- *           browser holds a patient-context token in memory. Planned for C5.
+ *           browser holds a patient-context token in memory (smart/SmartApp).
  */
 export type Transport = 'bff' | 'smart';
 

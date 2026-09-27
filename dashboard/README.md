@@ -4,10 +4,19 @@ A React + TypeScript port of OpenEMR's patient summary dashboard, reading OpenEM
 
 | Folder | What |
 |---|---|
-| `web/` | Vite + React + TypeScript SPA. Data access goes through a `DataSource` interface with two transports: `BffDataSource` (mode A, used now) and `SmartDataSource` (modes B/C, stub until C5). |
+| `web/` | Vite + React + TypeScript SPA. Data access goes through a `DataSource` interface with two transports: `BffDataSource` (mode A) and `SmartDataSource` (modes B/C, see *Modes B and C*). |
 | `bff/` | Fastify + TypeScript backend-for-frontend: serves the built SPA, runs the OAuth login as a **confidential client**, keeps tokens server-side, and proxies an allow-list of read-only GET routes. |
+| `scripts/` | `register-smart-client.mjs`: registers the SMART client for modes B/C. |
 
-Why a BFF: on this OpenEMR build a public (browser) client cannot be granted clinician `user/` scopes, and every CORS preflight to `/apis/*` returns 404, so a browser on another origin cannot call the API at all. Both were measured on the dev stack.
+Three hosting modes, one React app:
+
+| Mode | Where | Login | Patient |
+|---|---|---|---|
+| **A** standalone | own origin, served by the BFF | BFF, confidential client, `user/` scopes | in-app search and switching |
+| **B** inside OpenEMR | same origin, `/interface/modules/custom_modules/oe-module-copilot/public/dashboard/` | SMART EHR launch from the Patient menu entry "Patient Dashboard (React)", public client, `patient/` scopes | the open chart |
+| **C** SMART app | the same build, launched from the patient dashboard's *SMART Enabled Apps* card | same as B | the open chart |
+
+Why a BFF for mode A: on this OpenEMR build a public (browser) client cannot be granted clinician `user/` scopes, and every CORS preflight to `/apis/*` returns 404, so a browser on another origin cannot call the API at all. Both were measured on the dev stack. Modes B/C avoid both problems by being on OpenEMR's own origin with a patient-context token.
 
 ## Scripts (run in `dashboard/`)
 
@@ -17,6 +26,8 @@ Why a BFF: on this OpenEMR build a public (browser) client cannot be granted cli
 | `npm run dev` | BFF on :3000 (reads `dashboard/.env`) + Vite on :5173. Vite proxies `/auth`, `/api` and `/healthz` to the BFF, so the browser sees one origin. Open http://localhost:5173 |
 | `npm run build` | `web/dist` (static app) and `bff/dist` (server) |
 | `npm start` | Run the built BFF; it also serves `web/dist` |
+| `npm run build:smart` | Modes B/C build into the Co-Pilot module's `public/dashboard/` (gitignored; see *Modes B and C*) |
+| `npm run register:smart -- --openemr https://localhost:9300 --write-config <path>` | Register the SMART client for modes B/C and write its config |
 | `npm test` | Vitest: BFF (mock OpenEMR on a loopback port) and web (React Testing Library + MSW) |
 | `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit` for both packages |
 
@@ -148,3 +159,55 @@ G-numbers refer to `DASHBOARD_ANALYSIS_A2_FHIR.md` §6; G21 is new in C3, G22–
   Browser cookies and headers are not forwarded; the BFF adds only the bearer token. OpenEMR's 401 ends the session. Its `500` on a read of an inaccessible patient becomes `403 {"error":"not_accessible"}`. Other 5xx become 502, and a timeout becomes 504. API responses are `Cache-Control: no-store`.
 - **Headers**: CSP (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, and HSTS when cookies are Secure.
 - **Logs**: one JSON line per request with the request id, method, route pattern, FHIR resource type, status and duration. URLs, query strings, headers, cookies, tokens and bodies are never logged. `GET /healthz` returns `{"status":"ok"}`.
+
+## Modes B and C (SMART EHR launch, served by OpenEMR)
+
+The same React app, built with `npm run build:smart`, runs on OpenEMR's own origin from the Co-Pilot module's public folder, `/interface/modules/custom_modules/oe-module-copilot/public/dashboard/`. It uses `SmartDataSource`: the browser holds a patient-context token and calls OpenEMR's FHIR API directly, which works because it is the same origin (no CORS preflight). No BFF, no OpenEMR code change: the module only adds a menu entry and a launch page (packaging).
+
+- **Mode B**: *Patient → Patient Dashboard (React)* (shown with a chart open, for users with `patients/demo`). It opens the module's `public/dashboard-launch.php` in the patient tab. That page only redirects to OpenEMR's own `interface/smart/ehr-launch-client.php` with the dashboard's client id, the session CSRF token and intent `main.tab`. OpenEMR builds the launch token for the open chart and redirects to the app.
+- **Mode C**: the patient dashboard's *SMART Enabled Apps* card lists every enabled client with the `launch` scope. *Launch* opens `ehr-launch-client.php` in a dialog iframe; from there it is the same flow.
+
+### The launch (web/src/smart)
+
+1. OpenEMR opens `…/dashboard/?launch=…&iss=…`. `iss` must be a FHIR base (`…/apis/<site>/fhir`) on the page's own origin; anything else is refused before any request.
+2. The app reads `iss/.well-known/smart-configuration`. The authorize and token endpoints must be on the same origin and `S256` must be offered.
+3. It redirects to `authorize` as a **public client** (no secret): code + PKCE S256, a random `state`, `launch`, `aud = iss`, and the scopes in `web/src/smart/scopes.json`: `openid fhirUser launch patient/Patient.rs patient/AllergyIntolerance.rs patient/Condition.rs patient/MedicationRequest.rs patient/CareTeam.rs patient/Observation.rs patient/Practitioner.rs patient/Organization.rs`. Each resource is listed (OpenEMR rejects wildcards). No `launch/patient` (it would add OpenEMR's patient picker), no `user/`, no `offline_access` (so no refresh token).
+4. On return (`?code&state`, same URL) the `state` must match the stored one (single use, 10 minutes). The code goes to the token endpoint as a form POST with the verifier and no cookies. The patient comes from the token response's `patient`.
+5. Only the verifier, state and the two URLs are kept in `sessionStorage`, and only across the redirect. The **access token is kept in memory only** (a closure inside the data source): a reload or a new tab needs a new launch. The id_token is read only for `fhirUser`, for the "Signed in as" name.
+
+The patient is fixed to the launch context: there is no search, and the header says to change the chart in OpenEMR to see another patient. A 401 (the token lasts 1 h) or *Sign out* drops the token and the cached data and asks for a relaunch from the chart.
+
+Differences from mode A, all caused by the patient-context token:
+
+| | Mode A (BFF, `user/` scopes) | Modes B/C (`patient/` scopes) |
+|---|---|---|
+| Care Team member and facility names | "Name not available (permission)" for the Physicians group | resolved (`Practitioner`/`Organization` reads are allowed in patient context) |
+| Medications / Prescriptions | split with the standard API's medication list | OpenEMR's standard API answers 403 to patient tokens, so no request is made and one **"Medications and prescriptions (combined)"** card lists every current order, with the reason |
+| Edit links | with `VITE_OPENEMR_WEB_URL` | none: they need the numeric pid, which only the standard API gives (the user is in the chart already) |
+| Patient | search and switch | the launched chart |
+
+The subject guard stays on: OpenEMR's lab search ignores the `patient` parameter under a patient token (Phase B), so every result is still checked against the launched patient.
+
+### Build and hosting
+
+- `npm run build:smart` = `vite build --mode smart`: sets `VITE_TRANSPORT=smart`, base path `/interface/modules/custom_modules/oe-module-copilot/public/dashboard/` (`DASHBOARD_BASE` for an OpenEMR webroot other than `/`), output into that folder (`DASHBOARD_OUT_DIR` to write elsewhere). The folder is gitignored and emptied on each build.
+- Dev stack: the container serves the mounted tree, so a local `npm run build:smart` is enough.
+- Image: the root `Dockerfile` runs `npm ci && npm run build:smart` in `dashboard/` with the Flex image's Node (24) and removes `node_modules`. `.dockerignore` keeps local builds and `node_modules` out of the context.
+- `web/smart-public/.htaccess` is copied into the folder: CSP `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; object-src 'none'`, `X-Frame-Options: SAMEORIGIN`, `nosniff`, `Referrer-Policy: no-referrer`, `index.html` revalidated, 404 for the `assets/` folder itself. `frame-ancestors 'self'` allows OpenEMR's tab frame and the SMART card's dialog, which are on the same origin, and nothing else. OpenEMR's `<Directory>` allows only `AllowOverride FileInfo`, so the file uses only FileInfo directives; directory listing is already off server-wide (`Options -Indexes`).
+
+### Register the SMART client (one-time admin step, same client for B and C)
+
+1. Register a **public** client whose launch URI and redirect URI are both the app URL (one page handles both):
+
+   ```sh
+   cd dashboard
+   NODE_EXTRA_CA_CERTS=/path/openemr-dev.pem npm run register:smart -- --openemr https://localhost:9300 \
+     --write-config ../interface/modules/custom_modules/oe-module-copilot/public/dashboard.config.json
+   ```
+
+   `--dry-run` prints the request body; `--webroot /openemr` for a webroot. The script prints the `client_id` only. The config file (`{"clientId": "…"}`, gitignored, next to the app folder so a rebuild keeps it) is read by the app and by the launch page. In the image, set `DASHBOARD_SMART_CLIENT_ID` instead: the start script (`bin/copilot-start.sh`) writes the file at container start.
+2. The client is created **disabled** (it has the `launch` scope). *Administration → System → API Clients → Edit → Enable Client*.
+3. For no second login: on the same page click **Disable EHR Launch Authorization Flow** (OpenEMR's label for turning the skip on; it needs the Connectors global *OAuth2 EHR-Launch Authorization Flow Skip*, on by default). A clinician who is signed in to OpenEMR then gets the code straight away, without the OAuth login and consent pages. Without it, OpenEMR's OAuth login page appears in the tab or dialog and the user signs in a second time. Verified on the dev stack both ways. With the skip, OpenEMR grants **all** of the client's registered scopes without a consent page, which is why the client is registered with read-only scopes only.
+4. Check: open a patient's dashboard; the *SMART Enabled Apps* card lists "Patient Dashboard (React, SMART)" (the card only appears while the FHIR API is on).
+
+Verified on the dev stack (2026-09-27, `drdash`, pid 7): the menu entry and the card's *Launch* both open the app for Evelyn Demo with no second login (skip on), "Signed in as Dana Dashboard", care-team member and facility names resolved, the combined medications card, labs; no token in `sessionStorage`/`localStorage`; served with the CSP above and no CSP violations. A care-team member who is not a FHIR Practitioner (the `admin` user, no NPI) shows "Name not available".
