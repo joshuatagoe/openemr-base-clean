@@ -20,7 +20,7 @@ export interface RxRow {
   drug: string;
   details: string;
   qty: string;
-  /** `authoredOn` (= prescriptions.date_added) as YYYY-MM-DD, raw like the PHP card. */
+  /** `authoredOn` (= prescriptions.date_added) as `YYYY-MM-DD HH:MM:SS`, raw like the PHP card. */
   filled: string;
 }
 
@@ -104,6 +104,18 @@ function time(v: string | undefined): number {
   return Number.isNaN(t) ? -Infinity : t;
 }
 
+/**
+ * OpenEMR writes date_added as the server's local wall-clock time plus its UTC
+ * offset (UtilsService::getLocalDateAsUTC), so the text before the offset is
+ * exactly the stored value the PHP card prints.
+ */
+function filledText(authoredOn: string | undefined): string {
+  if (!authoredOn) return '';
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/.exec(authoredOn);
+  if (!m) return authoredOn;
+  return m[2] ? `${m[1]} ${m[2]}` : (m[1] as string);
+}
+
 /** The Prescriptions card: PHP order `date_modified DESC, date_added DESC` (= meta.lastUpdated, authoredOn). */
 export function prescriptionTable(medReqs: readonly MedicationRequest[], listUuids: ReadonlySet<string>): RxTable {
   const rx = medReqs.filter((m) => !(m.id && listUuids.has(m.id)));
@@ -118,7 +130,7 @@ export function prescriptionTable(medReqs: readonly MedicationRequest[], listUui
         drug: drugName(m),
         details: details(m),
         qty: qty === undefined ? '' : String(qty),
-        filled: m.authoredOn ? m.authoredOn.slice(0, 10) : '',
+        filled: filledText(m.authoredOn),
       };
     });
   return { total: rx.length, rows };

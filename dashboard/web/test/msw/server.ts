@@ -8,4 +8,16 @@ export const signedIn = http.get('*/auth/me', () =>
 export const signedOut = http.get('*/auth/me', () => HttpResponse.json({ error: 'unauthenticated' }, { status: 401 }));
 export const expired = http.get('*/auth/me', () => HttpResponse.json({ error: 'session_expired' }, { status: 401 }));
 
-export const server = setupServer(signedOut);
+const emptyBundle = () => HttpResponse.json({ resourceType: 'Bundle', type: 'collection', total: 0, entry: [] });
+
+/** Clinical-card routes answering "nothing recorded", so pages that render the cards stay quiet by default. */
+export const emptyClinical = [
+  http.get('*/api/fhir/AllergyIntolerance', emptyBundle),
+  http.get('*/api/fhir/Condition', emptyBundle),
+  http.get('*/api/fhir/MedicationRequest', emptyBundle),
+  http.get('*/api/fhir/CareTeam', emptyBundle),
+  http.get('*/api/patient/:pid/medication', () => new HttpResponse(null, { status: 404 })),
+  http.get('*/api/patient/:puuid', ({ params }) => HttpResponse.json({ pid: '42', uuid: String(params.puuid) })),
+];
+
+export const server = setupServer(signedOut, ...emptyClinical);

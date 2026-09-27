@@ -63,7 +63,7 @@ describe('allergies (PHP allergies.html.twig parity)', () => {
     expect(rows.map((r) => [r.name, r.severity, r.highlight])).toEqual([
       ['Penicillin', 'Low Risk', false],
       ['Peanut', 'High Risk', true],
-      ['Latex', 'Unable to Assess Risk', false],
+      ['Latex', 'Unassigned', false],
       ['Dust', '', false],
     ]);
     expect(rows[0]?.tooltip).toBe('Penicillin Reaction: Rash - Low Risk');
@@ -195,9 +195,9 @@ describe('medications vs prescriptions (uuid split)', () => {
     );
     expect(table.total).toBe(4);
     expect(table.rows.map((r) => [r.drug, r.details, r.qty, r.filled])).toEqual([
-      ['Amoxicillin 500 mg', '500mg 1 tab b.i.d.', '30', '2026-05-01'],
-      ['Prednisone 10 mg', '', '', '2026-02-01'],
-      ['Metformin HCl 500 mg', '1 tab BID', '60', '2026-01-15'],
+      ['Amoxicillin 500 mg', '500mg 1 tab b.i.d.', '30', '2026-05-01 09:00:00'],
+      ['Prednisone 10 mg', '', '', '2026-02-01 09:00:00'],
+      ['Metformin HCl 500 mg', '1 tab BID', '60', '2026-01-15 09:00:00'],
     ]);
   });
 
@@ -206,6 +206,11 @@ describe('medications vs prescriptions (uuid split)', () => {
     const t = prescriptionTable([medReq('rx', 'Stopped', { status: 'stopped' })], new Set());
     expect(t.total).toBe(1);
     expect(t.rows).toEqual([]);
+  });
+
+  it('Filled: the server-local date_added as PHP prints it; a date-only value stays as is', () => {
+    const t = prescriptionTable([medReq('a', 'A', { authoredOn: '2026-01-15' })], new Set());
+    expect(t.rows[0]?.filled).toBe('2026-01-15');
   });
 
   it('uses the RxNorm display when the drug is coded', () => {

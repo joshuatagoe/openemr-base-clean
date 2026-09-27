@@ -15,10 +15,12 @@ export interface AllergyRow {
 }
 
 // The labels OpenEMR's FhirAllergyIntoleranceService uses for each criticality.
+// `unable-to-assess` comes only from the PHP severity "Unassigned", so the PHP
+// word is shown for it; low and high each stand for several PHP severities.
 const CRITICALITY_LABELS: Readonly<Record<string, string>> = {
   low: 'Low Risk',
   high: 'High Risk',
-  'unable-to-assess': 'Unable to Assess Risk',
+  'unable-to-assess': 'Unassigned',
 };
 
 /**

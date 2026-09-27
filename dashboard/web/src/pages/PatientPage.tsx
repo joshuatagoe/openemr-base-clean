@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router';
+import { ClinicalCards } from '../components/ClinicalCards';
 import { PatientHeader } from '../components/PatientHeader';
 import type { DataSourceError } from '../data/errors';
 import { FHIR_ID, usePatient } from '../data/hooks';
@@ -75,7 +76,7 @@ export function PatientPage() {
       return (
         <>
           <PatientHeader patient={view.data} actions={<FindAnother />} />
-          <p className="muted">The clinical cards are added in the next milestones.</p>
+          <ClinicalCards key={id} patientId={id} />
         </>
       );
   }
