@@ -13,6 +13,8 @@
   "scripts": {
     "dev": "concurrently -k -n bff,web -c blue,magenta \"npm run dev -w bff\" \"npm run dev -w web\"",
     "build": "npm run build -w web && npm run build -w bff",
+    "build:smart": "npm run build:smart -w web",
+    "register:smart": "node scripts/register-smart-client.mjs",
     "start": "npm run start -w bff",
     "test": "npm run test -w bff && npm run test -w web",
     "lint": "eslint .",

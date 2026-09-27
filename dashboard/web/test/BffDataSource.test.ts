@@ -2,7 +2,6 @@ import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 import { BffDataSource } from '../src/data/BffDataSource';
 import { DataSourceError } from '../src/data/errors';
-import { SmartDataSource } from '../src/data/SmartDataSource';
 import { server } from './msw/server';
 
 const PID = 'a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7';
@@ -111,17 +110,5 @@ describe('BffDataSource', () => {
     server.use(http.get('*/api/fhir/Patient/:id', () => HttpResponse.error()));
     const err = await new BffDataSource().read('Patient', PID).catch((e: unknown) => e);
     expect((err as DataSourceError).kind).toBe('network');
-  });
-});
-
-describe('SmartDataSource (planned for C5)', () => {
-  it('is a stub that says it is not implemented yet', async () => {
-    const ds = new SmartDataSource({ fhirBaseUrl: 'https://openemr.example/apis/default/fhir', getAccessToken: () => 'x' });
-    expect(ds.transport).toBe('smart');
-    const err = await ds.read('Patient', PID).catch((e: unknown) => e);
-    expect((err as DataSourceError).kind).toBe('not_implemented');
-    await expect(ds.search('Patient', { name: 'x' })).rejects.toMatchObject({ kind: 'not_implemented' });
-    await expect(ds.patientMedicationList('7')).rejects.toMatchObject({ kind: 'not_implemented' });
-    await expect(ds.patientPid(PID)).rejects.toMatchObject({ kind: 'not_implemented' });
   });
 });

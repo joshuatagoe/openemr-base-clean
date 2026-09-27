@@ -1,3 +1,4 @@
+import type { Transport } from './data/DataSource';
 import { parseDateDisplayFormat, type DateDisplayFormat } from './format/date';
 
 /**
@@ -24,3 +25,24 @@ export function parseWebUrl(raw: string | undefined): string | undefined {
 }
 
 export const OPENEMR_WEB_URL: string | undefined = parseWebUrl(import.meta.env.VITE_OPENEMR_WEB_URL as string | undefined);
+
+/**
+ * Which transport the build uses (VITE_TRANSPORT): 'smart' for modes B/C (the
+ * build served by OpenEMR; `vite build --mode smart` sets it), otherwise 'bff'
+ * (mode A).
+ */
+export function parseTransport(raw: string | undefined): Transport {
+  return raw?.trim().toLowerCase() === 'smart' ? 'smart' : 'bff';
+}
+
+export const TRANSPORT: Transport = parseTransport(import.meta.env.VITE_TRANSPORT as string | undefined);
+
+/**
+ * The SMART client config (`{ "clientId": "..." }`) sits next to the app's
+ * folder, not inside it, so a rebuild (which empties the folder) keeps it. It is
+ * written once the client is registered (dev: the registration script; image:
+ * the start script, from DASHBOARD_SMART_CLIENT_ID).
+ */
+export function smartConfigUrl(baseUrl: string, origin: string): string {
+  return new URL('../dashboard.config.json', new URL(baseUrl, origin)).toString();
+}

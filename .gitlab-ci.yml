@@ -59,3 +59,5 @@ dashboard:
     - npm run typecheck
     - npm test
     - npm run build
+    # Modes B/C build (the root Dockerfile runs the same script into the module folder).
+    - $env:DASHBOARD_OUT_DIR = "$env:TEMP\dashboard-smart-ci"; npm run build:smart

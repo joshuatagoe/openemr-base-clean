@@ -1,0 +1,5 @@
+# Patient dashboard (React), modes B/C: build output of `npm run build:smart`
+# in dashboard/ (the image builds it in the root Dockerfile), and the SMART
+# client config written after the client is registered.
+/public/dashboard/
+/public/dashboard.config.json
