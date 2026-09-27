@@ -264,7 +264,7 @@ export function PatientSearchPage() {
 
   return (
     <section className="landing">
-      <h1 ref={headingRef} tabIndex={-1}>
+      <h1 className="page-title" ref={headingRef} tabIndex={-1}>
         Find a patient
       </h1>
       <form className="landing-form" role="search" aria-label="Patient search" onSubmit={onSubmit} noValidate>

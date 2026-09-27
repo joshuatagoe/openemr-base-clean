@@ -102,7 +102,9 @@ describe('auth shell', () => {
   it('an unknown address says the page does not exist and links to the patient list', async () => {
     server.use(signedIn);
     renderAt('/no-such-page');
-    expect(await screen.findByText("This page doesn't exist.")).toBeInTheDocument();
+    // A page heading like every other page (axe page-has-heading-one), focused on arrival.
+    const heading = await screen.findByRole('heading', { level: 1, name: "This page doesn't exist." });
+    expect(heading).toHaveFocus();
     expect(screen.getByRole('link', { name: 'Go to the patient list' })).toHaveAttribute('href', '/dashboard');
   });
 

@@ -9,7 +9,6 @@
 /* A readable column: the form fits on one line and a name sits close to its
    DOB, instead of spreading four columns across 1200px. */
 .landing { max-width: 55rem; }
-.landing h1 { margin: 0 0 0.75rem; font-size: 1.5rem; font-weight: 500; line-height: 1.2; }
 
 /* Search form: labels above fields, buttons on the fields' baseline. */
 .landing-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
@@ -36,7 +35,7 @@
 /* Cards. .card gives the border, square corners, 1px shadow and 0.25rem
    padding; the title is plain (not a toggle), so it is dark, not link blue. */
 .landing-card { margin-top: 1.25rem; }
-.landing-card + .landing-card { margin-top: 1rem; }
+.landing-card + .landing-card { margin-top: 0.5rem; } /* the dashboard's card gap */
 .landing-card-head {
   display: flex;
   flex-wrap: wrap;
@@ -83,7 +82,6 @@
 
 /* Phones: name across the top, DOB and MRN side by side, buttons below. */
 @media (max-width: 575.98px) {
-  .landing h1 { font-size: 1.375rem; margin-bottom: 0.5rem; }
   .landing-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem 0.75rem; }
   .landing-field { width: auto; }
   .landing-field-name,

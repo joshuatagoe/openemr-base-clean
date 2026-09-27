@@ -1,10 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { BrowserRouter, Link, Route, Routes } from 'react-router';
 import { AuthProvider } from './auth/AuthProvider';
 import { AppHeader } from './components/AppHeader';
 import { NoticeBanner } from './components/NoticeBanner';
 import { RequireAuth } from './components/RequireAuth';
+import { useFocusOnChange } from './components/useFocusOnChange';
 import { DataSourceProvider } from './data/DataSourceProvider';
 import { QueryProvider } from './data/QueryProvider';
 import { HomePage } from './pages/HomePage';
@@ -20,9 +21,13 @@ export interface AppProps {
 }
 
 function NotFound() {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useFocusOnChange(headingRef, 'mount');
   return (
-    <section className="page-state">
-      <p>This page doesn't exist.</p>
+    <section>
+      <h1 className="page-title" ref={headingRef} tabIndex={-1}>
+        This page doesn't exist.
+      </h1>
       <Link to="/dashboard">Go to the patient list</Link>
     </section>
   );
