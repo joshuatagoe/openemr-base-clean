@@ -68,7 +68,7 @@ describe('axe-core: no violations on the rendered pages', () => {
     );
     window.history.replaceState(null, '', '/dashboard?page=2');
     render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     const recent = await screen.findByRole('region', { name: 'Recent patients' });
     await within(recent).findByText('Otherfamily, Bram');
     await screen.findByRole('navigation', { name: 'Patient list pages' });

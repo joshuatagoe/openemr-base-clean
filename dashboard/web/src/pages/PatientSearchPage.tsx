@@ -1,26 +1,34 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type Ref } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { Patient } from 'fhir/r4';
+import { Spinner } from '../components/Card';
 import { useFocusOnChange } from '../components/useFocusOnChange';
 import { DATE_DISPLAY_FORMAT } from '../config';
+import type { DataErrorKind } from '../data/errors';
 import { patientListName, patientMrn, patientSexLabel } from '../fhir/patient';
 import { formatShortDate } from '../format/date';
 import { PATIENT_PAGE_SIZE, usePatientList, usePatientsById, type PatientSearchCriteria } from '../data/hooks';
 import { useRecentPatients } from '../recent/recentContext';
+import './landing.css';
 
 type Field = 'name' | 'birthdate' | 'identifier';
+
+const DOB_MESSAGE = 'Enter the full date of birth, or clear the field.';
 
 // The same patterns the BFF allow-list enforces, so a refused search is
 // explained here instead of coming back as a 400.
 const RULES: Readonly<Record<Field, { pattern: RegExp; message: string }>> = {
-  name: { pattern: /^[\p{L}\p{M}' .-]{1,64}$/u, message: 'Names may contain letters, spaces, apostrophes, hyphens and dots.' },
-  birthdate: { pattern: /^\d{4}-\d{2}-\d{2}$/, message: 'Enter the date of birth as YYYY-MM-DD.' },
-  identifier: { pattern: /^[A-Za-z0-9._|:-]{1,64}$/, message: 'MRNs may contain letters, digits and . _ | : -' },
+  name: { pattern: /^[\p{L}\p{M}' .-]{1,64}$/u, message: 'Use only letters, spaces, apostrophes, hyphens and dots in the name.' },
+  birthdate: { pattern: /^\d{4}-\d{2}-\d{2}$/, message: DOB_MESSAGE },
+  identifier: { pattern: /^[A-Za-z0-9._|:-]{1,64}$/, message: 'Use only letters, digits and . _ | : - in the MRN.' },
 };
 const FIELDS: readonly Field[] = ['name', 'birthdate', 'identifier'];
 
 // The BFF accepts _offset up to 999999.
 const MAX_PAGE = Math.floor(999_999 / PATIENT_PAGE_SIZE) + 1;
+
+// The tab names the page, never a patient (tab strips and history are PHI).
+const TITLE = 'Find a patient – Patient Dashboard';
 
 type Validation = { ok: true; criteria: PatientSearchCriteria } | { ok: false; field: Field; message: string };
 
@@ -46,22 +54,49 @@ function pageFromUrl(params: URLSearchParams): number {
   return n <= MAX_PAGE ? n : 1;
 }
 
-/** Name (link to the chart), DOB, sex and MRN (the PT identifier; never the SSN, never a phone number). */
-function PatientTable({
-  caption,
-  labelledBy,
-  patients,
-  tableRef,
-}: {
-  /** Visible caption, or `labelledBy`: the id of a heading that names the table. */
-  caption?: string;
-  labelledBy?: string;
-  patients: readonly Patient[];
-  tableRef?: Ref<HTMLTableElement>;
-}) {
+/** What failed, per error kind (null: the auth layer ends the session and says so). */
+function listErrorMessage(kind: DataErrorKind, filtered: boolean): string | null {
+  switch (kind) {
+    case 'network':
+      return filtered ? "Couldn't reach OpenEMR, so the search didn't run. Try again." : "Couldn't reach OpenEMR, so the patient list didn't load. Try again.";
+    case 'timeout':
+      return 'OpenEMR took too long to answer. Try again.';
+    case 'upstream':
+      return 'OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.';
+    case 'bad_request':
+      return "OpenEMR didn't accept these search terms. Check the name, date of birth and MRN.";
+    case 'forbidden':
+    case 'not_accessible':
+      return "Your OpenEMR role can't view the patient list.";
+    case 'session_expired':
+    case 'unauthenticated':
+      return null;
+    default:
+      return "Couldn't load the patient list from OpenEMR.";
+  }
+}
+
+const TRANSIENT: ReadonlySet<DataErrorKind> = new Set(['network', 'timeout', 'upstream']);
+
+function useDocumentTitle(title: string): void {
+  useEffect(() => {
+    const previous = document.title;
+    document.title = title;
+    return () => {
+      document.title = previous;
+    };
+  }, [title]);
+}
+
+/**
+ * Name (the chart link), DOB, sex and MRN (the PT identifier; never the SSN,
+ * never a phone number). The name is the one real link; Bootstrap's
+ * stretched-link draws it over the whole row, as OpenEMR's Patient Finder
+ * opens a chart from anywhere on the row.
+ */
+function PatientTable({ labelledBy, patients, tableRef }: { labelledBy: string; patients: readonly Patient[]; tableRef?: Ref<HTMLTableElement> }) {
   return (
-    <table className="results" ref={tableRef} tabIndex={tableRef ? -1 : undefined} aria-labelledby={labelledBy}>
-      {caption && <caption>{caption}</caption>}
+    <table className="landing-table" ref={tableRef} tabIndex={tableRef ? -1 : undefined} aria-labelledby={labelledBy}>
       <thead>
         <tr>
           <th scope="col">Name</th>
@@ -72,9 +107,11 @@ function PatientTable({
       </thead>
       <tbody>
         {patients.map((p) => (
-          <tr key={p.id}>
+          <tr key={p.id} className="row-link">
             <td>
-              <Link to={`/patient/${encodeURIComponent(p.id ?? '')}`}>{patientListName(p)}</Link>
+              <Link className="stretched-link" to={`/patient/${encodeURIComponent(p.id ?? '')}`}>
+                {patientListName(p)}
+              </Link>
             </td>
             <td>{formatShortDate(p.birthDate, DATE_DISPLAY_FORMAT)}</td>
             <td>{patientSexLabel(p)}</td>
@@ -83,6 +120,19 @@ function PatientTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** OpenEMR card chrome (square, 1px shadow) with a plain title and one item on the right. */
+function LandingCard({ headingId, title, aside, children }: { headingId: string; title: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="card landing-card" aria-labelledby={headingId}>
+      <div className="landing-card-head">
+        <h2 id={headingId}>{title}</h2>
+        {aside}
+      </div>
+      <div className="landing-card-body">{children}</div>
+    </section>
   );
 }
 
@@ -111,19 +161,29 @@ function RecentPatients() {
   if (!recent || (ready.length === 0 && !loading)) return null;
 
   return (
-    <section className="recent-patients" aria-labelledby={headingId}>
-      <div className="section-header">
-        <h2 id={headingId}>Recent patients</h2>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={recent.clear} aria-label="Clear recent patients">
-          Clear
+    <LandingCard
+      headingId={headingId}
+      title="Recent patients"
+      aside={
+        <button type="button" className="btn btn-secondary btn-sm" onClick={recent.clear}>
+          Clear list
         </button>
-      </div>
-      {ready.length > 0 ? <PatientTable labelledBy={headingId} patients={ready} /> : <p className="muted">Loading recent patients...</p>}
-    </section>
+      }
+    >
+      {ready.length > 0 ? (
+        <PatientTable labelledBy={headingId} patients={ready} />
+      ) : (
+        <p className="landing-message muted">
+          <Spinner />
+          Loading recent patients…
+        </p>
+      )}
+    </LandingCard>
   );
 }
 
 export function PatientSearchPage() {
+  useDocumentTitle(TITLE);
   const [params, setParams] = useSearchParams();
   const urlValues = fromUrl(params);
   const urlCheck = validate(urlValues);
@@ -137,6 +197,7 @@ export function PatientSearchPage() {
   const focusListAfterPaging = useRef(false);
   const inputs = useRef<Partial<Record<Field, HTMLInputElement | null>>>({});
   const errorId = useId();
+  const listHeadingId = useId();
   useFocusOnChange(headingRef, 'mount');
 
   const { view, retry } = usePatientList({ criteria, page });
@@ -150,12 +211,22 @@ export function PatientSearchPage() {
     }
   }, [view.status, page]);
 
+  function block(field: Field, message: string) {
+    setProblem({ field, message });
+    inputs.current[field]?.focus();
+  }
+
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    // A partly typed date reads as '' (the browser only reports badInput), so
+    // without this check the search would silently run without the DOB.
+    if (inputs.current.birthdate?.validity.badInput) {
+      block('birthdate', DOB_MESSAGE);
+      return;
+    }
     const check = validate(values);
     if (!check.ok) {
-      setProblem({ field: check.field, message: check.message });
-      inputs.current[check.field]?.focus();
+      block(check.field, check.message);
       return;
     }
     setProblem(null);
@@ -171,8 +242,8 @@ export function PatientSearchPage() {
     setParams(next);
   }
 
-  const field = (name: Field, label: string, type: 'text' | 'date', autoComplete = 'off') => (
-    <div className="form-field">
+  const field = (name: Field, label: string, type: 'text' | 'date') => (
+    <div className={`landing-field landing-field-${name}`}>
       <label htmlFor={`search-${name}`}>{label}</label>
       <input
         id={`search-${name}`}
@@ -181,7 +252,7 @@ export function PatientSearchPage() {
         }}
         type={type}
         value={values[name]}
-        autoComplete={autoComplete}
+        autoComplete="off"
         onChange={(e) => setValues((v) => ({ ...v, [name]: e.target.value }))}
         aria-invalid={problem?.field === name ? true : undefined}
         aria-describedby={problem?.field === name ? errorId : undefined}
@@ -192,67 +263,101 @@ export function PatientSearchPage() {
   const hasNext = view.status === 'ready' && view.data.hasNext;
   const patients = view.status === 'ready' ? view.data.patients : [];
   const first = (page - 1) * PATIENT_PAGE_SIZE + 1;
-  let statusText = '';
-  if (view.status === 'loading') statusText = filtered ? 'Searching...' : 'Loading patients...';
-  if (view.status === 'empty') {
-    if (page > 1) statusText = 'No patients on this page.';
-    else statusText = filtered ? 'No patients found.' : 'No patients.';
-  }
+  let count = '';
   if (view.status === 'ready') {
     const n = patients.length;
     const noun = n === 1 ? 'patient' : 'patients';
-    if (page === 1 && !hasNext) statusText = filtered ? `${n} ${noun} found` : `${n} ${noun}`;
-    else statusText = `Showing ${filtered ? 'matches' : 'patients'} ${first}–${first + n - 1}`;
+    if (page === 1 && !hasNext) count = filtered ? `${n} ${noun} found` : `${n} ${noun}`;
+    else count = `Showing ${first}–${first + n - 1}`;
   }
+  const pageOne = new URLSearchParams(params);
+  pageOne.delete('page');
+
+  // One live region: the loading and empty messages, or (read only by screen
+  // readers) the count that the card header shows.
+  let status: ReactNode = null;
+  if (view.status === 'loading' || view.status === 'idle') {
+    status = (
+      <p className="landing-message muted">
+        <Spinner />
+        {filtered ? 'Searching…' : 'Loading patients…'}
+      </p>
+    );
+  } else if (view.status === 'empty') {
+    status =
+      page > 1 ? (
+        <p className="landing-message">
+          This page is past the end of the list. <Link to={{ search: pageOne.toString() }}>Go to page 1</Link>
+        </p>
+      ) : (
+        <p className="landing-message">{filtered ? 'No patients match. Check the spelling, or search with fewer fields.' : 'No patients to show.'}</p>
+      );
+  } else if (view.status === 'ready') {
+    status = <span className="landing-sr-only">{count}</span>;
+  }
+  const errorMessage = view.status === 'error' ? listErrorMessage(view.error.kind, filtered) : null;
   const showPager = (view.status === 'ready' || view.status === 'empty') && (page > 1 || hasNext);
 
   return (
-    <section className="patient-search">
+    <section className="landing">
       <h1 ref={headingRef} tabIndex={-1}>
         Find a patient
       </h1>
-      <form className="search-form" role="search" aria-label="Patient search" onSubmit={onSubmit} noValidate>
+      <form className="landing-form" role="search" aria-label="Patient search" onSubmit={onSubmit} noValidate>
         {field('name', 'Name', 'text')}
         {field('birthdate', 'Date of birth', 'date')}
         {field('identifier', 'MRN', 'text')}
-        <button type="submit" className="btn btn-primary">
-          Search
-        </button>
-        {filtered && (
-          <Link className="btn btn-secondary" to="/dashboard" onClick={() => setValues({ name: '', birthdate: '', identifier: '' })}>
-            Show all patients
-          </Link>
-        )}
+        <div className="landing-actions">
+          <button type="submit" className="btn btn-primary">
+            Search
+          </button>
+          {filtered && (
+            <Link className="btn btn-secondary" to="/dashboard" onClick={() => setValues({ name: '', birthdate: '', identifier: '' })}>
+              Show all patients
+            </Link>
+          )}
+        </div>
       </form>
       {problem && (
-        <p id={errorId} className="notice notice-warning" role="alert">
+        <p id={errorId} className="notice notice-warning landing-problem" role="alert">
           {problem.message}
         </p>
       )}
 
       {!filtered && <RecentPatients />}
 
-      <p className="muted" role="status">
-        {statusText}
-      </p>
-      {view.status === 'error' && (
-        <div className="page-state">
-          <p className="notice notice-warning" role="alert">
-            {filtered ? 'Patient search failed.' : 'The patient list could not be loaded.'}{' '}
-            {view.error.kind === 'bad_request' ? 'The server refused the search terms.' : 'Please try again.'}
-          </p>
-          <button type="button" className="btn btn-primary" onClick={retry}>
-            Try again
-          </button>
-        </div>
-      )}
-      {view.status === 'ready' && <PatientTable caption={filtered ? 'Search results' : 'Patients'} patients={patients} tableRef={tableRef} />}
+      <LandingCard
+        headingId={listHeadingId}
+        title={filtered ? 'Search results' : 'All patients'}
+        aside={
+          count ? (
+            <span className="landing-count" aria-hidden="true">
+              {count}
+            </span>
+          ) : undefined
+        }
+      >
+        <div role="status">{status}</div>
+        {view.status === 'error' && errorMessage && (
+          <div className="landing-error">
+            <p className="notice notice-warning" role="alert">
+              {errorMessage}
+            </p>
+            {TRANSIENT.has(view.error.kind) && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={retry}>
+                Try again
+              </button>
+            )}
+          </div>
+        )}
+        {view.status === 'ready' && <PatientTable labelledBy={listHeadingId} patients={patients} tableRef={tableRef} />}
+      </LandingCard>
       {showPager && (
-        <nav className="pager" aria-label="Patient list pages">
+        <nav className="landing-pager" aria-label="Patient list pages">
           <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => goToPage(page - 1)} aria-label="Previous page">
             Previous
           </button>
-          <span className="pager-page">Page {page}</span>
+          <span>Page {page}</span>
           <button type="button" className="btn btn-secondary" disabled={!hasNext} onClick={() => goToPage(page + 1)} aria-label="Next page">
             Next
           </button>
