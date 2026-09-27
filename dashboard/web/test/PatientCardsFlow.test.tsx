@@ -35,7 +35,7 @@ describe('patient page with the clinical cards (mode A, through the BFF routes)'
     render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
 
     const region = (name: string) => screen.findByRole('region', { name });
-    expect(await within(await region('Allergies')).findByText("You don't have permission to view allergies.")).toBeInTheDocument();
+    expect(await within(await region('Allergies')).findByText(/^Your OpenEMR role can't view allergies\./)).toBeInTheDocument();
     expect(await within(await region('Medical Problems')).findByText('Nothing Recorded')).toBeInTheDocument();
     expect(await within(await region('Medications')).findByText('Nothing Recorded')).toBeInTheDocument();
     const rx = await within(await region('Prescriptions')).findByRole('table');
@@ -45,7 +45,8 @@ describe('patient page with the clinical cards (mode A, through the BFF routes)'
 
     const careTeamCard = await region('Care Team');
     await userEvent.click(within(careTeamCard).getByRole('button', { name: 'Care Team' }));
-    expect(await within(careTeamCard).findAllByText('Name not available (permission)')).toHaveLength(2);
+    expect(await within(careTeamCard).findByText("Member and facility names are hidden: your OpenEMR role can't read provider or facility records.")).toBeInTheDocument();
+    expect(within(careTeamCard).queryByText(/Name not available/)).toBeNull();
   });
 
   it('Labs: calls the allow-listed Observation route and shows the latest report, entered-in-error dropped', async () => {

@@ -3,14 +3,76 @@
 // Prescriptions (full width below), Care Team (full width), Labs (left column).
 // Parity reference: DASHBOARD_ANALYSIS_A1_PARITY.md §2–§7; FHIR gaps: README.
 import { OPENEMR_WEB_URL } from '../config';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { useAllergies, useCareTeam, useLatestLabReport, useMedicationCards, useProblems, useResourceName, type MedicationCards } from '../data/cardHooks';
+import { cardErrorMessage, isRetryable } from '../data/errors';
 import { usePatientPid } from '../data/hooks';
 import type { QueryView } from '../data/queryView';
 import type { CareTeamMemberRow } from '../fhir/careTeam';
-import { Card, CardView } from './Card';
+import { Card, Spinner } from './Card';
+import './cards.css';
 
 const NOTHING_RECORDED = 'Nothing Recorded';
-const NOT_IN_FHIR = "Value not available: OpenEMR's FHIR API does not provide it";
+
+// "—" cells are explained by one visible footnote per card (touch and keyboard
+// users never see a hover tooltip); the column header points to it.
+const REFILLS_FOOTNOTE = "Refills aren't available from OpenEMR's FHIR API.";
+const STATUS_NOTE_FOOTNOTE = "Status and note aren't available from OpenEMR's FHIR API.";
+const ENCOUNTER_FOOTNOTE = "The encounter isn't available from OpenEMR's FHIR API.";
+const NAMES_HIDDEN_NOTE = "Member and facility names are hidden: your OpenEMR role can't read provider or facility records.";
+
+/** Loading / error / empty states shared by every card; `ready` renders `children`. */
+function CardContent<T>({
+  view,
+  retry,
+  noun,
+  empty,
+  children,
+}: {
+  view: QueryView<T>;
+  retry: () => void;
+  /** Lower case, for messages: "allergies", "the care team". */
+  noun: string;
+  empty: ReactNode;
+  children: (data: T) => ReactNode;
+}) {
+  switch (view.status) {
+    case 'idle':
+    case 'loading':
+      return (
+        <p className="card-state muted" role="status">
+          <Spinner />
+          Loading {noun}…
+        </p>
+      );
+    case 'error': {
+      const message = cardErrorMessage(view.error, noun);
+      if (message === null) return null; // The auth layer ends the session and says so.
+      return (
+        <div className="card-state card-problem">
+          <p className="card-error">{message}</p>
+          {isRetryable(view.error) && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={retry}>
+              Try again
+            </button>
+          )}
+        </div>
+      );
+    }
+    case 'empty':
+      return <div className="card-state">{empty}</div>;
+    case 'ready':
+      return <>{children(view.data)}</>;
+  }
+}
+
+function Footnote({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <p className="card-footnote" id={id}>
+      {children}
+    </p>
+  );
+}
 
 type EditLink = { href: string; label: string } | undefined;
 
@@ -18,7 +80,7 @@ function AllergiesCard({ patientId, edit }: { patientId: string; edit: EditLink 
   const { view, retry } = useAllergies(patientId);
   return (
     <Card id="allergy_ps_expand" title="Allergies" defaultExpanded edit={edit}>
-      <CardView view={view} retry={retry} text={{ noun: 'allergies', subject: 'Allergies', empty: NOTHING_RECORDED }}>
+      <CardContent view={view} retry={retry} noun="allergies" empty={NOTHING_RECORDED}>
         {(rows) => (
           <ul className="pami-list">
             {rows.map((r) => (
@@ -35,7 +97,7 @@ function AllergiesCard({ patientId, edit }: { patientId: string; edit: EditLink 
             ))}
           </ul>
         )}
-      </CardView>
+      </CardContent>
     </Card>
   );
 }
@@ -44,7 +106,7 @@ function ProblemsCard({ patientId, edit }: { patientId: string; edit: EditLink }
   const { view, retry } = useProblems(patientId);
   return (
     <Card id="medical_problem_ps_expand" title="Medical Problems" defaultExpanded edit={edit}>
-      <CardView view={view} retry={retry} text={{ noun: 'medical problems', subject: 'Medical problems', empty: NOTHING_RECORDED }}>
+      <CardContent view={view} retry={retry} noun="medical problems" empty={NOTHING_RECORDED}>
         {(rows) => (
           <ul className="pami-list">
             {rows.map((r) =>
@@ -58,7 +120,7 @@ function ProblemsCard({ patientId, edit }: { patientId: string; edit: EditLink }
             )}
           </ul>
         )}
-      </CardView>
+      </CardContent>
     </Card>
   );
 }
@@ -77,7 +139,7 @@ function MedicationsCard({ view, retry, edit }: { view: QueryView<MedicationCard
   const v = splitView(view, 'medications');
   return (
     <Card id="medication_ps_expand" title="Medications" defaultExpanded edit={edit}>
-      <CardView view={v} retry={retry} text={{ noun: 'medications', subject: 'Medications', empty: NOTHING_RECORDED }}>
+      <CardContent view={v} retry={retry} noun="medications" empty={NOTHING_RECORDED}>
         {(rows) =>
           rows.length === 0 ? (
             <div className="card-state">{NOTHING_RECORDED}</div>
@@ -97,47 +159,53 @@ function MedicationsCard({ view, retry, edit }: { view: QueryView<MedicationCard
             </ul>
           )
         }
-      </CardView>
+      </CardContent>
     </Card>
   );
 }
 
 function PrescriptionsCard({ view, retry, edit }: { view: QueryView<MedicationCards>; retry: () => void; edit: EditLink }) {
   const v = splitView(view, 'prescriptions');
+  const footnoteId = useId();
   return (
     <Card id="prescriptions_ps_expand" title="Prescriptions" defaultExpanded edit={edit} className="card-wide">
-      <CardView view={v} retry={retry} text={{ noun: 'prescriptions', subject: 'Prescriptions', empty: 'None' }}>
+      <CardContent view={v} retry={retry} noun="prescriptions" empty="None">
         {(table) =>
           table.total === 0 ? (
             <div className="card-state">None</div>
           ) : (
-            <div className="table-responsive" tabIndex={0} role="region" aria-label="Prescriptions table">
-              <table className="card-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Drug</th>
-                    <th scope="col">Details</th>
-                    <th scope="col">Qty</th>
-                    <th scope="col">Refills</th>
-                    <th scope="col">Filled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {table.rows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.drug}</td>
-                      <td>{r.details}</td>
-                      <td>{r.qty}</td>
-                      <td title={NOT_IN_FHIR}>—</td>
-                      <td>{r.filled}</td>
+            <>
+              <div className="table-responsive" tabIndex={0} role="region" aria-label="Prescriptions table">
+                <table className="card-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Drug</th>
+                      <th scope="col">Details</th>
+                      <th scope="col">Qty</th>
+                      <th scope="col" aria-describedby={footnoteId}>
+                        Refills
+                      </th>
+                      <th scope="col">Filled</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {table.rows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.drug}</td>
+                        <td>{r.details}</td>
+                        <td>{r.qty}</td>
+                        <td>—</td>
+                        <td>{r.filled}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Footnote id={footnoteId}>{REFILLS_FOOTNOTE}</Footnote>
+            </>
           )
         }
-      </CardView>
+      </CardContent>
     </Card>
   );
 }
@@ -148,8 +216,7 @@ function CombinedMedicationsCard({ view, edit }: { view: QueryView<MedicationCar
   return (
     <Card id="medication_ps_expand" title="Medications and prescriptions (combined)" defaultExpanded edit={edit}>
       <p className="notice notice-warning card-note">
-        OpenEMR's medication list could not be read with this sign-in, so medications and prescriptions cannot be told apart. Every current
-        medication order is listed once.
+        This sign-in can't read OpenEMR's medication list, so medications and prescriptions are shown together, each order once.
       </p>
       {rows.length === 0 ? (
         <div className="card-state">{NOTHING_RECORDED}</div>
@@ -172,8 +239,16 @@ function CombinedMedicationsCard({ view, edit }: { view: QueryView<MedicationCar
   );
 }
 
-function NameCell({ type, id }: { type: 'Practitioner' | 'Organization'; id: string }) {
+/**
+ * A member or facility name. A name the user's role can't read shows "—" and
+ * reports it, so the card explains it once instead of in every row.
+ */
+function NameCell({ type, id, onForbidden }: { type: 'Practitioner' | 'Organization'; id: string; onForbidden: () => void }) {
   const { view } = useResourceName(type, id);
+  const forbidden = view.status === 'error' && (view.error.kind === 'forbidden' || view.error.kind === 'not_accessible');
+  useEffect(() => {
+    if (forbidden) onForbidden();
+  }, [forbidden, onForbidden]);
   switch (view.status) {
     case 'ready':
       return <>{view.data}</>;
@@ -181,42 +256,45 @@ function NameCell({ type, id }: { type: 'Practitioner' | 'Organization'; id: str
     case 'loading':
       return <span className="muted">Loading…</span>;
     case 'error':
-      return (
-        <span className="muted">
-          {view.error.kind === 'forbidden' || view.error.kind === 'not_accessible' ? 'Name not available (permission)' : 'Name not available'}
-        </span>
-      );
+      return forbidden ? <>—</> : <span className="muted">Name not available</span>;
     case 'empty':
       return <span className="muted">Name not available</span>;
   }
 }
 
-function MemberRow({ m }: { m: CareTeamMemberRow }) {
+function MemberRow({ m, onForbidden }: { m: CareTeamMemberRow; onForbidden: () => void }) {
   return (
     <tr>
       <td>{m.type === 'provider' ? <span className="badge badge-primary">Provider</span> : <span className="badge badge-info">Related Person</span>}</td>
       <td>
         {m.type === 'provider' ? (
-          <NameCell type="Practitioner" id={m.memberId} />
+          <NameCell type="Practitioner" id={m.memberId} onForbidden={onForbidden} />
         ) : (
           // RelatedPerson reads are not in the dashboard's scope set.
           <span className="muted">Name not available</span>
         )}
       </td>
       <td>{m.role}</td>
-      <td>{m.facilityId ? <NameCell type="Organization" id={m.facilityId} /> : ''}</td>
+      <td>{m.facilityId ? <NameCell type="Organization" id={m.facilityId} onForbidden={onForbidden} /> : ''}</td>
       <td>{m.since}</td>
-      <td title={NOT_IN_FHIR}>—</td>
-      <td title={NOT_IN_FHIR}>—</td>
+      <td>—</td>
+      <td>—</td>
     </tr>
   );
 }
 
 function CareTeamCard({ patientId, edit }: { patientId: string; edit: EditLink }) {
   const { view, retry } = useCareTeam(patientId);
+  // Set once any member or facility name comes back forbidden (mode A, Physicians: gap G9).
+  const [namesHidden, setNamesHidden] = useState(false);
+  const markNamesHidden = useCallback(() => setNamesHidden(true), []);
+  const uid = useId();
+  const hiddenNoteId = `${uid}-hidden`;
+  const footnoteId = `${uid}-footnote`;
+  const hiddenRef = namesHidden ? hiddenNoteId : undefined;
   return (
     <Card id="careteam_ps_expand" title="Care Team" defaultExpanded={false} edit={edit} className="card-wide">
-      <CardView view={view} retry={retry} text={{ noun: 'the care team', subject: 'The care team', empty: NOTHING_RECORDED }}>
+      <CardContent view={view} retry={retry} noun="the care team" empty={NOTHING_RECORDED}>
         {(team) =>
           team && (
             <>
@@ -229,30 +307,44 @@ function CareTeamCard({ patientId, edit }: { patientId: string; edit: EditLink }
                   </>
                 )}
               </h3>
+              {namesHidden && (
+                <p className="card-footnote care-team-hidden" id={hiddenNoteId}>
+                  {NAMES_HIDDEN_NOTE}
+                </p>
+              )}
               <div className="table-responsive" tabIndex={0} role="region" aria-label="Care team members">
                 <table className="card-table">
                   <thead>
                     <tr>
                       <th scope="col">Type</th>
-                      <th scope="col">Member</th>
+                      <th scope="col" aria-describedby={hiddenRef}>
+                        Member
+                      </th>
                       <th scope="col">Role</th>
-                      <th scope="col">Facility</th>
+                      <th scope="col" aria-describedby={hiddenRef}>
+                        Facility
+                      </th>
                       <th scope="col">Since</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Note</th>
+                      <th scope="col" aria-describedby={footnoteId}>
+                        Status
+                      </th>
+                      <th scope="col" aria-describedby={footnoteId}>
+                        Note
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {team.members.map((m) => (
-                      <MemberRow key={m.key} m={m} />
+                      <MemberRow key={m.key} m={m} onForbidden={markNamesHidden} />
                     ))}
                   </tbody>
                 </table>
               </div>
+              <Footnote id={footnoteId}>{STATUS_NOTE_FOOTNOTE}</Footnote>
             </>
           )
         }
-      </CardView>
+      </CardContent>
     </Card>
   );
 }
@@ -268,9 +360,10 @@ function CareTeamCard({ patientId, edit }: { patientId: string; edit: EditLink }
  */
 function LabsCard({ patientId, allLabsHref }: { patientId: string; allLabsHref: string | undefined }) {
   const { view, retry } = useLatestLabReport(patientId);
+  const footnoteId = useId();
   return (
     <Card id="labdata_ps_expand" title="Labs" defaultExpanded={false}>
-      <CardView view={view} retry={retry} text={{ noun: 'lab data', subject: 'Lab data', empty: 'No lab data documented.' }}>
+      <CardContent view={view} retry={retry} noun="lab data" empty="No lab data documented.">
         {(report) =>
           report && (
             <div className="labdata">
@@ -280,7 +373,7 @@ function LabsCard({ patientId, allLabsHref }: { patientId: string; allLabsHref: 
                 <span>{`Tests: ${report.tests}${report.date ? ` (${report.date})` : ''}`}</span>
                 <br />
                 <span>
-                  Encounter: <span title={NOT_IN_FHIR}>—</span>
+                  Encounter: <span aria-describedby={footnoteId}>—</span>
                 </span>
               </p>
               {allLabsHref && (
@@ -290,10 +383,11 @@ function LabsCard({ patientId, allLabsHref }: { patientId: string; allLabsHref: 
                   </a>
                 </p>
               )}
+              <Footnote id={footnoteId}>{ENCOUNTER_FOOTNOTE}</Footnote>
             </div>
           )
         }
-      </CardView>
+      </CardContent>
     </Card>
   );
 }

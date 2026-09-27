@@ -114,14 +114,14 @@ describe('SmartApp (modes B/C)', () => {
   it('refuses a launch whose iss is another origin', async () => {
     server.use(config);
     const navigate = renderAt(`/?launch=l&iss=${encodeURIComponent('https://evil.example/apis/default/fhir')}`);
-    expect(await screen.findByRole('alert')).toHaveTextContent('The launch did not come from this OpenEMR server.');
+    expect(await screen.findByRole('alert')).toHaveTextContent("The launch didn't come from this OpenEMR server. Open the dashboard again from the patient's chart in OpenEMR.");
     expect(navigate).not.toHaveBeenCalled();
   });
 
   it('reports a missing client configuration', async () => {
     server.use(http.get('*/dashboard.config.json', () => new HttpResponse(null, { status: 404 })));
     renderAt(`/?launch=l&iss=${encodeURIComponent(ISS)}`);
-    expect(await screen.findByRole('alert')).toHaveTextContent('The dashboard is not configured');
+    expect(await screen.findByRole('alert')).toHaveTextContent("The dashboard isn't set up yet (no SMART client ID). Ask your OpenEMR administrator.");
   });
 
   it('after the callback, shows the launched patient with every card, care-team names resolved and medications combined', async () => {
@@ -131,15 +131,21 @@ describe('SmartApp (modes B/C)', () => {
     renderAt('/?code=code-1&state=state-1');
 
     expect(await screen.findByRole('heading', { level: 1, name: /Ada/ })).toBeInTheDocument();
-    expect(await screen.findByText('Signed in as Dana Dashboard')).toBeInTheDocument();
+    // Plan L5: OpenEMR's own tab bar is above the app, so there is no separate
+    // title row; "Signed in as" and Sign out sit in the patient bar.
+    const bar = screen.getByRole('region', { name: 'Patient' });
+    expect(await within(bar).findByText('Signed in as Dana Dashboard')).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    expect(screen.queryByRole('banner')).toBeNull();
+    expect(screen.queryByText('Patient Dashboard')).toBeNull();
+    expect(document.title).toBe('Chart – Patient Dashboard');
     // Code and state are removed from the address bar.
     expect(window.location.search).toBe('');
     // The patient is fixed to the launch context: no search, no switching in the app.
     expect(screen.queryByRole('link', { name: 'Find another patient' })).toBeNull();
-    expect(screen.getByText(/To open another patient, change the chart in OpenEMR/)).toBeInTheDocument();
 
     const combined = await screen.findByRole('region', { name: 'Medications and prescriptions (combined)' });
-    expect(within(combined).getByText(/could not be read with this sign-in/)).toBeInTheDocument();
+    expect(within(combined).getByText(/can't read OpenEMR's medication list/)).toBeInTheDocument();
     expect(within(combined).getByText('Metformin HCl 500 mg')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Prescriptions' })).toBeNull();
 
@@ -190,21 +196,37 @@ describe('SmartApp (modes B/C)', () => {
     );
     seedPending();
     renderAt('/?code=code-1&state=state-1');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired. Open the dashboard again from the patient\'s chart in OpenEMR.');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Your session expired. Open the dashboard again from the patient's chart in OpenEMR.");
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
   });
 
   it('shows a readable message for an OAuth error on the callback', async () => {
     server.use(config);
     renderAt('/?error=access_denied&state=s');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in did not complete: access was denied.');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Sign-in didn't complete: access was denied. Open the dashboard again from the patient's chart in OpenEMR.");
   });
 
   it('refuses a callback whose state does not match', async () => {
     server.use(config);
     seedPending();
     renderAt('/?code=code-1&state=forged');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in did not complete: the sign-in link expired or was already used.');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Sign-in didn't complete: the sign-in link expired or was already used. Open the dashboard again from the patient's chart in OpenEMR.");
+  });
+
+  it("says when the user's account can't open the launched patient", async () => {
+    server.use(config, token, http.get('*/apis/default/fhir/Patient/:id', () => HttpResponse.json({ message: 'Forbidden' }, { status: 403 })), ...fhirApi([]));
+    seedPending();
+    renderAt('/?code=code-1&state=state-1');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Your OpenEMR account doesn't have access to this patient's chart.");
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it("while the patient loads, holds the patient bar's place with a spinner", async () => {
+    server.use(config, token, http.get('*/apis/default/fhir/Patient/:id', () => new Promise<Response>(() => undefined)), ...fhirApi([]));
+    seedPending();
+    renderAt('/?code=code-1&state=state-1');
+    const status = await screen.findByText('Loading patient…');
+    expect(status.closest('.patient-bar-loading')).not.toBeNull();
   });
 
   it('signing out drops the token and says how to come back', async () => {

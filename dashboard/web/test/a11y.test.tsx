@@ -112,7 +112,7 @@ describe('axe-core: no violations on the rendered pages', () => {
     }
     await within(await screen.findByRole('region', { name: 'Prescriptions' })).findByRole('table');
     await within(await screen.findByRole('region', { name: 'Care Team' })).findByText('Synthetic, Dana');
-    await within(await screen.findByRole('region', { name: 'Labs' })).findByText(/permission/);
+    await within(await screen.findByRole('region', { name: 'Labs' })).findByText(/can't view lab data/);
     expect(await violations()).toEqual([]);
     // Wide tables scroll sideways on a phone; the scroll box must take keyboard focus
     // (axe scrollable-region-focusable, which needs layout and so only fires in a browser).

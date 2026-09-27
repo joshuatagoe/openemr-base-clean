@@ -58,7 +58,7 @@ describe('auth shell', () => {
   it('tells the user when the session has expired', async () => {
     server.use(expired);
     renderAt('/dashboard');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired. Please sign in again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired. Sign in again to continue.');
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
   });
 
@@ -98,7 +98,7 @@ describe('auth shell', () => {
     renderAt('/probe', [{ path: '/probe', element: <Probe /> }]);
     await screen.findByText('Signed in as Dana Testdoctor');
     await userEvent.click(screen.getByRole('button', { name: 'probe' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired. Please sign in again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired. Sign in again to continue.');
     expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
   });
 });

@@ -215,7 +215,7 @@ describe('patient header (PHP patient-bar parity)', () => {
       }),
     );
     renderAt(`/patient/${PATIENT_A_ID}`);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired. Please sign in again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired. Sign in again to continue.');
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(calls).toBe(1);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
