@@ -115,6 +115,8 @@ input:focus-visible,
 .page-title { margin: 0 0 0.75rem; font-size: 1.5rem; font-weight: 500; line-height: 1.2; }
 .muted { color: var(--oe-muted); }
 .signed-out { display: grid; gap: 0.75rem; justify-items: start; }
+/* The grid gap alone spaces the heading, text and button (0.75rem, the landing title's margin). */
+.signed-out > * { margin: 0; }
 /* Text for screen readers only. */
 .visually-hidden {
   position: absolute;
