@@ -25,15 +25,27 @@ import {
 import { PATIENT_A_ID, PATIENT_B_ID, patientA, patientB, searchset } from './fixtures/patients';
 import { server, signedIn, signedOut } from './msw/server';
 
+// The context is the whole document, so page-level rules (html-has-lang,
+// document-title, landmark-one-main, …) run too; on document.body they are
+// skipped because they select <html>. page-has-heading-one is always
+// "incomplete" in jsdom (it cannot tell whether the h1 is visible), so each
+// test also asserts exactly one level-1 heading; the real-browser run checks
+// the rule itself (docs/dashboard-parity/PARITY.md).
 async function violations(): Promise<string[]> {
-  const result = await axe.run(document.body, {
+  const result = await axe.run(document, {
     rules: { 'color-contrast': { enabled: false } },
     resultTypes: ['violations'],
   });
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   return result.violations.map((v) => `${v.impact ?? '?'} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
 }
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  window.localStorage.clear();
+  // What index.html sets; jsdom starts with a bare <html>.
+  document.documentElement.lang = 'en';
+  document.title = 'Patient Dashboard';
+});
 
 describe('axe-core: no violations on the rendered pages', () => {
   it('signed-out home page', async () => {

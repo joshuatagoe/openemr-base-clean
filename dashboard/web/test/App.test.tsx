@@ -22,6 +22,19 @@ describe('auth shell', () => {
     expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
   });
 
+  it('gives the signed-out home page a focused page heading and a tab title', async () => {
+    server.use(signedOut);
+    document.title = 'Patient Dashboard';
+    renderAt('/');
+    // One h1 like every other page (axe page-has-heading-one), same style as the landing page title.
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Sign in' });
+    expect(heading).toHaveClass('page-title');
+    expect(heading).toHaveFocus();
+    expect(screen.getByText('Use your OpenEMR account to open the patient dashboard.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in with OpenEMR' })).toHaveAttribute('href', '/auth/login');
+    expect(document.title).toBe('Sign in – Patient Dashboard');
+  });
+
   it('shows "Signed in as <name>" and a Sign out button, and opens the dashboard route', async () => {
     server.use(signedIn);
     renderAt('/');
