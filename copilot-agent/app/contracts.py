@@ -114,6 +114,9 @@ class RecordType(StrEnum):
     #: A value read from an uploaded document, not yet verified or filed (ADR-011).
     #: Never a chart record: cited under its own type so it cannot pass as one.
     PENDING_DOCUMENT_FACT = "pending_document_fact"
+    #: An item the patient wrote on an intake form (ADR-010): patient-reported,
+    #: never a lab value or a chart record, and never fileable.
+    PATIENT_REPORTED = "patient_reported"
 
 
 class EvidenceSource(StrEnum):
@@ -250,6 +253,21 @@ class AllergyRecord(StrictModel):
     duplicate_count: int = Field(default=1, ge=1)
 
 
+#: The item labels an intake form's pending facts carry (``app.intake.intake_items``).
+#: Demographics are never items, so a name or DOB can never arrive as one.
+PATIENT_REPORTED_LABELS = frozenset(
+    {
+        "Chief concern",
+        "Current medication",
+        "Current medications (none reported)",
+        "Allergy",
+        "Allergies (none reported)",
+        "Family history",
+        "Family history (none reported)",
+    }
+)
+
+
 class PendingDocumentFact(StrictModel):
     """One value read from an uploaded document and awaiting clinician review (contract C5, ADR-011).
 
@@ -280,6 +298,19 @@ class PendingDocumentFact(StrictModel):
         default=None,
         description="The date the document was uploaded to OpenEMR (documents.date). Dates the document when no collection date was read (the 12-month ageing rule, app.ageing).",
     )
+    kind: Literal["lab_value", "patient_reported"] = Field(
+        default="lab_value",
+        description="lab_value: a value read from a lab document. patient_reported: an item the patient wrote on an intake form (test_name is the item label, value_text the item); never a lab value or chart fact.",
+    )
+
+    @model_validator(mode="after")
+    def _patient_reported_is_not_a_lab_value(self) -> PendingDocumentFact:
+        if self.kind == "patient_reported":
+            if self.test_name not in PATIENT_REPORTED_LABELS:
+                raise ValueError("a patient_reported fact must carry an intake item label")
+            if any(v is not None for v in (self.unit, self.reference_range, self.abnormal_flag, self.collection_date)) or self.flag_source != "unavailable":
+                raise ValueError("a patient_reported fact carries no units, range, flag or collection date")
+        return self
 
     @model_validator(mode="after")
     def _located(self) -> PendingDocumentFact:
@@ -655,6 +686,7 @@ __all__ = [
     "MedicationAction",
     "MedicationRecord",
     "MedicationSource",
+    "PATIENT_REPORTED_LABELS",
     "PendingDocumentFact",
     "PriorNote",
     "ReadyResponse",

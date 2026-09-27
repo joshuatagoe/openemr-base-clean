@@ -31,7 +31,7 @@ from app.contracts import (
     StrictModel,
 )
 from app.medications import ingredient_key
-from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED, PENDING_LABEL
+from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED, PATIENT_REPORTED_LABEL, PENDING_LABEL
 from app.synonyms import normalize, resolve_commitment, resolve_record, resolve_record_panel
 
 MAX_RECORDS = 10
@@ -84,7 +84,12 @@ class FindPendingArgs(StrictModel):
     test_query: str | None = Field(default=None, max_length=80, description="Test name or panel, e.g. 'HbA1c'; null for every pending value.")
 
 
+class FindReportedArgs(StrictModel):
+    query: str | None = Field(default=None, max_length=80, description="A word to look for, e.g. 'metformin', 'allergy', 'penicillin'; null for every reported item.")
+
+
 PENDING_TOOL = "find_pending_document_facts"
+PATIENT_REPORTED_TOOL = "find_patient_reported"
 
 TOOL_ARGS: dict[str, type[StrictModel]] = {
     "list_commitments": NoArgs,
@@ -94,6 +99,7 @@ TOOL_ARGS: dict[str, type[StrictModel]] = {
     "get_baseline_note": NoArgs,
     "list_allergies": NoArgs,
     PENDING_TOOL: FindPendingArgs,
+    PATIENT_REPORTED_TOOL: FindReportedArgs,
 }
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -107,6 +113,11 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Values read from documents uploaded for this patient that a clinician has NOT yet verified or filed. "
         "Not chart records. Each has the document id, page, verification status, and conflicts_with: filed results "
         "for the same test and day with a different value."
+    ),
+    PATIENT_REPORTED_TOOL: (
+        "Items the patient wrote on an intake form uploaded for this patient (chief concern, current medications, "
+        "allergies, family history), not reviewed by a clinician. Patient-reported: not chart records and not lab values. "
+        "Each has the document id, page, the item label and the item as written."
     ),
 }
 
@@ -132,15 +143,16 @@ def strict_schema(schema: Any) -> Any:
     return schema
 
 
-def tool_definitions(*, include_pending: bool = False) -> list[dict[str, Any]]:
+def tool_definitions(*, include_pending: bool = False, include_patient_reported: bool = False) -> list[dict[str, Any]]:
     """Provider-neutral tool definitions: name, description, strict JSON schema (no numeric/length bounds).
 
     ``find_pending_document_facts`` is offered only when the bundle holds
-    pending facts, so a chart with no uploads sees exactly the Week 1 tools.
+    pending lab values and ``find_patient_reported`` only when it holds intake
+    items, so a chart with no uploads sees exactly the Week 1 tools.
     """
     defs = []
     for name, model in TOOL_ARGS.items():
-        if name == PENDING_TOOL and not include_pending:
+        if (name == PENDING_TOOL and not include_pending) or (name == PATIENT_REPORTED_TOOL and not include_patient_reported):
             continue
         schema = strict_schema(model.model_json_schema())
         defs.append({"name": name, "description": TOOL_DESCRIPTIONS[name], "input_schema": schema})
@@ -195,7 +207,7 @@ def find_results(bundle: ContextBundle, _: list[EvidenceMatch], args: FindResult
         return ToolOutput(tool="find_results", error="unresolvable_query")
     rows = [r for r in bundle.lab_results if _record_key(r.test_name, r.code) in keys and _since_ok(r.observed_at, args.since)]
     rows.sort(key=lambda r: (r.observed_at, r.result_id), reverse=True)
-    pending = sum(1 for f in bundle.pending_document_facts if _pending_matches(f.test_name, keys, args.test_query))
+    pending = sum(1 for f in lab_pending_facts(bundle) if _pending_matches(f.test_name, keys, args.test_query))
     limit = args.limit or MAX_RECORDS
     records = [
         {
@@ -293,6 +305,16 @@ def list_allergies(bundle: ContextBundle, _: list[EvidenceMatch], __: NoArgs) ->
     return ToolOutput(tool="list_allergies", records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
 
 
+def lab_pending_facts(bundle: ContextBundle) -> list[PendingDocumentFact]:
+    """Pending values read from lab documents (intake items are patient-reported, not lab values)."""
+    return [f for f in bundle.pending_document_facts if f.kind == "lab_value"]
+
+
+def patient_reported_facts(bundle: ContextBundle) -> list[PendingDocumentFact]:
+    """Waiting intake items: what the patient wrote, never a lab value or chart fact."""
+    return [f for f in bundle.pending_document_facts if f.kind == "patient_reported"]
+
+
 def _pending_matches(test_name: str, keys: frozenset[str], query: str) -> bool:
     """Whether a pending value belongs to the queried test - generously.
 
@@ -366,7 +388,7 @@ def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], a
     ``age_label``. Without it nothing is aged (pure callers and fixtures).
     """
     aged = {} if as_of is None else aged_pending_documents(bundle.pending_document_facts, as_of)
-    facts = bundle.pending_document_facts
+    facts = lab_pending_facts(bundle)
     if args.test_query is not None and args.test_query.strip():
         keys = _test_keys(args.test_query)
         if keys is None:
@@ -396,6 +418,36 @@ def find_pending_document_facts(bundle: ContextBundle, _: list[EvidenceMatch], a
     return ToolOutput(tool=PENDING_TOOL, records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
 
 
+def find_patient_reported(bundle: ContextBundle, _: list[EvidenceMatch], args: FindReportedArgs, *, as_of: date | None = None) -> ToolOutput:
+    """Waiting intake items, each labelled patient-reported; never mixed into the lab or chart tools.
+
+    A query matches generously (any of its words in the item label or text):
+    over-matching only adds a labelled item.
+    """
+    aged = {} if as_of is None else aged_pending_documents(bundle.pending_document_facts, as_of)
+    facts = patient_reported_facts(bundle)
+    words = set(normalize(args.query).split()) if args.query else set()
+    if words:
+        facts = [f for f in facts if words & set(normalize(f"{f.test_name} {f.value_text or ''}").split())]
+    records = [
+        {
+            "record_id": f.fact_id,
+            "label": PATIENT_REPORTED_LABEL,
+            "source": "intake form",
+            "kind": f.kind,
+            "document_id": f.document_id,
+            "page": f.page,
+            "item": f.test_name,
+            "value": f.value_text,
+            "verification_status": f.verification_status,
+            "date": None if f.received_at is None else f.received_at.isoformat(),
+        }
+        | _age_fields(aged.get(f.document_id))
+        for f in facts
+    ]
+    return ToolOutput(tool=PATIENT_REPORTED_TOOL, records=records[:MAX_RECORDS], truncated=len(records) > MAX_RECORDS)
+
+
 def _age_fields(dated: tuple[date, DateKind] | None) -> dict[str, Any]:
     if dated is None:
         return {}  # a recent value's record is unchanged
@@ -410,6 +462,7 @@ TOOL_IMPLEMENTATIONS: dict[str, Callable[[ContextBundle, list[EvidenceMatch], An
     "get_baseline_note": get_baseline_note,
     "list_allergies": list_allergies,
     PENDING_TOOL: find_pending_document_facts,
+    PATIENT_REPORTED_TOOL: find_patient_reported,
 }
 
 
@@ -429,6 +482,8 @@ def run_tool(bundle: ContextBundle, matches: list[EvidenceMatch], name: str, raw
     try:
         if name == PENDING_TOOL:
             return find_pending_document_facts(bundle, matches, args, as_of=as_of)
+        if name == PATIENT_REPORTED_TOOL:
+            return find_patient_reported(bundle, matches, args, as_of=as_of)
         return impl(bundle, matches, args)
     except Exception:  # noqa: BLE001 - a tool failure must surface as an error, not a crash or an empty list
         return ToolOutput(tool=name, error="tool_failed")
@@ -444,6 +499,8 @@ def serialize_output(output: ToolOutput) -> str:
 
 __all__ = [
     "MAX_RECORDS",
+    "PATIENT_REPORTED_LABEL",
+    "PATIENT_REPORTED_TOOL",
     "PENDING_LABEL",
     "PENDING_TOOL",
     "TOOL_ARGS",

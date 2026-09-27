@@ -710,7 +710,9 @@
                 line.appendChild(document.createTextNode(String(s.text || '')));
                 const cites = Array.isArray(s.citations) ? s.citations : [];
                 if (cites.length) {
-                    line.appendChild(el('div', 'small text-muted', 'Sources: ' + cites.map((c) => String(c.record_id) + ' (' + fmtDate(c.timestamp) + ')').join('; ')));
+                    // An intake item is what the patient wrote, never a chart record: say so beside its id.
+                    const source = (c) => String(c.record_id) + (c.record_type === 'patient_reported' ? ' \u2014 patient-reported, intake form' : '') + ' (' + fmtDate(c.timestamp) + ')';
+                    line.appendChild(el('div', 'small text-muted', 'Sources: ' + cites.map(source).join('; ')));
                 }
                 item.appendChild(line);
             });

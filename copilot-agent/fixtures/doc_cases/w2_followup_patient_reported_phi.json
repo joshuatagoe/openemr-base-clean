@@ -1,0 +1,74 @@
+{
+  "case_id": "w2_followup_patient_reported_phi",
+  "kind": "followup",
+  "source": "hand-authored 2026-09-26 (follow-up documents: intake answers); scripted turn - no model calls",
+  "rubric": "no_phi_in_logs",
+  "trace": true,
+  "test_class": "phi",
+  "guards": "A follow-up over intake items leaves no item text, statement text or patient id in any log field or exported span.",
+  "bundle_update": {
+    "pending_document_facts": [
+      {
+        "fact_id": "copilot_extracted_value:91",
+        "document_id": 301,
+        "test_name": "Current medication",
+        "value_text": "Metformin 1000 mg twice daily",
+        "unit": null,
+        "reference_range": null,
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": null,
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": null,
+        "status": "candidate",
+        "kind": "patient_reported",
+        "received_at": "2026-09-25"
+      },
+      {
+        "fact_id": "copilot_extracted_value:92",
+        "document_id": 301,
+        "test_name": "Allergy",
+        "value_text": "Sulfa drugs; reaction: hives",
+        "unit": null,
+        "reference_range": null,
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": null,
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": null,
+        "status": "candidate",
+        "kind": "patient_reported",
+        "received_at": "2026-09-25"
+      }
+    ]
+  },
+  "question": "Any allergies on the intake form?",
+  "script": [
+    {
+      "tool_calls": [
+        {
+          "name": "find_patient_reported",
+          "arguments": {
+            "query": "allergy"
+          }
+        }
+      ]
+    },
+    {
+      "answer": [
+        {
+          "text": "Allergy: Sulfa drugs; reaction: hives (patient-reported (from the intake form), not in the chart).",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:92"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "kept_count": 1
+  }
+}

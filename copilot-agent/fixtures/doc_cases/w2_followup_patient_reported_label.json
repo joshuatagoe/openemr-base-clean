@@ -1,0 +1,104 @@
+{
+  "case_id": "w2_followup_patient_reported_label",
+  "kind": "followup",
+  "source": "hand-authored 2026-09-26 (follow-up documents: intake answers); scripted turn - no model calls",
+  "rubric": "citation_present",
+  "test_class": "patient_reported",
+  "guards": "ADR-010 intake items in follow-ups: a statement citing a patient-reported item must say it is patient-reported (from the intake form) and not in the chart; the unlabelled one and the one calling it a lab result are rejected, the labelled one is kept and cited as patient_reported.",
+  "bundle_update": {
+    "pending_document_facts": [
+      {
+        "fact_id": "copilot_extracted_value:91",
+        "document_id": 301,
+        "test_name": "Current medication",
+        "value_text": "Metformin 1000 mg twice daily",
+        "unit": null,
+        "reference_range": null,
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": null,
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": null,
+        "status": "candidate",
+        "kind": "patient_reported",
+        "received_at": "2026-09-25"
+      },
+      {
+        "fact_id": "copilot_extracted_value:92",
+        "document_id": 301,
+        "test_name": "Allergy",
+        "value_text": "Sulfa drugs; reaction: hives",
+        "unit": null,
+        "reference_range": null,
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": null,
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": null,
+        "status": "candidate",
+        "kind": "patient_reported",
+        "received_at": "2026-09-25"
+      }
+    ]
+  },
+  "question": "What medications and allergies did she list on the intake form?",
+  "script": [
+    {
+      "tool_calls": [
+        {
+          "name": "find_patient_reported",
+          "arguments": {
+            "query": null
+          }
+        }
+      ]
+    },
+    {
+      "answer": [
+        {
+          "text": "She takes Metformin 1000 mg twice daily.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:91"
+          ]
+        },
+        {
+          "text": "The allergy lab result is Sulfa drugs; reaction: hives (patient-reported (from the intake form), not in the chart).",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:92"
+          ]
+        },
+        {
+          "text": "Current medication: Metformin 1000 mg twice daily (patient-reported (from the intake form), not in the chart).",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:91"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "kept": [
+      {
+        "text_contains": [
+          "patient-reported (from the intake form), not in the chart"
+        ],
+        "cited": [
+          "copilot_extracted_value:91"
+        ],
+        "cited_types": [
+          "patient_reported"
+        ]
+      }
+    ],
+    "kept_count": 1,
+    "rejection_codes": [
+      "patient_reported_as_lab",
+      "patient_reported_label_missing"
+    ]
+  }
+}

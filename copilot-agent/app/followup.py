@@ -78,7 +78,10 @@ async def run_turn(
     ``as_of`` is the date pending document values are aged against (the route passes today).
     """
     transcript: list[Any] = [*_history_messages(history), {"role": "user", "content": build_question_content(question)}]
-    tools = tool_definitions(include_pending=bool(bundle.pending_document_facts))
+    tools = tool_definitions(
+        include_pending=any(f.kind == "lab_value" for f in bundle.pending_document_facts),
+        include_patient_reported=any(f.kind == "patient_reported" for f in bundle.pending_document_facts),
+    )
     outputs: list[ToolOutput] = []
     records: list[ToolCallRecord] = []
     answer: ModelTurnAnswer | None = None

@@ -117,4 +117,14 @@ interface ProcessingRepositoryInterface
      * @return list<PendingFactRow>
      */
     public function listPendingFacts(int $pid, int $limit): array;
+
+    /**
+     * `candidate` items of this patient's `extracted` intake forms (held and deleted documents
+     * excluded), the newest form first (document id descending, then item order), at most `$limit`
+     * (<= 100). Same row shape as listPendingFacts: `test_name` is the item label, `value_text` the
+     * item as written. Patient-reported evidence for follow-ups, never fileable.
+     *
+     * @return list<PendingFactRow>
+     */
+    public function listPatientReportedFacts(int $pid, int $limit): array;
 }

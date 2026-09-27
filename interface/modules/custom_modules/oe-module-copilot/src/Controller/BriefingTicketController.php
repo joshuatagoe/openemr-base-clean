@@ -75,6 +75,9 @@ final class BriefingTicketController
 
     public const LAB_RESULT_LIMIT = 200;
 
+    /** Most waiting intake items (patient-reported facts) one follow-up bundle carries, apart from lab values. */
+    public const PATIENT_REPORTED_LIMIT = 100;
+
     public const AS_OF_SOURCE_ENCOUNTER = 'current_encounter';
     public const AS_OF_SOURCE_SERVER = 'server_time';
 
@@ -451,7 +454,9 @@ final class BriefingTicketController
 
     /**
      * Pending document facts for follow-ups (ADR-011, contract C5): candidate
-     * values of this patient's extracted, non-held documents, only from
+     * values of this patient's extracted, non-held lab documents (at most
+     * LAB_RESULT_LIMIT) and waiting intake items as `patient_reported` facts (at
+     * most PATIENT_REPORTED_LIMIT), only from
      * documents the user may open (core `can_access()`, as for the briefing
      * reader). None while the module tables are missing; a read or access-check
      * failure is logged by code and the bundle goes without them rather than
@@ -466,6 +471,10 @@ final class BriefingTicketController
         }
         try {
             $facts = $this->pendingFacts->listPendingFacts($pid, self::LAB_RESULT_LIMIT);
+            // Waiting intake items: patient-reported evidence, labelled as such for the agent (contract C5 `kind`).
+            foreach ($this->pendingFacts->listPatientReportedFacts($pid, self::PATIENT_REPORTED_LIMIT) as $item) {
+                $facts[] = ['kind' => ContextBundleBuilder::KIND_PATIENT_REPORTED] + $item;
+            }
             if ($this->documentAccess === null) {
                 return $facts;
             }

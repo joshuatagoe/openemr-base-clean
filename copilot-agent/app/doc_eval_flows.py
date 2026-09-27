@@ -569,6 +569,8 @@ def score_followup_case(case: dict[str, Any], *, model: str) -> Any:  # noqa: AR
 
     canaries = {str(bundle.patient_uuid)}
     canaries |= {f.test_name for f in bundle.pending_document_facts}
+    # What a patient wrote on an intake form is PHI: none of it may reach a log or span.
+    canaries |= {f.value_text for f in bundle.pending_document_facts if f.kind == "patient_reported" and f.value_text}
     canaries |= {s["text"] for step in case["script"] for s in step.get("answer", [])}
     canaries |= {s.text for s in outcome.statements}
     if bundle.prior_note is not None:

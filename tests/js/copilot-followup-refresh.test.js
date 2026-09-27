@@ -196,3 +196,20 @@ describe('CopilotPanel.refreshFollowUpContext', () => {
         expect(posts[1].refresh_bundle_id).toBe(BOUND.bundle_id);
     });
 });
+
+describe('follow-up sources', () => {
+    test('an intake item is shown as patient-reported beside its id', () => {
+        const panel = new CopilotPanel(container());
+        const item = document.createElement('li');
+        panel.renderTurn({
+            statements: [{ kind: 'fact', text: 'Metformin 1000 mg twice daily (patient-reported (from the intake form), not in the chart).', citations: [
+                { record_type: 'patient_reported', record_id: 'copilot_extracted_value:91', timestamp: '2026-09-25T00:00:00Z' },
+                { record_type: 'medication', record_id: 'prescriptions:31', timestamp: '2026-05-01T00:00:00Z' }
+            ] }],
+            rejected_count: 0, tool_calls: []
+        }, item);
+        const sources = item.textContent;
+        expect(sources).toContain('copilot_extracted_value:91 \u2014 patient-reported, intake form');
+        expect(sources).not.toContain('prescriptions:31 \u2014 patient-reported');
+    });
+});

@@ -21,6 +21,9 @@ PENDING_LABEL = "not yet verified or filed"
 #: must carry besides PENDING_LABEL (the 12-month ageing rule, app.ageing). The tool
 #: gives the full phrase with the document's date as ``age_label``.
 AGED_LABEL = "from an older document"
+#: The label every follow-up statement citing an intake item must carry (ADR-010):
+#: what the patient wrote is patient-reported and not in the chart.
+PATIENT_REPORTED_LABEL = "patient-reported (from the intake form), not in the chart"
 AGED_NEVER_REVIEWED = "never reviewed"
 
 PLAN_TEXT_OPEN = "<plan_text>"
@@ -54,6 +57,7 @@ FOLLOWUP_SYSTEM_PROMPT = f"""You answer a physician's follow-up questions about 
 Scope. The record sources are exactly: lab/test results (find_results), lab/test orders (find_orders), medications (find_medications), allergies (list_allergies), the prior note's plan text (get_baseline_note), and the plan check (list_commitments: each prior-plan commitment with its evidence state and cited records).
 - A question about what changed, what happened, or what is outstanding since the last visit or plan is answered from list_commitments: report each commitment's evidence state with its cited records, nothing more.
 - When the find_pending_document_facts tool is offered, it lists values read from lab documents uploaded for this patient that a clinician has not yet verified or filed. They are not chart records. A question about an uploaded document or its values is answered from it.
+- When the find_patient_reported tool is offered, it lists items the patient wrote on an intake form (chief concern, current medications, allergies, family history) that no clinician has reviewed. They are not chart records and not lab values. A question about what the patient reported, or about their intake form, is answered from it.
 - A question that none of these sources can answer (for example vital signs, imaging, problems or diagnoses, encounter notes other than the plan text, appointments, insurance, a summary of the whole history, or anything about another patient) is out of scope. Do not call any tool: call submit_answer at once with exactly one statement of kind refusal: "{SCOPE_REFUSAL_TEXT}"
 
 Rules:
@@ -65,6 +69,7 @@ Rules:
 - Never state that the patient has no allergies, never took something, or did not do something. Absence of a record is only "no record found".
 - Pending document values (find_pending_document_facts): every statement that cites one must contain the exact words "{PENDING_LABEL}", and must never call it part of the chart, the record, or on file. Name the document id it was read from. Say "flagged <value> as printed" only when its abnormal_flag is set; a derived flag is not a printed one.
 - A pending value whose record has aged set comes from an older document that nobody reviewed. Every statement citing one must also contain its age_label exactly as returned (for example "{AGED_LABEL} (collected 2025-01-10) that was {AGED_NEVER_REVIEWED}").
+- Patient-reported items (find_patient_reported): every statement that cites one must contain the exact words "{PATIENT_REPORTED_LABEL}". Never call one a result, a lab value, or part of the chart or record. When a reported medication differs from the chart's medication records, you may state it as a discrepancy in one statement that cites both the reported item and the chart record.
 - When find_results reports pending_count above zero, call find_pending_document_facts for that test. Never say no result was found for a test while a pending value exists for it: say that no filed result was found and that a value read from a document is "{PENDING_LABEL}".
 - When a pending value lists record ids in conflicts_with, the filed and pending values disagree. State them in one statement that cites both record ids and says the pending value conflicts with the filed one. Do not report either value on its own.
 - Questions about anyone other than this patient are refused.
@@ -190,6 +195,7 @@ __all__ = [
     "EXTRACTION_SYSTEM_PROMPT",
     "FOLLOWUP_SYSTEM_PROMPT",
     "INTAKE_EXTRACTION_PROMPT_VERSION",
+    "PATIENT_REPORTED_LABEL",
     "INTAKE_EXTRACTION_SYSTEM_PROMPT",
     "LAB_EXTRACTION_PROMPT_VERSION",
     "LAB_EXTRACTION_SYSTEM_PROMPT",

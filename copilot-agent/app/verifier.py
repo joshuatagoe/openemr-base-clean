@@ -38,7 +38,7 @@ from typing import Any
 
 from app.contracts import ADVICE_REFUSAL_TEXT, SCOPE_REFUSAL_TEXT, Citation, RecordType, StatementKind, VerifiedStatement
 from app.providers.base import ModelStatement, ModelTurnAnswer
-from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED
+from app.providers.prompt import AGED_LABEL, AGED_NEVER_REVIEWED, PATIENT_REPORTED_LABEL
 from app.tools import PENDING_LABEL, ToolOutput
 
 # Modal / directive phrasing that would turn a record lookup into advice.
@@ -61,6 +61,8 @@ _CHART_CLAIM = re.compile(
     r"\b(?:in|on|to) (?:the |this |her |his |their )?(?:patient'?s )?(?:chart|record)\b|\bon file\b|\bcharted\b|\bfiled (?:value|result)\b",
     re.I,
 )
+# Wording that presents what a patient reported as a measured lab value.
+_LAB_CLAIM = re.compile(r"\b(?:lab(?:oratory)?|results?|resulted|test value|measured)\b", re.I)
 # A pending-vs-filed disagreement must be named as one, not left for the reader to spot.
 _CONFLICT_WORD = re.compile(r"\b(conflicts?|conflicting|differs?|disagrees?|does not match)\b", re.I)
 _FLAG_WORDS = {"high": {"high", "yes"}, "elevated": {"high", "yes"}, "low": {"low", "yes"}, "abnormal": {"high", "low", "yes"}, "critical": {"high", "low", "yes"}, "normal": {"no"}, "within normal range": {"no"}, "within normal limits": {"no"}, "within reference range": {"no"}, "out of range": {"high", "low", "yes"}}
@@ -104,7 +106,7 @@ class TurnEvidence:
 
 def _record_numbers(record: dict[str, Any]) -> set[str]:
     numbers: set[str] = set()
-    for key in ("value", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span", "document_id", "page", "document_date"):
+    for key in ("value", "item", "units", "range", "date", "started_at", "ended_at", "modified_at", "dosage_text", "status_value", "begdate", "enddate", "drug_name", "test_name", "title", "plan_text", "summary", "source_span", "document_id", "page", "document_date"):
         v = record.get(key)
         if isinstance(v, (str, int, float)):
             numbers.update(_normalize_number(n) for n in _NUMBER.findall(str(v)))
@@ -130,7 +132,7 @@ def _citation_for(rid: str, record: dict[str, Any]) -> Citation:
         "prescriptions": RecordType.MEDICATION,
         "lists": RecordType.MEDICATION if "drug_name" in record else RecordType.ALLERGY,
         "form_soap": RecordType.PRIOR_NOTE,
-        PENDING_PREFIX: RecordType.PENDING_DOCUMENT_FACT,
+        PENDING_PREFIX: RecordType.PATIENT_REPORTED if record.get("kind") == "patient_reported" else RecordType.PENDING_DOCUMENT_FACT,
     }.get(prefix, RecordType.PRIOR_NOTE)
     raw = record.get("date") or record.get("modified_at") or record.get("started_at") or record.get("begdate")
     try:
@@ -155,9 +157,14 @@ def _domain_violation(text: str, cited: Iterable[dict[str, Any]]) -> str | None:
         if allowed is None:
             continue
         flags = {str(r.get("abnormal_flag")).lower() for r in cited if r.get("abnormal_flag") is not None}
-        if not (flags & allowed):
+        if not (flags & allowed) and not _quotes_the_patient(word, cited):
             return "interpretation_without_flag"
     return None
+
+
+def _quotes_the_patient(word: str, cited: list[dict[str, Any]]) -> bool:
+    """The word is in what the patient wrote on a cited intake item ("high blood pressure"), not an interpretation."""
+    return any(r.get("kind") == "patient_reported" and word in str(r.get("value") or "").lower() for r in cited)
 
 
 def _is_pending(rid: str) -> bool:
@@ -175,16 +182,27 @@ def _pending_violation(text: str, cited_ids: list[str], evidence: TurnEvidence) 
     - A value from a document older than the ageing rule (its record is
       ``aged``) must also be said to come from an older document that was
       never reviewed.
+    - An intake item (``patient_reported``) is labelled patient-reported and
+      not in the chart instead, and standing alone is never called a result,
+      a lab value or chart data. Cited beside a chart record it may be stated
+      as a discrepancy.
     """
     if any(_is_pending(rid) for rid in cited_ids):
         lowered = text.lower()
-        if PENDING_LABEL not in lowered:
-            return "pending_label_missing"
         records = evidence.records()
+        reported = {rid for rid in cited_ids if records.get(rid, {}).get("kind") == "patient_reported"}
+        lab_pending = [rid for rid in cited_ids if _is_pending(rid) and rid not in reported]
+        if lab_pending and PENDING_LABEL not in lowered:
+            return "pending_label_missing"
+        if reported and PATIENT_REPORTED_LABEL not in lowered:
+            return "patient_reported_label_missing"
         if any(records.get(rid, {}).get("aged") for rid in cited_ids) and not (AGED_LABEL in lowered and AGED_NEVER_REVIEWED in lowered):
             return "aged_label_missing"
-        if all(_is_pending(rid) for rid in cited_ids) and _CHART_CLAIM.search(lowered.replace(PENDING_LABEL, "")):
-            return "pending_cited_as_chart"
+        unlabelled = lowered.replace(PENDING_LABEL, "").replace(PATIENT_REPORTED_LABEL, "")
+        if all(_is_pending(rid) for rid in cited_ids) and _CHART_CLAIM.search(unlabelled):
+            return "patient_reported_as_chart" if reported else "pending_cited_as_chart"
+        if reported and set(cited_ids) <= reported and _LAB_CLAIM.search(unlabelled):
+            return "patient_reported_as_lab"
     conflicts = evidence.conflicts()
     cited = set(cited_ids)
     for rid in cited_ids:
