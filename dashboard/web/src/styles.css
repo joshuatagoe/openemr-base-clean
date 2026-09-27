@@ -77,7 +77,11 @@ h1:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
 .cards-row { display: grid; gap: 0.5rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 768px) {
   .cards-row-pami { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  /* Labs sits in the PHP left column (col-md-8). */
+  .cards-row-left { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
+.labdata { margin: 0 0.6rem; }
+.labdata p { margin: 0 0 0.75rem; }
 .card { background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 12%); padding: 0.25rem; min-width: 0; }
 .card-title { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 0.25rem; font-size: 1rem; }
 .card-toggle {

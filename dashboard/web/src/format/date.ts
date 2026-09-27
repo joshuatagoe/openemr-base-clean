@@ -24,3 +24,16 @@ export function localToday(now: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
+
+/**
+ * OpenEMR's FHIR writes local timestamps as the server's wall-clock time plus
+ * its UTC offset (UtilsService::getLocalDateAsUTC), so the text before the
+ * offset is exactly the stored value that PHP cards print raw
+ * (`YYYY-MM-DD HH:MM:SS`, or the date alone).
+ */
+export function openemrWallClock(value: string | undefined): string {
+  if (!value) return '';
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/.exec(value);
+  if (!m) return value;
+  return m[2] ? `${m[1]} ${m[2]}` : (m[1] as string);
+}

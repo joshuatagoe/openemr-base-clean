@@ -9,6 +9,7 @@ import type {
   Condition,
   FhirResource,
   MedicationRequest,
+  Observation,
   Organization,
   Practitioner,
 } from 'fhir/r4';
@@ -182,6 +183,49 @@ export function practitioner(id: string, given: string, family: string): Practit
 
 export function organization(id: string, name: string): Organization {
   return { resourceType: 'Organization', id, name };
+}
+
+// --------------------------------------------------------------------- Labs
+
+export const ENC_1 = 'e1000000-0000-4000-8000-000000000001';
+export const ENC_2 = 'e2000000-0000-4000-8000-000000000002';
+
+/**
+ * One lab Observation, shaped like FhirObservationLaboratoryService output: one
+ * per procedure_result row, effectiveDateTime = procedure_report.date_report as
+ * local wall-clock time plus offset, encounter = the order's encounter, no
+ * report id and no procedure name (A2 §2.6).
+ */
+export function labObs(
+  id: string,
+  opts: {
+    loinc?: string;
+    name?: string;
+    /** false: result_code or result_text empty, so OpenEMR sends nullFlavor UNK. */
+    coded?: boolean;
+    status?: Observation['status'];
+    effective?: string | null;
+    encounter?: string | null;
+    patient?: string;
+    value?: { value: number; unit: string };
+  } = {},
+): Observation {
+  const o: Observation = {
+    resourceType: 'Observation',
+    id,
+    meta: { versionId: '1', lastUpdated: opts.effective ?? '2026-09-12T09:15:00+00:00' },
+    status: opts.status ?? 'final',
+    category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory', display: 'Laboratory' }] }],
+    code:
+      opts.coded === false
+        ? { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-NullFlavor', code: 'UNK', display: 'unknown' }] }
+        : { coding: [{ system: 'http://loinc.org', code: opts.loinc ?? '4548-4', display: opts.name ?? 'Hemoglobin A1c' }] },
+    subject: { reference: `Patient/${opts.patient ?? PATIENT_A_ID}` },
+  };
+  if (opts.effective !== null) o.effectiveDateTime = opts.effective ?? '2026-09-12T09:15:00+00:00';
+  if (opts.encounter !== null) o.encounter = { reference: `Encounter/${opts.encounter ?? ENC_1}` };
+  if (opts.value) o.valueQuantity = { value: opts.value.value, unit: opts.value.unit };
+  return o;
 }
 
 export { PATIENT_A_ID, PATIENT_B_ID };

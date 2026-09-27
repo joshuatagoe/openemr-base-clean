@@ -13,7 +13,9 @@ import {
   bundle,
   careTeam,
   condition,
+  ENC_2,
   facilityParticipant,
+  labObs,
   medReq,
   ORG_1,
   organization,
@@ -74,18 +76,20 @@ beforeEach(() => {
 });
 
 describe('page layout', () => {
-  it('renders the five cards in PHP order with PHP titles', () => {
+  it('renders the six cards in PHP order with PHP titles', () => {
     renderCards(fakeSource().ds);
     const titles = screen.getAllByRole('region').map((r) => within(r).getByRole('heading', { level: 2 }).textContent);
-    expect(titles).toEqual(['Allergies', 'Medical Problems', 'Medications', 'Prescriptions', 'Care Team']);
+    expect(titles).toEqual(['Allergies', 'Medical Problems', 'Medications', 'Prescriptions', 'Care Team', 'Labs']);
   });
 
-  it('expands Allergies, Medical Problems, Medications and Prescriptions by default; Care Team starts collapsed', () => {
+  it('expands Allergies, Medical Problems, Medications and Prescriptions by default; Care Team and Labs start collapsed', () => {
     renderCards(fakeSource().ds);
     for (const t of ['Allergies', 'Medical Problems', 'Medications', 'Prescriptions']) {
       expect(within(card(t)).getByRole('button', { name: t })).toHaveAttribute('aria-expanded', 'true');
     }
-    expect(within(card('Care Team')).getByRole('button', { name: 'Care Team' })).toHaveAttribute('aria-expanded', 'false');
+    for (const t of ['Care Team', 'Labs']) {
+      expect(within(card(t)).getByRole('button', { name: t })).toHaveAttribute('aria-expanded', 'false');
+    }
   });
 
   it('toggling a card collapses it and the choice survives a remount (per browser)', async () => {
@@ -403,5 +407,113 @@ describe('Care Team card', () => {
     expect(await within(card('Care Team')).findByText('Nothing Recorded')).toBeInTheDocument();
     expect(screen.queryByText('Not ours')).toBeNull();
     warn.mockRestore();
+  });
+});
+
+describe('Labs card (PHP labdata_fragment.php parity)', () => {
+  const a1c = () => labObs('o-a1c', { name: 'Hemoglobin A1c', effective: '2026-09-12T09:15:00+00:00', value: { value: 8.9, unit: '%' } });
+
+  async function openLabs() {
+    const btn = within(card('Labs')).getByRole('button', { name: 'Labs' });
+    await userEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+  }
+
+  it("asks for this patient's laboratory Observations only", async () => {
+    const { ds, search } = fakeSource();
+    renderCards(ds);
+    await openLabs();
+    await within(card('Labs')).findByText('No lab data documented.');
+    expect(search).toHaveBeenCalledWith('Observation', { patient: PATIENT_A_ID, category: 'laboratory' }, expect.anything());
+  });
+
+  it('loading, then "Most recent lab data:", the tests with the raw report date, and the encounter as not available', async () => {
+    let resolve: (b: Bundle) => void = () => undefined;
+    const { ds } = fakeSource({ search: { Observation: () => new Promise<Bundle>((r) => (resolve = r)) } });
+    renderCards(ds);
+    await openLabs();
+    expect(within(card('Labs')).getByRole('status')).toHaveTextContent('Loading lab data');
+    resolve(bundle(labObs('old', { name: 'Potassium', effective: '2026-06-25T09:10:00+00:00', encounter: ENC_2 }), a1c()));
+    const c = card('Labs');
+    expect(await within(c).findByText('Most recent lab data:')).toBeInTheDocument();
+    expect(within(c).getByText('Tests: Hemoglobin A1c (2026-09-12 09:15:00)')).toBeInTheDocument();
+    const enc = within(c).getByText('—');
+    expect(enc.parentElement).toHaveTextContent('Encounter: —');
+    expect(enc).toHaveAttribute('title', expect.stringContaining('not available'));
+    // Parity card only: no values table.
+    expect(within(c).queryByRole('table')).toBeNull();
+    expect(within(c).queryByText(/8\.9/)).toBeNull();
+    expect(within(c).queryByText(/Potassium/)).toBeNull();
+  });
+
+  it('empty: "No lab data documented." and no link', async () => {
+    renderCards(fakeSource().ds, { openemrWebUrl: 'https://emr.invalid' });
+    await openLabs();
+    expect(await within(card('Labs')).findByText('No lab data documented.')).toBeInTheDocument();
+    expect(within(card('Labs')).queryByRole('link')).toBeNull();
+  });
+
+  it('only entered-in-error results: "No lab data documented."', async () => {
+    const { ds } = fakeSource({ search: { Observation: () => Promise.resolve(bundle(labObs('x', { status: 'entered-in-error', name: 'Glucose' }))) } });
+    renderCards(ds);
+    await openLabs();
+    expect(await within(card('Labs')).findByText('No lab data documented.')).toBeInTheDocument();
+    expect(screen.queryByText(/Glucose/)).toBeNull();
+  });
+
+  it('403: permission message, no retry', async () => {
+    const { ds, search } = fakeSource({ search: { Observation: () => Promise.reject(forbidden()) } });
+    renderCards(ds);
+    await openLabs();
+    expect(await within(card('Labs')).findByText("You don't have permission to view lab data.")).toBeInTheDocument();
+    expect(within(card('Labs')).queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(search.mock.calls.filter(([t]) => t === 'Observation')).toHaveLength(1);
+  });
+
+  it('upstream error: message and a working "Try again"', async () => {
+    let fail = true;
+    const { ds } = fakeSource({ search: { Observation: () => (fail ? Promise.reject(upstream()) : Promise.resolve(bundle(a1c()))) } });
+    renderCards(ds);
+    await openLabs();
+    const retry = await within(card('Labs')).findByRole('button', { name: 'Try again' });
+    expect(within(card('Labs')).getByText('Lab data could not be loaded.')).toBeInTheDocument();
+    fail = false;
+    await userEvent.click(retry);
+    expect(await within(card('Labs')).findByText(/Hemoglobin A1c/)).toBeInTheDocument();
+  });
+
+  it("subject guard: another patient's newer result is dropped, only a count is logged", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { ds } = fakeSource({
+      search: {
+        Observation: () => Promise.resolve(bundle(a1c(), labObs('theirs', { name: 'Not ours', effective: '2026-09-25T08:00:00+00:00', patient: PATIENT_B_ID }))),
+      },
+    });
+    renderCards(ds);
+    await openLabs();
+    expect(await within(card('Labs')).findByText(/Hemoglobin A1c/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not ours/)).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 Observation'));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Not ours');
+    warn.mockRestore();
+  });
+
+  it('no pencil (PHP renders none for its "Trend" button); the view-all link goes to the PHP dashboard for this patient', async () => {
+    const { ds } = fakeSource({ search: { Observation: () => Promise.resolve(bundle(a1c())) } });
+    renderCards(ds, { openemrWebUrl: 'https://emr.invalid' });
+    await openLabs();
+    const link = await within(card('Labs')).findByRole('link', { name: 'View and graph all lab data in OpenEMR' });
+    expect(link).toHaveAttribute('href', `https://emr.invalid/interface/patient_file/summary/demographics.php?set_pid=${PID_A}`);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(within(card('Labs')).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('no link without a configured OpenEMR URL', async () => {
+    const { ds } = fakeSource({ search: { Observation: () => Promise.resolve(bundle(a1c())) } });
+    renderCards(ds);
+    await openLabs();
+    await within(card('Labs')).findByText(/Hemoglobin A1c/);
+    expect(within(card('Labs')).queryByRole('link')).toBeNull();
   });
 });

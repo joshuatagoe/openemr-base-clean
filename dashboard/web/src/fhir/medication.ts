@@ -6,6 +6,7 @@
 // uuids is a prescription (the PHP Prescriptions card).
 import type { MedicationRequest } from 'fhir/r4';
 import type { StdMedicationRow } from '../data/DataSource';
+import { openemrWallClock } from '../format/date';
 import { conceptText } from './allergy';
 
 export interface MedListRow {
@@ -104,18 +105,6 @@ function time(v: string | undefined): number {
   return Number.isNaN(t) ? -Infinity : t;
 }
 
-/**
- * OpenEMR writes date_added as the server's local wall-clock time plus its UTC
- * offset (UtilsService::getLocalDateAsUTC), so the text before the offset is
- * exactly the stored value the PHP card prints.
- */
-function filledText(authoredOn: string | undefined): string {
-  if (!authoredOn) return '';
-  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}:\d{2}))?/.exec(authoredOn);
-  if (!m) return authoredOn;
-  return m[2] ? `${m[1]} ${m[2]}` : (m[1] as string);
-}
-
 /** The Prescriptions card: PHP order `date_modified DESC, date_added DESC` (= meta.lastUpdated, authoredOn). */
 export function prescriptionTable(medReqs: readonly MedicationRequest[], listUuids: ReadonlySet<string>): RxTable {
   const rx = medReqs.filter((m) => !(m.id && listUuids.has(m.id)));
@@ -130,7 +119,7 @@ export function prescriptionTable(medReqs: readonly MedicationRequest[], listUui
         drug: drugName(m),
         details: details(m),
         qty: qty === undefined ? '' : String(qty),
-        filled: filledText(m.authoredOn),
+        filled: openemrWallClock(m.authoredOn), // date_added, raw like the PHP card
       };
     });
   return { total: rx.length, rows };

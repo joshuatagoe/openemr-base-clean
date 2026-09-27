@@ -16,6 +16,7 @@ export const emptyClinical = [
   http.get('*/api/fhir/Condition', emptyBundle),
   http.get('*/api/fhir/MedicationRequest', emptyBundle),
   http.get('*/api/fhir/CareTeam', emptyBundle),
+  http.get('*/api/fhir/Observation', emptyBundle),
   http.get('*/api/patient/:pid/medication', () => new HttpResponse(null, { status: 404 })),
   http.get('*/api/patient/:puuid', ({ params }) => HttpResponse.json({ pid: '42', uuid: String(params.puuid) })),
 ];

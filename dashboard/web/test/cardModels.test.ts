@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { allergyRows } from '../src/fhir/allergy';
 import { careTeamView, pickCareTeam } from '../src/fhir/careTeam';
 import { problemRows } from '../src/fhir/condition';
+import { groupLabReports, latestLabReport } from '../src/fhir/lab';
 import { combinedRows, isActiveIssue, medicationListRows, prescriptionTable } from '../src/fhir/medication';
 import { guardSubject, isForPatient } from '../src/fhir/subject';
 import {
   allergy,
   careTeam,
   condition,
+  ENC_1,
+  ENC_2,
   facilityParticipant,
+  labObs,
   medReq,
   ORG_1,
   PATIENT_A_ID,
@@ -265,5 +269,84 @@ describe('care team', () => {
     expect(careTeamView(careTeam('t', { status: 'inactive', name: 'n' })).badgeClass).toBe('badge-warning');
     expect(careTeamView(careTeam('t', { status: 'proposed', name: 'n' })).badgeClass).toBe('badge-info');
     expect(careTeamView(careTeam('t', { status: 'suspended', name: 'n' })).badgeClass).toBe('badge-secondary');
+  });
+});
+
+describe('labs (PHP labdata_fragment.php parity: the single most recent report)', () => {
+  it('groups one-per-result Observations into reports by encounter and report date', () => {
+    const groups = groupLabReports([
+      labObs('o1', { loinc: '2951-2', name: 'Sodium', effective: '2026-07-02T09:00:00+00:00', encounter: ENC_1 }),
+      labObs('o2', { loinc: '2823-3', name: 'Potassium', effective: '2026-07-02T09:00:00+00:00', encounter: ENC_1 }),
+      labObs('o3', { loinc: '2951-2', name: 'Sodium', effective: '2026-07-02T15:30:00+00:00', encounter: ENC_1 }),
+      labObs('o4', { loinc: '4548-4', name: 'Hemoglobin A1c', effective: '2026-07-02T09:00:00+00:00', encounter: ENC_2 }),
+    ]);
+    expect(groups.map((g) => g.observations.map((o) => o.id))).toEqual([['o3'], ['o1', 'o2'], ['o4']]);
+  });
+
+  it('picks the report with the latest date, whatever the server order, and names its tests', () => {
+    const report = latestLabReport([
+      labObs('old', { name: 'Potassium', effective: '2026-06-25T09:10:00+00:00', encounter: ENC_2 }),
+      labObs('a1c', { name: 'Hemoglobin A1c', effective: '2026-09-12T09:15:00+00:00', encounter: ENC_1 }),
+      labObs('older', { name: 'TSH', effective: '2026-05-21T10:00:00+00:00', encounter: ENC_2 }),
+    ]);
+    expect(report).toEqual({ tests: 'Hemoglobin A1c', date: '2026-09-12 09:15:00', encounter: `Encounter/${ENC_1}` });
+  });
+
+  it('compares instants, not text, across different offsets', () => {
+    const report = latestLabReport([
+      labObs('east', { name: 'Early', effective: '2026-09-12T10:00:00+02:00' }), // 08:00 UTC
+      labObs('west', { name: 'Late', effective: '2026-09-12T05:00:00-04:00', encounter: ENC_2 }), // 09:00 UTC
+    ]);
+    expect(report?.tests).toBe('Late');
+    // Shown as OpenEMR stored it: the wall-clock text before the offset, like the raw PHP value.
+    expect(report?.date).toBe('2026-09-12 05:00:00');
+  });
+
+  it('lists every test of a multi-result report once, in server order', () => {
+    const report = latestLabReport([
+      labObs('na', { name: 'Sodium' }),
+      labObs('k', { name: 'Potassium' }),
+      labObs('na2', { name: 'Sodium' }),
+    ]);
+    expect(report?.tests).toBe('Sodium, Potassium');
+  });
+
+  it('drops entered-in-error results; a report left with none is not a report', () => {
+    const eie = latestLabReport([
+      labObs('new-eie', { name: 'Glucose', status: 'entered-in-error', effective: '2026-09-20T08:00:00+00:00', encounter: ENC_2 }),
+      labObs('a1c', { name: 'Hemoglobin A1c', effective: '2026-09-12T09:15:00+00:00' }),
+    ]);
+    expect(eie?.tests).toBe('Hemoglobin A1c');
+    const mixed = latestLabReport([
+      labObs('ok', { name: 'Sodium' }),
+      labObs('bad', { name: 'Glucose (EIE)', status: 'entered-in-error' }),
+    ]);
+    expect(mixed?.tests).toBe('Sodium');
+    expect(latestLabReport([labObs('only', { status: 'entered-in-error' })])).toBeNull();
+  });
+
+  it('keeps other statuses (PHP does not filter by status): corrected, preliminary, cancelled, unknown', () => {
+    for (const status of ['corrected', 'preliminary', 'cancelled', 'unknown'] as const) {
+      expect(latestLabReport([labObs('x', { status, name: 'Sodium' })])?.tests).toBe('Sodium');
+    }
+  });
+
+  it('no results: null (the card says "No lab data documented.")', () => {
+    expect(latestLabReport([])).toBeNull();
+  });
+
+  it('a result whose name OpenEMR dropped (nullFlavor UNK) is "Unnamed result" (gap G13)', () => {
+    expect(latestLabReport([labObs('x', { coded: false })])?.tests).toBe('Unnamed result');
+  });
+
+  it('a report without a date sorts after dated ones (MySQL: NULL last in DESC) and shows no date', () => {
+    const report = latestLabReport([labObs('nodate', { name: 'Undated', effective: null, encounter: ENC_2 }), labObs('dated', { name: 'Dated' })]);
+    expect(report?.tests).toBe('Dated');
+    expect(latestLabReport([labObs('nodate', { name: 'Undated', effective: null })])).toEqual({ tests: 'Undated', date: '', encounter: `Encounter/${ENC_1}` });
+  });
+
+  it('same date in two reports: the first in server order wins (PHP ties are arbitrary)', () => {
+    const report = latestLabReport([labObs('first', { name: 'First', encounter: ENC_2 }), labObs('second', { name: 'Second', encounter: ENC_1 })]);
+    expect(report?.tests).toBe('First');
   });
 });

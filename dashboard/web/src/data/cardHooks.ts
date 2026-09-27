@@ -1,10 +1,11 @@
 // Queries behind the clinical cards. Every result passes the subject guard
 // before any model code sees it.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AllergyIntolerance, Bundle, CareTeam, Condition, FhirResource, MedicationRequest, Organization, Practitioner } from 'fhir/r4';
+import type { AllergyIntolerance, Bundle, CareTeam, Condition, FhirResource, MedicationRequest, Observation, Organization, Practitioner } from 'fhir/r4';
 import { allergyRows, type AllergyRow } from '../fhir/allergy';
 import { careTeamView, pickCareTeam, type CareTeamViewModel } from '../fhir/careTeam';
 import { problemRows, type ProblemRow } from '../fhir/condition';
+import { latestLabReport, type LabReportSummary } from '../fhir/lab';
 import { combinedRows, medicationListRows, prescriptionTable, type CombinedRow, type MedListRow, type RxTable } from '../fhir/medication';
 import { guardPid, guardSubject } from '../fhir/subject';
 import { useDataSource } from './DataSourceContext';
@@ -98,6 +99,20 @@ export function useCareTeam(patientId: string): ViewResult<CareTeamViewModel | n
     },
   });
   return { view: toView(q, (v) => v === null), retry: () => void q.refetch() };
+}
+
+/** The PHP Labs card's single most recent report; `null` when there is none. */
+export function useLatestLabReport(patientId: string): ViewResult<LabReportSummary | null> {
+  const ds = useDataSource();
+  const q = useQuery({
+    queryKey: ['labs', patientId],
+    enabled: FHIR_ID.test(patientId),
+    queryFn: async ({ signal }) => {
+      const b = await ds.search<Observation>('Observation', { patient: patientId, category: 'laboratory' }, signal);
+      return latestLabReport(guardSubject(resourcesOf(b, 'Observation'), patientId, (o) => o.subject?.reference, 'Observation'));
+    },
+  });
+  return { view: toView(q, (r) => r === null), retry: () => void q.refetch() };
 }
 
 /** "Last, First", as the PHP Care Team card lists users. */

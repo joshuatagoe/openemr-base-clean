@@ -1,9 +1,9 @@
-// The five clinical cards of OpenEMR's patient dashboard (demographics.php),
-// in the PHP page order: Allergies, Medical Problems, Medications (one row of
-// three), Prescriptions (full width below), Care Team (full width).
-// Parity reference: DASHBOARD_ANALYSIS_A1_PARITY.md §2–§6; FHIR gaps: README.
+// The clinical cards of OpenEMR's patient dashboard (demographics.php), in the
+// PHP page order: Allergies, Medical Problems, Medications (one row of three),
+// Prescriptions (full width below), Care Team (full width), Labs (left column).
+// Parity reference: DASHBOARD_ANALYSIS_A1_PARITY.md §2–§7; FHIR gaps: README.
 import { OPENEMR_WEB_URL } from '../config';
-import { useAllergies, useCareTeam, useMedicationCards, useProblems, useResourceName, type MedicationCards } from '../data/cardHooks';
+import { useAllergies, useCareTeam, useLatestLabReport, useMedicationCards, useProblems, useResourceName, type MedicationCards } from '../data/cardHooks';
 import { usePatientPid } from '../data/hooks';
 import type { QueryView } from '../data/queryView';
 import type { CareTeamMemberRow } from '../fhir/careTeam';
@@ -257,6 +257,47 @@ function CareTeamCard({ patientId, edit }: { patientId: string; edit: EditLink }
   );
 }
 
+/**
+ * PHP labdata_fragment.php: "Most recent lab data:", "Procedure: <name> (<raw
+ * date_collected>)", "Encounter: <id>" and a link to labdata.php. The FHIR
+ * equivalents are the report's test names and date_report (G16, G17); the
+ * encounter number is not in FHIR. labdata.php reads the patient from the
+ * OpenEMR session, so the link goes to the PHP dashboard with set_pid instead,
+ * whose Labs card links on to it. PHP shows no pencil (its "Trend" button is
+ * not rendered by card_base), and neither does this card.
+ */
+function LabsCard({ patientId, allLabsHref }: { patientId: string; allLabsHref: string | undefined }) {
+  const { view, retry } = useLatestLabReport(patientId);
+  return (
+    <Card id="labdata_ps_expand" title="Labs" defaultExpanded={false}>
+      <CardView view={view} retry={retry} text={{ noun: 'lab data', subject: 'Lab data', empty: 'No lab data documented.' }}>
+        {(report) =>
+          report && (
+            <div className="labdata">
+              <p>
+                <b>Most recent lab data:</b>
+                <br />
+                <span>{`Tests: ${report.tests}${report.date ? ` (${report.date})` : ''}`}</span>
+                <br />
+                <span>
+                  Encounter: <span title={NOT_IN_FHIR}>—</span>
+                </span>
+              </p>
+              {allLabsHref && (
+                <p>
+                  <a href={allLabsHref} target="_blank" rel="noopener noreferrer">
+                    View and graph all lab data in OpenEMR
+                  </a>
+                </p>
+              )}
+            </div>
+          )
+        }
+      </CardView>
+    </Card>
+  );
+}
+
 export interface ClinicalCardsProps {
   patientId: string;
   /** OpenEMR web origin for the edit links (VITE_OPENEMR_WEB_URL); no links when unset. */
@@ -295,6 +336,9 @@ export function ClinicalCards({ patientId, openemrWebUrl = OPENEMR_WEB_URL }: Cl
       )}
       <div className="cards-row">
         <CareTeamCard patientId={patientId} edit={edit('Edit care team in OpenEMR')} />
+      </div>
+      <div className="cards-row cards-row-left">
+        <LabsCard patientId={patientId} allLabsHref={dashboardHref} />
       </div>
     </div>
   );

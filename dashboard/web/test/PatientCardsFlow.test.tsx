@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { createQueryClient } from '../src/data/queryClient';
-import { bundle, careTeam, medReq, ORG_1, PRACT_1, practitionerParticipant, stdMed } from './fixtures/clinical';
+import { bundle, careTeam, labObs, medReq, ORG_1, PRACT_1, practitionerParticipant, stdMed } from './fixtures/clinical';
 import { PATIENT_A_ID, patientA } from './fixtures/patients';
 import { server, signedIn } from './msw/server';
 
@@ -46,6 +46,30 @@ describe('patient page with the clinical cards (mode A, through the BFF routes)'
     const careTeamCard = await region('Care Team');
     await userEvent.click(within(careTeamCard).getByRole('button', { name: 'Care Team' }));
     expect(await within(careTeamCard).findAllByText('Name not available (permission)')).toHaveLength(2);
+  });
+
+  it('Labs: calls the allow-listed Observation route and shows the latest report, entered-in-error dropped', async () => {
+    const seen: string[] = [];
+    server.use(
+      signedIn,
+      http.get('*/api/fhir/Patient/:id', () => HttpResponse.json(patientA)),
+      http.get('*/api/fhir/Observation', ({ request }) => {
+        seen.push(new URL(request.url).search);
+        return HttpResponse.json(
+          bundle(
+            labObs('eie', { name: 'Glucose', status: 'entered-in-error', effective: '2026-09-20T08:00:00+00:00' }),
+            labObs('a1c', { name: 'Hemoglobin A1c', effective: '2026-09-12T09:15:00+00:00' }),
+          ),
+        );
+      }),
+    );
+    window.history.replaceState(null, '', `/patient/${PATIENT_A_ID}`);
+    render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
+    const labs = await screen.findByRole('region', { name: 'Labs' });
+    await userEvent.click(within(labs).getByRole('button', { name: 'Labs' }));
+    expect(await within(labs).findByText('Tests: Hemoglobin A1c (2026-09-12 09:15:00)')).toBeInTheDocument();
+    expect(within(labs).queryByText(/Glucose/)).toBeNull();
+    expect(seen).toEqual([`?patient=${PATIENT_A_ID}&category=laboratory`]);
   });
 
   it('list medications from the standard API go to Medications, not Prescriptions', async () => {
