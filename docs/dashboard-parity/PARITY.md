@@ -2,15 +2,15 @@
 
 Evidence for the parity requirement of the dashboard port (`dashboard/`). Each row compares what the PHP patient summary (`interface/patient_file/summary/demographics.php`) shows with what the port shows for the same synthetic patient, on the same dev stack, on the same day.
 
-- **Captured** 2026-09-27 on `docker/development-easy` (OpenEMR 8.2.0-dev, date format `YYYY-MM-DD`).
+- **Captured** 2026-09-27 on `docker/development-easy` (OpenEMR 8.2.0-dev, date format `YYYY-MM-DD`). The port screenshots (`*_port.png`, `list_landing_port.png`, `pid7_phone_port.png`) were re-captured after UX wave 3 the same day, with the same recipe (1400 px window, Care Team and Labs expanded; phone at 390 × 844 with the default collapse state).
 - **PHP**: signed in as `admin`, the dashboard opened in the patient tab.
 - **Port**: mode A (BFF), signed in as `drdash`, a non-admin user in the Physicians group, with the default build (no `VITE_OPENEMR_WEB_URL`, so no edit links).
-- **Mode B** (inside OpenEMR, patient-context token): `pid7_modeB_page.png` (from C5).
+- **Mode B** (inside OpenEMR, patient-context token): `pid7_modeB_page.png` (from C5, before the UX waves: it still shows the old card chrome and app bar).
 - **Patients**: Evelyn Demo (pid 7) and Thomas Reyes (pid 10). All data is synthetic. Pid 7's care team ("C3 Synthetic Team": one active and one inactive member) was seeded for C3.
 - **Screenshots**: one element per file, named `pid<N>_<part>_{php|port}.png`.
 - **Gap numbers** (G#) refer to the gaps table in `dashboard/README.md` (*FHIR gaps and deliberate differences*).
 
-Status: **match** = same content. Styling follows OpenEMR's default theme (style_light) since the UX waves of 2026-09-27; the remaining visual differences are listed under *Presentation (UX waves 1–2)* below. **gap G#** = a documented difference caused by what OpenEMR's FHIR API exposes. **by design** = a deliberate choice, explained in the README.
+Status: **match** = same content. Styling follows OpenEMR's default theme (style_light) since the UX waves of 2026-09-27; the remaining visual differences are listed under *Presentation (UX waves 1–3)* below. **gap G#** = a documented difference caused by what OpenEMR's FHIR API exposes. **by design** = a deliberate choice, explained in the README.
 
 ## Header (`pid7_header_*`, `pid10_header_*`)
 
@@ -105,14 +105,14 @@ Added after the parity capture, on the same dev stack as `drdash` (2026-09-27). 
 
 | Feature | OpenEMR | Port | Status |
 |---|---|---|---|
-| Patient list without a search term | Patient Finder: paged list of all patients | landing page `/dashboard`: 20 per page, Previous / Next, "Page N", page in the URL | mirrors. Live: 14 synthetic patients, one page, sorted Demo … Walsh; `?page=2` says "No patients on this page." |
+| Patient list without a search term | Patient Finder: paged list of all patients | landing page `/dashboard`: 20 per page, Previous / Next, "Page N", page in the URL | mirrors. Live: 14 synthetic patients, one page, sorted Demo … Walsh; `?page=2` says "This page is past the end of the list." with a *Go to page 1* link |
 | Sort | Finder's saved column order | last name, then first and middle name (`_sort=family,given`) | mirrors. OpenEMR honours `_count`, `_offset` and `_sort` on Patient searches (checked live with `_count=5`: pages 1 and 2 follow on; `-family,-given` and `birthdate` sort as expected). Ties on the full name have no further tie-break (OpenEMR's sort whitelist has no FHIR key for the uuid) |
-| Total / next page | Finder shows "x of N" | no total; "Showing patients 21–40" and Next enabled only when a 21st row came back | OpenEMR's Bundle has only a `self` link and `total` = the entries returned, so the overall count is unknown |
+| Total / next page | Finder shows "x of N" | no total; "Showing 21–40" and Next enabled only when a 21st row came back | OpenEMR's Bundle has only a `self` link and `total` = the entries returned, so the overall count is unknown |
 | Columns | configurable (name, phone, SSN, DOB, …) | Name, DOB, Sex, MRN (`PT` identifier) | by design: never SSN, never phone |
 | Search box | Finder's column filters | the existing name / DOB / MRN search narrows the same list, with the same paging | mirrors |
-| Recent patients | per user, server-side (`recent_patients`, updated when the PHP dashboard opens a chart, default 20) | per user **in this browser** (hashed `fhirUser` key), **ids only**, max 10, most recent first, updated when a patient opens; names / DOB / MRN read live; gone or forbidden patients dropped silently; Clear button | by design: no REST or FHIR route exposes OpenEMR's list, and the app is read-only. Live: opening Evelyn Demo then Thomas Reyes listed Reyes, Demo; storage held the two uuids only; Clear removed the entry |
+| Recent patients | per user, server-side (`recent_patients`, updated when the PHP dashboard opens a chart, default 20) | per user **in this browser** (hashed `fhirUser` key), **ids only**, max 10, most recent first, updated when a patient opens; names / DOB / MRN read live; gone or forbidden patients dropped silently; *Clear list* button | by design: no REST or FHIR route exposes OpenEMR's list, and the app is read-only. Live: opening Evelyn Demo then Thomas Reyes listed Reyes, Demo; storage held the two uuids only; Clear removed the entry |
 
-## Presentation (UX waves 1–2, 2026-09-27)
+## Presentation (UX waves 1–3, 2026-09-27)
 
 Presentation and wording only: no data rule changed (allergy severity mapping, refills "—", the subject guard, entered-in-error filtering and the combined-medications fallback are as above). The plan is `W2_PLANNING/DASHBOARD_UX_PLAN.md`; the look is OpenEMR's default theme (`style_light`) and `demographics.php`, not a redesign.
 
@@ -131,13 +131,15 @@ Presentation and wording only: no data rule changed (allergy severity mapping, r
 | Combined medications note (modes B/C) | n/a | "This sign-in can't read OpenEMR's medication list, so medications and prescriptions are shown together, each order once." | wording only |
 | Modes B/C app bar | OpenEMR's own bars | no separate title row; *Signed in as* / *Sign out* in the patient bar | by design (plan L5) |
 | Phone (390 px) | not responsive | sticky patient bar 65 px, no wrapped button text, cards stacked | port only |
+| Page layout (mode A) | patient page `container-fluid` | every page starts on the app title's left edge; the landing page is a 55rem column; the landing and not-found pages share one page title style (1.5rem, weight 500, OpenEMR `.title` size); landing cards sit 0.5rem apart, as on the dashboard | port only (wave 3) |
+| Page messages (mode A) | n/a | patient page: "Your OpenEMR account doesn't have access to this patient's chart.", "No patient matches this link. …", "Couldn't load this patient: …" with *Try again*; "Checking your sign-in…"; "Couldn't reach the dashboard server. Check your connection, then reload the page."; a failed sign-in says "Sign-in didn't complete: …" and the button reads *Sign in again*; unknown addresses: "This page doesn't exist." (a page heading) + *Go to the patient list* | wording only (wave 3) |
 
 ## Accessibility and layout (port)
 
 - **axe-core in a real browser** (Chrome, all rules including colour contrast):
   - pages checked: patient search with results; patient page with every card expanded; phone width (390 px); the patient-list landing page, with and without the recent-patients list (2026-09-27: 0 violations; at 390 px no horizontal page scroll).
   - result: **0 violations** after two fixes made in C6. The muted text colour was changed from `#6c757d` to `#5c636a` (it measured below 4.5:1 on striped rows and on the page background). The wide table wrappers became focusable regions, so they can be scrolled from the keyboard.
-  - UX wave 1 (2026-09-27) set the muted colour to **`#4b5563`** (style_light `$gray-600`, OpenEMR's `.text-muted`; 7.5:1 on white), which also passes on the striped rows and the grey page. Re-run at 1366 px and 390 px: after wave 1 on the landing page and the patient page, and after wave 2 on the patient page with every card expanded (care-team note and footnotes shown), once as loaded and once with the Labs request blocked (error line and *Try again* shown): **0 violations** each time, no horizontal scroll at 390 px.
+  - UX wave 1 (2026-09-27) set the muted colour to **`#4b5563`** (style_light `$gray-600`, OpenEMR's `.text-muted`; 7.5:1 on white), which also passes on the striped rows and the grey page. Re-run at 1366 px and 390 px: after wave 1 on the landing page and the patient page, and after wave 2 on the patient page with every card expanded (care-team note and footnotes shown), once as loaded and once with the Labs request blocked (error line and *Try again* shown): **0 violations** each time, no horizontal scroll at 390 px. After wave 3 (all rules, built BFF on the dev stack as `drdash`), at 1366 px and 390 px: the landing page empty, with recent patients, with search results and with the partial-DOB error; pid 7 with every card expanded; and the not-found page (its missing `h1` was the one finding, `page-has-heading-one`, fixed in wave 3): **0 violations**, no horizontal scroll at 390 px.
 - **PHP page for comparison** (`demographics.php?set_pid=7`, loaded as a top-level page): **34 serious or critical nodes in 7 rules** (`link-name` 17, `color-contrast` 11, `aria-required-parent` 2, `aria-hidden-focus`, `aria-valid-attr-value`, `html-has-lang`, `list`), plus 4 moderate rules.
 - **Unit test**: `dashboard/web/test/a11y.test.tsx` runs axe on the signed-out, search, landing (list + pager + recent patients) and patient pages in jsdom. jsdom cannot check colour contrast.
 - **Keyboard only**, mode A, every step passed (C6, before the patient list was added; tab counts have changed since). Paging with Previous / Next by keyboard, with focus moving to the new page's table, is covered by `web/test/PatientListFlow.test.tsx`; the dev stack has too few patients for a second page:
