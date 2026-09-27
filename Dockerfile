@@ -21,6 +21,17 @@ RUN mkdir -p /couchdb/data \
     && NODE_OPTIONS=--max-old-space-size=2048 npm run build \
     && composer dump-autoload -o
 
+# Patient dashboard (React), modes B/C: build the SMART web app into the Co-Pilot
+# module's public folder, where Apache serves it as static files under the
+# folder's own .htaccess (CSP). Uses the Flex image's Node (24; the dashboard
+# needs >= 22). The folder is gitignored and excluded from the build context, so
+# the image never ships a stale local build; node_modules are removed afterwards.
+RUN cd /openemr/dashboard \
+    && npm ci --no-audit --no-fund \
+    && npm run build:smart \
+    && rm -rf node_modules web/node_modules bff/node_modules \
+    && chown -R apache:apache /openemr/interface/modules/custom_modules/oe-module-copilot/public/dashboard
+
 # Skip the inherited Flex build steps on container start; everything is prebuilt above.
 ENV FORCE_NO_BUILD_MODE=yes
 

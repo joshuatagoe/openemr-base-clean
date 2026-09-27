@@ -26,6 +26,10 @@
  *    Controller\DocumentPatientConfirmController.
  *  - `GET /api/copilot/results/:rid/source` - the source document of a filed
  *    chart result (ADR-009 7b); see Controller\ResultSourceController.
+ *  - Patient menu entry "Patient Dashboard (React)" (MenuEvent::MENU_UPDATE):
+ *    opens public/dashboard-launch.php, which starts OpenEMR's own SMART EHR
+ *    launch of the React dashboard for the open chart (packaging only; see
+ *    Dashboard\DashboardLauncher).
  *  - Module global under Administration > Globals > "Clinical Co-Pilot":
  *      copilot_admin_relationship_override (bool, default off) - allow
  *        admin/super users without a care relationship, audited as such
@@ -52,6 +56,7 @@ use OpenEMR\Core\OEGlobalsBag;
 use OpenEMR\Events\Globals\GlobalsInitializedEvent;
 use OpenEMR\Events\PatientDemographics\RenderEvent;
 use OpenEMR\Events\RestApiExtend\RestApiCreateEvent;
+use OpenEMR\Menu\MenuEvent;
 use OpenEMR\Modules\Copilot\Agent\GuzzleAgentClient;
 use OpenEMR\Modules\Copilot\Authorization\AclMainChecker;
 use OpenEMR\Modules\Copilot\Authorization\CopilotAuthorizer;
@@ -65,6 +70,7 @@ use OpenEMR\Modules\Copilot\Controller\DocumentValuesController;
 use OpenEMR\Modules\Copilot\Controller\FilingController;
 use OpenEMR\Modules\Copilot\Controller\ResultSourceController;
 use OpenEMR\Modules\Copilot\Controller\DocumentsController;
+use OpenEMR\Modules\Copilot\Dashboard\DashboardLauncher;
 use OpenEMR\Modules\Copilot\Data\SqlClinicalReader;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Data\SqlSchemaStatus;
@@ -108,6 +114,14 @@ final class Bootstrap
         $this->eventDispatcher->addListener(RestApiCreateEvent::EVENT_HANDLE, $this->addRoutes(...));
         $this->eventDispatcher->addListener(GlobalsInitializedEvent::EVENT_HANDLE, $this->addGlobals(...));
         $this->eventDispatcher->addListener(RenderEvent::EVENT_SECTION_LIST_RENDER_TOP, $this->renderPanel(...));
+        $this->eventDispatcher->addListener(MenuEvent::MENU_UPDATE, $this->addDashboardMenuItem(...));
+    }
+
+    /** Patient > "Patient Dashboard (React)": the React port in mode B (Dashboard\DashboardLauncher). */
+    public function addDashboardMenuItem(MenuEvent $event): MenuEvent
+    {
+        $event->setMenu((new DashboardLauncher())->addMenuItem($event->getMenu(), xlt('Patient Dashboard (React)')));
+        return $event;
     }
 
     /**

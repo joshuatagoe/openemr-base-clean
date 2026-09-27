@@ -1,2 +1,9 @@
 .git
 docker/
+# Patient dashboard: dependencies and builds are made inside the image (Dockerfile).
+dashboard/node_modules
+dashboard/*/node_modules
+dashboard/*/dist
+dashboard/.env
+interface/modules/custom_modules/oe-module-copilot/public/dashboard
+interface/modules/custom_modules/oe-module-copilot/public/dashboard.config.json
