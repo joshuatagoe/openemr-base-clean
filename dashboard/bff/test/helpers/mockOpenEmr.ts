@@ -8,6 +8,9 @@ import Fastify, { type FastifyInstance } from 'fastify';
 export const CLIENT_ID = 'test-client-id';
 export const CLIENT_SECRET = 'test-client-secret-value-0123456789';
 export const OTHER_PATIENT_ID = 'other-patient-0001';
+export const STD_PATIENT_UUID = 'a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7';
+export const STD_PATIENT_NO_PID_UUID = '00000000-0000-4000-8000-000000000001';
+export const STD_PATIENT_FORBIDDEN_UUID = '00000000-0000-4000-8000-000000000403';
 
 export interface RecordedRequest {
   method: string;
@@ -145,6 +148,26 @@ export async function startMockOpenEmr(): Promise<MockOpenEmr> {
       return reply.type('application/fhir+json').send({ resourceType: 'Patient', id: path.slice('Patient/'.length) });
     }
     return reply.type('application/fhir+json').send({ resourceType: 'Bundle', type: 'searchset', total: 0, entry: [] });
+  });
+
+  // Standard API patient read. OpenEMR answers the whole patient_data row
+  // (including `ss`) inside the standard envelope; values here are synthetic.
+  app.get('/apis/default/api/patient/:puuid', async (req, reply) => {
+    record(req);
+    if (!authorized(req.headers.authorization)) return reply.code(401).send({ message: 'Unauthorized' });
+    const { puuid } = req.params as { puuid: string };
+    if (puuid === STD_PATIENT_UUID) {
+      return reply.type('application/json').send({
+        validationErrors: [],
+        internalErrors: [],
+        data: { id: '1', uuid: STD_PATIENT_UUID, pid: '7', pubpid: 'MRN-SYN-7', fname: 'Synthetica', lname: 'Testpatient', ss: '999-00-1234', DOB: '1970-01-01' },
+      });
+    }
+    if (puuid === STD_PATIENT_NO_PID_UUID) {
+      return reply.type('application/json').send({ validationErrors: [], internalErrors: [], data: { uuid: STD_PATIENT_NO_PID_UUID } });
+    }
+    if (puuid === STD_PATIENT_FORBIDDEN_UUID) return reply.code(403).send({ message: 'forbidden' });
+    return reply.code(404).type('application/json').send({ validationErrors: [], internalErrors: [], data: [] });
   });
 
   app.get('/apis/default/api/patient/:pid/medication', async (req, reply) => {

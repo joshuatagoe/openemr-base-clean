@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchFhirRequest, matchStdMedicationRequest } from '../src/allowlist.js';
+import { matchFhirRequest, matchStdMedicationRequest, matchStdPatientRequest } from '../src/allowlist.js';
 
 const PID = 'a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7';
 const q = (s: string) => new URLSearchParams(s);
@@ -87,5 +87,25 @@ describe('standard API allow-list', () => {
   it('rejects non-numeric pids and any query param', () => {
     expect(matchStdMedicationRequest('abc', q(''))).toMatchObject({ ok: false, status: 404 });
     expect(matchStdMedicationRequest('7', q('x=1'))).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe('standard API patient read (uuid -> pid)', () => {
+  it('allows /patient/:puuid with a uuid and no params', () => {
+    const r = matchStdPatientRequest(PID, q(''));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.upstreamPath).toBe(`patient/${PID}`);
+      expect(r.query.toString()).toBe('');
+      expect(r.kind).toBe('read');
+    }
+  });
+
+  it.each(['7', 'abc', 'prac-1', `${PID}x`, `${PID}/medication`, '..', ''])('404s a puuid that is not a uuid: %s', (id) => {
+    expect(matchStdPatientRequest(id, q(''))).toEqual({ ok: false, status: 404, error: 'not_found' });
+  });
+
+  it.each(['x=1', '_format=xml', 'fields=ss'])('400s any query parameter: %s', (query) => {
+    expect(matchStdPatientRequest(PID, q(query))).toMatchObject({ ok: false, status: 400 });
   });
 });

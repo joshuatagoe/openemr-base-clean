@@ -11,7 +11,7 @@ import type { Writable } from 'node:stream';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { matchFhirRequest, matchStdMedicationRequest, type MatchResult } from './allowlist.js';
+import { matchFhirRequest, matchStdMedicationRequest, matchStdPatientRequest, type MatchResult } from './allowlist.js';
 import type { Config } from './config.js';
 import { codeChallengeS256, randomToken, safeEqual } from './pkce.js';
 import { ExpiringStore, type PendingLogin, type Session } from './store.js';
@@ -61,6 +61,17 @@ function decodeJwtClaims(jwt: string): Record<string, unknown> | undefined {
 
 function isJson(contentType: string | null): boolean {
   return contentType !== null && /^application\/(fhir\+)?json\b/i.test(contentType);
+}
+
+/** `{ data: { pid, uuid } }` (standard API envelope) -> `{ pid, uuid }`, pid as a numeric string. */
+export function projectPatientPid(body: unknown): { pid: string; uuid: string } | undefined {
+  if (!body || typeof body !== 'object' || !('data' in body)) return undefined;
+  const data = body.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
+  const { pid, uuid } = data as { pid?: unknown; uuid?: unknown };
+  const pidText = typeof pid === 'number' ? String(pid) : pid;
+  if (typeof pidText !== 'string' || !/^\d{1,10}$/.test(pidText) || typeof uuid !== 'string') return undefined;
+  return { pid: pidText, uuid };
 }
 
 export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
@@ -336,7 +347,17 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   });
 
   // ---- allow-listed proxy ---------------------------------------------------------
-  async function proxy(request: FastifyRequest, reply: FastifyReply, baseUrl: string, match: (q: URLSearchParams) => MatchResult) {
+  /**
+   * `project`, when given, replaces a 2xx JSON body with a reduced object
+   * (undefined = the upstream answer is unusable -> 502).
+   */
+  async function proxy(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    baseUrl: string,
+    match: (q: URLSearchParams) => MatchResult,
+    project?: (body: unknown) => object | undefined,
+  ) {
     const lookup = readSession(request);
     if (lookup.kind !== 'ok') return sessionError(reply, lookup);
     const m = match(new URL(request.url, 'http://bff.invalid').searchParams);
@@ -377,6 +398,16 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       }
       const body = Buffer.from(await res.arrayBuffer());
       if (body.length > MAX_UPSTREAM_BYTES) return reply.code(502).send({ error: 'upstream_invalid_response' });
+      if (project) {
+        let projected: object | undefined;
+        try {
+          projected = project(JSON.parse(body.toString('utf8')));
+        } catch {
+          projected = undefined;
+        }
+        if (!projected) return reply.code(502).send({ error: 'upstream_invalid_response' });
+        return reply.code(status).send(projected);
+      }
       return reply.code(status).type(contentType ?? 'application/json').send(body);
     }
     await res.body?.cancel();
@@ -397,6 +428,13 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   app.get('/api/fhir/*', async (request, reply) => {
     const path = (request.url.split('?', 1)[0] ?? '').slice('/api/fhir/'.length);
     return proxy(request, reply, config.fhirBaseUrl, (q) => matchFhirRequest(path, q));
+  });
+
+  // uuid -> pid for the medication-list route. OpenEMR answers the whole
+  // patient_data row (SSN included); only pid and uuid leave the BFF.
+  app.get('/api/patient/:puuid', async (request, reply) => {
+    const { puuid } = request.params as { puuid: string };
+    return proxy(request, reply, config.stdApiBaseUrl, (q) => matchStdPatientRequest(puuid, q), projectPatientPid);
   });
 
   app.get('/api/patient/:pid/medication', async (request, reply) => {

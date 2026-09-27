@@ -89,3 +89,16 @@ export function matchStdMedicationRequest(pid: string, query: URLSearchParams): 
   if ([...query.keys()].length > 0) return badRequest('this route takes no parameters');
   return { ok: true, upstreamPath: `patient/${pid}/medication`, query, resource: 'patient-medication', kind: 'search' };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Standard API `GET /api/patient/:puuid`: used only to map the FHIR Patient id
+ * (a uuid) to OpenEMR's numeric pid, which the medication-list route needs.
+ * The BFF answers `{ pid, uuid }` only (see app.ts), never the patient_data row.
+ */
+export function matchStdPatientRequest(puuid: string, query: URLSearchParams): MatchResult {
+  if (!UUID.test(puuid)) return NOT_FOUND;
+  if ([...query.keys()].length > 0) return badRequest('this route takes no parameters');
+  return { ok: true, upstreamPath: `patient/${puuid}`, query, resource: 'patient', kind: 'read' };
+}

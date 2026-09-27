@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { OTHER_PATIENT_ID } from './helpers/mockOpenEmr.js';
+import { OTHER_PATIENT_ID, STD_PATIENT_FORBIDDEN_UUID, STD_PATIENT_NO_PID_UUID, STD_PATIENT_UUID } from './helpers/mockOpenEmr.js';
 import { login, startHarness, type Harness } from './helpers/harness.js';
 
 const PID = 'a2c3ab57-cdd6-4aad-afc9-e19c171e7ed7';
@@ -63,6 +63,48 @@ describe('allow-listed proxy', () => {
     expect(fhirCalls().at(-1)?.path).toBe('/apis/default/api/patient/10/medication');
     const none = await h.app.inject({ url: '/api/patient/7/medication', headers: { cookie } });
     expect(none.statusCode).toBe(404);
+  });
+
+  describe('standard API patient read (uuid -> pid)', () => {
+    it('proxies /api/patient/:puuid and answers only { pid, uuid } (never the rest of patient_data)', async () => {
+      const res = await h.app.inject({ url: `/api/patient/${STD_PATIENT_UUID}`, headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ pid: '7', uuid: STD_PATIENT_UUID });
+      expect(res.body).not.toContain('999-00-1234');
+      expect(res.body).not.toContain('Synthetica');
+      expect(res.headers['cache-control']).toContain('no-store');
+      const call = fhirCalls().at(-1);
+      expect(call?.path).toBe(`/apis/default/api/patient/${STD_PATIENT_UUID}`);
+      expect(call?.query).toBe('');
+      expect(call?.headers.authorization).toBe(`Bearer ${h.mock.issuedAccessTokens[0]}`);
+    });
+
+    it('requires a session', async () => {
+      const res = await h.app.inject({ url: `/api/patient/${STD_PATIENT_UUID}` });
+      expect(res.statusCode).toBe(401);
+      expect(fhirCalls()).toHaveLength(0);
+    });
+
+    it('400s any query parameter without calling OpenEMR', async () => {
+      const res = await h.app.inject({ url: `/api/patient/${STD_PATIENT_UUID}?fields=ss`, headers: { cookie } });
+      expect(res.statusCode).toBe(400);
+      expect(fhirCalls()).toHaveLength(0);
+    });
+
+    it('passes 404 and 403 through with normalised bodies', async () => {
+      const missing = await h.app.inject({ url: '/api/patient/00000000-0000-4000-8000-00000000abcd', headers: { cookie } });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toEqual({ error: 'not_found' });
+      const forbidden = await h.app.inject({ url: `/api/patient/${STD_PATIENT_FORBIDDEN_UUID}`, headers: { cookie } });
+      expect(forbidden.statusCode).toBe(403);
+      expect(forbidden.json()).toEqual({ error: 'forbidden' });
+    });
+
+    it('answers 502 when OpenEMR returns no pid', async () => {
+      const res = await h.app.inject({ url: `/api/patient/${STD_PATIENT_NO_PID_UUID}`, headers: { cookie } });
+      expect(res.statusCode).toBe(502);
+      expect(res.json()).toEqual({ error: 'upstream_invalid_response' });
+    });
   });
 
   it.each([

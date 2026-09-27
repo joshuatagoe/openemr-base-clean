@@ -1,3 +1,4 @@
+import { isAbsolute, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SCOPES, loadConfig } from '../src/config.js';
 
@@ -29,6 +30,12 @@ describe('loadConfig', () => {
       expect(() => loadConfig(env)).toThrow(key);
     },
   );
+
+  it('resolves a relative WEB_DIST_DIR to an absolute path (@fastify/static requires one)', () => {
+    const c = loadConfig({ ...base, WEB_DIST_DIR: '../web/dist' });
+    expect(isAbsolute(c.webDistDir ?? '')).toBe(true);
+    expect(c.webDistDir).toBe(resolve('../web/dist'));
+  });
 
   it('rejects a short session secret', () => {
     expect(() => loadConfig({ ...base, SESSION_SECRET: 'short' })).toThrow(/SESSION_SECRET/);

@@ -2,6 +2,8 @@
 // server refuses to start misconfigured. Error messages name the variable,
 // never its value (the secrets must not reach logs).
 
+import { resolve } from 'node:path';
+
 /**
  * Scopes requested at /authorize. Read-only (`.rs`) clinician scopes verified
  * in Phase B for a confidential client, plus the standard-API medication scope.
@@ -132,6 +134,6 @@ export function loadConfig(env: Env): Config {
     port: parseIntIn('PORT', env.PORT, 3000, 1, 65535),
     upstreamTimeoutMs: parseIntIn('UPSTREAM_TIMEOUT_MS', env.UPSTREAM_TIMEOUT_MS, 10000, 100, 120000),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
-    webDistDir: env.WEB_DIST_DIR?.trim() || undefined,
+    webDistDir: env.WEB_DIST_DIR?.trim() ? resolve(env.WEB_DIST_DIR.trim()) : undefined,
   };
 }
