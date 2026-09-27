@@ -10,6 +10,7 @@ import { QueryProvider } from './data/QueryProvider';
 import { HomePage } from './pages/HomePage';
 import { PatientPage } from './pages/PatientPage';
 import { PatientSearchPage } from './pages/PatientSearchPage';
+import { RecentPatientsProvider } from './recent/RecentPatientsProvider';
 
 export interface AppProps {
   /** Additional routes (used by tests; later milestones add real pages here). */
@@ -23,35 +24,37 @@ export function App({ extraRoutes = [], queryClient }: AppProps) {
     <AuthProvider>
       <QueryProvider client={queryClient}>
         <DataSourceProvider>
-          <BrowserRouter>
-            <AppHeader />
-            <main className="app-main">
-              <NoticeBanner />
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <RequireAuth>
-                      <PatientSearchPage />
-                    </RequireAuth>
-                  }
-                />
-                <Route
-                  path="/patient/:id"
-                  element={
-                    <RequireAuth>
-                      <PatientPage />
-                    </RequireAuth>
-                  }
-                />
-                {extraRoutes.map((r) => (
-                  <Route key={r.path} path={r.path} element={r.element} />
-                ))}
-                <Route path="*" element={<p>Page not found.</p>} />
-              </Routes>
-            </main>
-          </BrowserRouter>
+          <RecentPatientsProvider>
+            <BrowserRouter>
+              <AppHeader />
+              <main className="app-main">
+                <NoticeBanner />
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <RequireAuth>
+                        <PatientSearchPage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/patient/:id"
+                    element={
+                      <RequireAuth>
+                        <PatientPage />
+                      </RequireAuth>
+                    }
+                  />
+                  {extraRoutes.map((r) => (
+                    <Route key={r.path} path={r.path} element={r.element} />
+                  ))}
+                  <Route path="*" element={<p>Page not found.</p>} />
+                </Routes>
+              </main>
+            </BrowserRouter>
+          </RecentPatientsProvider>
         </DataSourceProvider>
       </QueryProvider>
     </AuthProvider>

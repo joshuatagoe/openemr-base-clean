@@ -65,7 +65,11 @@ export function patientDobAgeLine(patient: Patient, { today, dateFormat }: Displ
 
 const SEX_LABELS: Readonly<Record<string, string>> = { male: 'Male', female: 'Female', other: 'Other', unknown: 'Unknown' };
 
-/** Picker only (the header does not show sex, for PHP parity). */
+/**
+ * FHIR Patient.gender as text. OpenEMR fills gender from patient_data.sex
+ * (Female / Male / UNK -> female / male / unknown; anything else -> other),
+ * the field its Demographics card labels "Birth Sex".
+ */
 export function patientSexLabel(patient: Patient): string {
   return patient.gender ? (SEX_LABELS[patient.gender] ?? patient.gender) : '';
 }

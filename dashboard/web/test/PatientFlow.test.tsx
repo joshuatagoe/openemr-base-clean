@@ -51,8 +51,14 @@ describe('patient search (mode A)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 patients found'));
-    expect(search.seen).toHaveLength(1);
-    expect([...(search.seen[0]?.entries() ?? [])]).toEqual([['name', 'Sample']]);
+    // The landing list, then the search (same paging and sort).
+    expect(search.seen).toHaveLength(2);
+    expect([...(search.seen[1]?.entries() ?? [])]).toEqual([
+      ['name', 'Sample'],
+      ['_count', '21'],
+      ['_offset', '0'],
+      ['_sort', 'family,given'],
+    ]);
 
     const results = screen.getByRole('table', { name: 'Search results' });
     const rowA = within(results).getByRole('row', { name: /Samplefamily, Ada Quinn/ });
@@ -77,20 +83,30 @@ describe('patient search (mode A)', () => {
     await userEvent.type(screen.getByLabelText('MRN'), 'SYN-1001');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 patient found'));
-    expect(Object.fromEntries(search.seen[0] ?? [])).toEqual({ birthdate: '1980-06-15', identifier: 'SYN-1001' });
+    expect(Object.fromEntries(search.seen.at(-1) ?? [])).toEqual({
+      birthdate: '1980-06-15',
+      identifier: 'SYN-1001',
+      _count: '21',
+      _offset: '0',
+      _sort: 'family,given',
+    });
   });
 
-  it('asks for at least one criterion and rejects characters the server would refuse, without calling it', async () => {
+  it('an empty search just shows the list; characters the server would refuse are rejected without calling it', async () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
+    await screen.findByRole('table', { name: 'Patients' });
     await userEvent.click(await screen.findByRole('button', { name: 'Search' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a name, date of birth or MRN.');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(window.location.search).toBe('');
     await userEvent.type(screen.getByLabelText('Name'), '<b>x');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Names may contain letters, spaces, apostrophes, hyphens and dots.');
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
-    expect(search.seen).toHaveLength(0);
+    // Only the landing list was requested.
+    expect(search.seen).toHaveLength(1);
+    expect(Object.fromEntries(search.seen[0] ?? [])).toEqual({ _count: '21', _offset: '0', _sort: 'family,given' });
   });
 
   it('says so when nothing matches', async () => {
@@ -118,7 +134,7 @@ describe('patient search (mode A)', () => {
 });
 
 describe('patient header (PHP patient-bar parity)', () => {
-  it('shows first + last name, (MRN from the PT identifier) and "DOB: … Age: …"; no sex, no active status, no SSN', async () => {
+  it('shows first + last name, (MRN from the PT identifier), "DOB: … Age: …" and the birth sex; no active status, no SSN', async () => {
     const reads = patientReads();
     server.use(signedIn, reads.handler);
     renderAt(`/patient/${PATIENT_A_ID}`);
@@ -128,7 +144,12 @@ describe('patient header (PHP patient-bar parity)', () => {
     // Same text as the PHP bar: "First Last (pubpid)" with a space before the MRN.
     expect(bar).toHaveTextContent(/^Ada Samplefamily \(SYN-1001\)\s*DOB:/);
     expect(bar).toHaveTextContent(`DOB: 1980-06-15 Age: ${expectedAge('1980-06-15')}`);
-    expect(bar).not.toHaveTextContent(/female|male|sex|active/i);
+    // Sex from FHIR Patient.gender, labelled as OpenEMR's Demographics card labels patient_data.sex.
+    expect(within(bar).getByText('Birth Sex:')).toBeInTheDocument();
+    expect(bar).toHaveTextContent('Birth Sex: Female');
+    expect(bar).not.toHaveTextContent(/\bmale\b/i);
+    // Active status is intentionally not shown: OpenEMR's FHIR hard-codes active = true.
+    expect(bar).not.toHaveTextContent(/active/i);
     expect(bar).not.toHaveTextContent('900-11-2222');
     expect(bar).not.toHaveTextContent('Quinn');
     expect(bar.className).toContain('patient-bar');
@@ -142,7 +163,27 @@ describe('patient header (PHP patient-bar parity)', () => {
     await within(bar).findByRole('heading', { name: 'Cleo Pastfamily' });
     expect(bar).toHaveTextContent('(SYN-3003)');
     expect(bar).toHaveTextContent('DOB: 1930-03-20 Age at death: 70');
+    expect(bar).toHaveTextContent('Birth Sex: Female');
     expect(bar).not.toHaveTextContent(/Age: /);
+  });
+
+  it('shows "Birth Sex: Male" for a male patient and leaves the item out when gender is absent', async () => {
+    server.use(
+      signedIn,
+      http.get('*/api/fhir/Patient/:id', ({ params }) =>
+        HttpResponse.json(String(params.id) === PATIENT_B_ID ? patientB : { ...patientA, gender: undefined }),
+      ),
+    );
+    const first = renderAt(`/patient/${PATIENT_B_ID}`);
+    const bar = await screen.findByRole('region', { name: 'Patient' });
+    await within(bar).findByRole('heading', { name: 'Bram Otherfamily' });
+    expect(bar).toHaveTextContent('Birth Sex: Male');
+    first.unmount();
+
+    renderAt(`/patient/${PATIENT_A_ID}`);
+    const barA = await screen.findByRole('region', { name: 'Patient' });
+    await within(barA).findByRole('heading', { name: 'Ada Samplefamily' });
+    expect(barA).not.toHaveTextContent('Birth Sex');
   });
 
   it.each([

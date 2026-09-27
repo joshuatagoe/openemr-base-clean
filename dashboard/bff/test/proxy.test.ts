@@ -40,6 +40,22 @@ describe('allow-listed proxy', () => {
     expect(call?.headers['x-forwarded-for']).toBeUndefined();
   });
 
+  it('proxies the bounded patient list (no criteria) with its paging parameters unchanged', async () => {
+    const res = await h.app.inject({ url: '/api/fhir/Patient?_count=21&_offset=20&_sort=family,given', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    const call = fhirCalls()[0];
+    expect(call?.path).toBe('/apis/default/fhir/Patient');
+    expect(new URLSearchParams(call?.query)).toEqual(new URLSearchParams('_count=21&_offset=20&_sort=family,given'));
+  });
+
+  it('400s an unbounded patient list and never calls OpenEMR', async () => {
+    for (const url of ['/api/fhir/Patient', '/api/fhir/Patient?_offset=0&_sort=family', '/api/fhir/Patient?_count=51']) {
+      const res = await h.app.inject({ url, headers: { cookie } });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(fhirCalls()).toHaveLength(0);
+  });
+
   it('marks API responses no-store', async () => {
     const res = await h.app.inject({ url: `/api/fhir/Patient/${PID}`, headers: { cookie } });
     expect(res.statusCode).toBe(200);
