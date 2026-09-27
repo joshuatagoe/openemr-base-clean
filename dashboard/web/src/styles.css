@@ -1,128 +1,263 @@
-/* Minimal shell styling; the dashboard layout follows the PHP summary page from C2 on. */
+/* Patient dashboard port. The look is OpenEMR's default theme (style_light,
+   Bootstrap 4) and demographics.php, not a redesign: flat grey page, square
+   white cards, bold blue card titles, small tables. See W2_PLANNING
+   DASHBOARD_UX_PLAN.md §3 for where each token comes from. */
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-  color: #212529;
-  background: #f8f9fa;
+  /* Surfaces. */
+  --oe-page-bg: #e6e6e6; /* demographics.php --bg: hsl(0 0% 90%); patient page, edge to edge */
+  --oe-shell-bg: #f9fafb; /* style_light $body-bg; landing page and app bar surround */
+  --oe-surface: #ffffff; /* cards, patient bar, app bar */
+  /* Text and links. */
+  --oe-text: #111827; /* style_light $gray-900 / $body-color */
+  --oe-muted: #4b5563; /* style_light $gray-600 (.text-muted); 7.5:1 on white */
+  --oe-link: #1d4ed8; /* style_light $link-color: links, card titles, pencil */
+  --oe-link-hover: #1e40af;
+  /* Lines and tables. */
+  --oe-border: rgba(0, 0, 0, 0.125); /* Bootstrap 4 .card border; list dividers */
+  --oe-table-head: #e5e7eb; /* style_light $gray-200 */
+  --oe-table-rule: #dee2e6; /* BS4 $table-border-color */
+  --oe-stripe: rgba(0, 0, 0, 0.05); /* BS4 .table-striped */
+  --oe-hover: rgba(0, 0, 0, 0.075); /* BS4 .table-hover */
+  --oe-card-shadow: 1px 1px 1px hsl(0 0% 0% / 0.2); /* demographics.php .card */
+  /* States. Kept contrast-safe where OpenEMR's own colour fails WCAG AA. */
+  --oe-warning: #ffc107; /* BS4 $yellow; severity highlight, text stays --oe-text */
+  --oe-btn-primary: #0d6efd; /* closest to OpenEMR #007bff that passes 4.5:1 with white */
+  --oe-success-badge: #198754; /* BS4 #28a745 fails AA with white text */
+  --oe-danger: #dc3545;
+  --oe-focus-ring: 3px solid #86b7fe; /* a11y: OpenEMR's translucent glow is too faint */
+  --oe-focus-offset: 2px;
+  /* Type: OpenEMR names Lato but never loads it, so clinicians see Helvetica/Arial. */
+  --oe-font: "Lato", Helvetica, Arial, sans-serif;
+  /* Height of the sticky patient bar (scroll padding, loading placeholder). */
+  --oe-patient-bar-h: 5.0625rem; /* 81px at 1366px, measured */
+
+  font-family: var(--oe-font);
+  color: var(--oe-text);
+  background: var(--oe-shell-bg);
+  line-height: 1.5;
+}
+/* The patient page is grey edge to edge, as demographics.php (container-fluid). */
+:root:has(.patient-bar) {
+  background: var(--oe-page-bg);
+  /* Keyboard focus never lands under the sticky bar (WCAG 2.4.11). */
+  scroll-padding-top: calc(var(--oe-patient-bar-h) + 0.5rem);
 }
 body { margin: 0; }
+
+/* Links: OpenEMR blue in every state (no visited purple), underlined on hover.
+   :where() keeps these at zero specificity so .btn and .card-* links win. */
+:where(a, a:visited) {
+  color: var(--oe-link);
+  text-decoration: none;
+}
+:where(a:hover) {
+  color: var(--oe-link-hover);
+  text-decoration: underline;
+}
+
+/* Focus. Controls get a clear 3px ring. Headings take focus only from code
+   (tabindex=-1, so a screen reader announces the new page); they are not
+   controls, so no box is drawn on them (WCAG 2.4.7 covers controls). */
+:is(h1, h2, h3)[tabindex='-1']:focus { outline: none; }
+a:focus-visible,
+.btn:focus-visible,
+.card-toggle:focus-visible,
+.form-field input:focus-visible,
+.table-responsive:focus-visible,
+.results:focus-visible {
+  outline: var(--oe-focus-ring);
+  outline-offset: var(--oe-focus-offset);
+}
+
+/* App bar. */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.5rem 1rem;
-  background: #fff;
-  border-bottom: 1px solid #dee2e6;
+  background: var(--oe-surface);
+  border-bottom: 1px solid var(--oe-border);
 }
-.app-title { font-weight: 600; font-size: 1.1rem; }
-.app-auth { display: flex; align-items: center; gap: 0.75rem; }
+.app-title { font-weight: 700; font-size: 1.1rem; white-space: nowrap; }
+.app-title, .app-title:visited { color: var(--oe-text); }
+.app-auth { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 .app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+.app-main:has(.patient-bar) { max-width: none; padding: 0 0 0.5rem; }
+.app-main:has(.patient-bar) > .notice { margin: 0.5rem; }
+
+/* Buttons. */
 .btn {
   display: inline-block;
   padding: 0.3rem 0.75rem;
   border-radius: 0.25rem;
   border: 1px solid transparent;
   font: inherit;
+  line-height: 1.5;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
-.btn-primary { background: #0d6efd; color: #fff; }
-.btn-secondary { background: #fff; color: #495057; border-color: #adb5bd; }
-.btn:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.btn-primary, .btn-primary:visited { background: var(--oe-btn-primary); color: #fff; }
+.btn-secondary, .btn-secondary:visited { background: var(--oe-surface); color: #495057; border-color: #adb5bd; }
+.btn:hover { text-decoration: none; }
+.btn-secondary:hover { background: #e9ecef; color: #343a40; }
+.btn-sm { padding: 0.15rem 0.5rem; font-size: 0.875rem; }
+.btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
 .notice { padding: 0.5rem 0.75rem; border-radius: 0.25rem; border: 1px solid; }
 .notice-info { background: #cff4fc; border-color: #9eeaf9; }
 .notice-warning { background: #fff3cd; border-color: #ffe69c; }
-/* #5c636a: at least 4.5:1 (WCAG AA) on the page background and on striped table rows (axe, C6). */
-.muted { color: #5c636a; }
+.muted { color: var(--oe-muted); }
 .signed-out { display: grid; gap: 0.75rem; justify-items: start; }
 
-/* Patient search (C2). */
-.patient-search h1, .patient-name { margin: 0 0 0.5rem; }
-h1:focus { outline: none; }
-h1:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+/* OpenEMR loader.html.twig: spinner-border spinner-border-sm + "Loading...". */
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.125em;
+  box-sizing: border-box;
+  border: 0.15em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: oe-spin 0.75s linear infinite;
+}
+@keyframes oe-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
+/* Patient search (landing). */
+.patient-search h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 500; }
 .search-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
 .form-field { display: grid; gap: 0.25rem; }
 .form-field input { font: inherit; padding: 0.3rem 0.5rem; border: 1px solid #adb5bd; border-radius: 0.25rem; }
-.form-field input:focus-visible, .results a:focus-visible { outline: 3px solid #86b7fe; outline-offset: 1px; }
-.form-field input[aria-invalid='true'] { border-color: #dc3545; }
-.results { border-collapse: collapse; width: 100%; background: #fff; }
+.form-field input[aria-invalid='true'] { border-color: var(--oe-danger); }
+.results { border-collapse: collapse; width: 100%; background: var(--oe-surface); }
 .results caption { text-align: left; font-weight: 600; padding: 0.25rem 0; }
-.results th, .results td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #dee2e6; }
+.results th, .results td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--oe-table-rule); }
 .page-state, .page-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.75rem 0; }
+.pager-page { font-weight: 600; }
+.recent-patients { margin: 0.5rem 0 1.25rem; }
+.section-header { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.section-header h2 { font-size: 1.125rem; margin: 0.25rem 0; }
 
-/* Persistent patient bar: mirrors OpenEMR's tab-frame patient bar
-   (name as large text, "(pubpid)" small + muted, "DOB: ... Age: ..." below). */
+/* Persistent patient bar: OpenEMR's tab-frame patient bar. Name large (PHP
+   ptName: 1.75rem, weight 400; kept dark because here it is not a link),
+   "(pubpid)" small + muted beside it, "DOB: ... Age: ...  Birth Sex: ..."
+   below, the page action top right. */
 .patient-bar {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  margin: 0 -1rem 1rem;
-  background: #fff;
-  border-bottom: 1px solid #dee2e6;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name actions' 'dob dob';
+  align-items: start;
+  column-gap: 1rem;
+  padding: 0.5rem 1rem;
+  margin: 0 0 0.5rem;
+  background: var(--oe-surface);
+  border-bottom: 1px solid var(--oe-border);
+  box-shadow: 0 1px 1px hsl(0 0% 0% / 0.1);
 }
-.patient-name { display: inline; font-size: 1.75rem; font-weight: 500; }
-.patient-mrn { font-size: 1.4rem; } /* <small> inside the PHP h3: 80% of the name size */
-.patient-dob { margin-top: 0.5rem; }
+.patient-bar-main { display: contents; }
+.patient-bar-name { grid-area: name; min-width: 0; }
+.patient-bar-actions { grid-area: actions; }
+.patient-name { display: inline; margin: 0; font-size: 1.75rem; font-weight: 400; line-height: 1.2; }
+.patient-mrn { font-size: 1.4rem; white-space: nowrap; } /* <small> inside the PHP h3: 80% of the name size */
+.patient-dob { grid-area: dob; margin-top: 0.25rem; }
+.patient-sex { margin-left: 0.75rem; white-space: nowrap; }
+.patient-bar-loading { display: flex; align-items: center; min-height: var(--oe-patient-bar-h); box-sizing: border-box; }
+.patient-bar-loading p { margin: 0; }
 
-/* Clinical cards (C3). Mirrors demographics.php: page background hsl(0 0% 90%),
-   white cards with a 1px shadow and no radius; row 1 = Allergies, Medical
-   Problems, Medications (col-md-4 each); Prescriptions and Care Team full width;
-   everything stacks below Bootstrap's md breakpoint (768px). */
-.clinical-cards { display: grid; gap: 0.5rem; background: hsl(0 0% 90%); margin: 0 -1rem; padding: 0.5rem; }
+/* Clinical cards. Mirrors demographics.php: white square cards with a 1px
+   shadow on the grey page; row 1 = Allergies, Medical Problems, Medications
+   (col-md-4 each, equal height as PHP's flex-fill); Prescriptions and Care
+   Team full width; Labs in the left 2/3; everything stacks below md (768px). */
+.clinical-cards { display: grid; gap: 0.5rem; margin: 0 0.5rem; }
 .cards-row { display: grid; gap: 0.5rem; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 768px) {
-  .cards-row-pami { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
-  /* Labs sits in the PHP left column (col-md-8). */
+  .cards-row-pami { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cards-row-left { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
-.labdata { margin: 0 0.6rem; }
-.labdata p { margin: 0 0 0.75rem; }
-.card { background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 12%); padding: 0.25rem; min-width: 0; }
-.card-title { display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 0.25rem; font-size: 1rem; }
-.card-toggle {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #0d6efd; cursor: pointer; text-align: left;
+.card {
+  background: var(--oe-surface);
+  border: 1px solid var(--oe-border);
+  border-radius: 0;
+  box-shadow: var(--oe-card-shadow);
+  padding: 0.25rem;
+  min-width: 0;
 }
-.card-toggle:focus-visible, .card-edit:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
-.card-edit { color: #495057; padding: 0 0.25rem; }
+.card-title { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin: 0; padding: 0.25rem; font-size: 1rem; }
+.card-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--oe-link);
+  cursor: pointer;
+  text-align: left;
+}
+.card-toggle:hover { color: var(--oe-link-hover); }
+.card-toggle:hover > span { text-decoration: underline; }
+.card-toggle svg, .card-edit svg { flex: none; display: block; }
+.card-edit, .card-edit:visited { display: inline-flex; padding: 0.125rem 0.25rem; color: var(--oe-link); }
+.card-edit:hover { color: var(--oe-link-hover); }
 .card-body { padding: 0.5rem 0.25rem 0.25rem; }
 .card-state { padding: 0 0.25rem; }
 .card-error { margin: 0 0 0.5rem; color: #842029; }
 .card-note { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.labdata { margin: 0 0.6rem; }
+.labdata p { margin: 0 0 0.75rem; }
 .pami-list { list-style: none; margin: 0; padding: 0; }
-.pami-list li { padding: 0.25rem; border-bottom: 1px solid rgb(0 0 0 / 12.5%); overflow-wrap: anywhere; }
+.pami-list li { padding: 0.25rem; border-bottom: 1px solid var(--oe-border); overflow-wrap: anywhere; }
 .pami-list li:last-child { border-bottom: 0; }
 /* PHP: bg-warning font-weight-bold px-1 on severe / life threatening / fatal. */
-.severity-alert { background: #ffc107; font-weight: 700; padding: 0 0.25rem; }
-.table-responsive { overflow-x: auto; }
+.severity-alert { background: var(--oe-warning); color: var(--oe-text); font-weight: 700; padding: 0 0.25rem; }
 /* Focusable so a keyboard user can scroll a wide table on a phone (axe scrollable-region-focusable). */
-.table-responsive:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.table-responsive { overflow-x: auto; }
 .card-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-.card-table th, .card-table td { text-align: left; padding: 0.3rem; border-top: 1px solid #dee2e6; vertical-align: top; }
-.card-table thead th { border-bottom: 2px solid #dee2e6; background: #f8f9fa; }
-.card-table tbody tr:nth-of-type(odd) { background: rgb(0 0 0 / 5%); }
+.card-table th, .card-table td { text-align: left; padding: 0.3rem; border-top: 1px solid var(--oe-table-rule); vertical-align: top; }
+.card-table thead th { border-bottom: 2px solid var(--oe-table-rule); background: var(--oe-table-head); }
+.card-table tbody tr:nth-of-type(odd) { background: var(--oe-stripe); }
 .care-team-name { font-size: 1.1rem; font-weight: 500; margin: 0.25rem 0 0.5rem; }
 .badge { display: inline-block; padding: 0.2em 0.45em; font-size: 75%; font-weight: 700; line-height: 1; border-radius: 0.25rem; color: #fff; vertical-align: baseline; }
-.badge-primary { background: #0d6efd; }
+.badge-primary { background: var(--oe-btn-primary); }
 .badge-info { background: #0dcaf0; color: #000; }
-.badge-success { background: #198754; }
-.badge-warning { background: #ffc107; color: #000; }
-.badge-danger { background: #dc3545; }
+.badge-success { background: var(--oe-success-badge); }
+.badge-warning { background: var(--oe-warning); color: #000; }
+.badge-danger { background: var(--oe-danger); }
 .badge-secondary { background: #6c757d; }
-.btn-sm { padding: 0.15rem 0.5rem; font-size: 0.875rem; }
 
-/* Patient list, pager and recent patients (mode A landing page). */
-.results:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
-.pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.75rem 0; }
-.pager-page { font-weight: 600; }
-.btn:disabled { opacity: 0.65; cursor: not-allowed; }
-.recent-patients { margin: 0.5rem 0 1.25rem; }
-.section-header { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-.section-header h2 { font-size: 1.15rem; margin: 0.25rem 0; }
-.patient-sex { margin-left: 0.75rem; }
+/* Phones (below Bootstrap's sm, 576px): nothing in the bars wraps inside a
+   button; the signed-in name is kept for screen readers only; the sticky
+   patient bar stays within 88px (name + MRN, then DOB / age / birth sex). */
+@media (max-width: 575.98px) {
+  :root { --oe-patient-bar-h: 4.0625rem; } /* 65px at 390px, measured */
+  .app-header { gap: 0.5rem; }
+  .app-user {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .app-main { padding: 0.75rem; }
+  .app-main:has(.patient-bar) { padding: 0 0 0.5rem; }
+  .patient-bar { column-gap: 0.5rem; padding: 0.375rem 0.75rem; }
+  .patient-name { font-size: 1.375rem; }
+  .patient-mrn { font-size: 1.1rem; }
+  .patient-dob { margin-top: 0.125rem; font-size: 0.9375rem; }
+  .patient-sex { margin-left: 0.5rem; }
+  .patient-bar-actions .btn { padding: 0.15rem 0.5rem; font-size: 0.875rem; }
+}

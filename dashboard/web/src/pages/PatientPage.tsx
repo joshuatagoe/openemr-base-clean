@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
+import { Spinner } from '../components/Card';
 import { ClinicalCards } from '../components/ClinicalCards';
 import { PatientHeader } from '../components/PatientHeader';
 import type { DataSourceError } from '../data/errors';
@@ -30,7 +31,22 @@ function errorText(error: DataSourceError): string | null {
   }
 }
 
+// The tab title names the page, never the patient: tab strips and browser
+// history are visible to anyone at the screen (PHI).
+const TITLE = 'Chart – Patient Dashboard';
+
+function useDocumentTitle(title: string): void {
+  useEffect(() => {
+    const previous = document.title;
+    document.title = title;
+    return () => {
+      document.title = previous;
+    };
+  }, [title]);
+}
+
 export function PatientPage() {
+  useDocumentTitle(TITLE);
   const id = useParams().id ?? '';
   const { view, retry } = usePatient(id);
   const recent = useRecentPatients();
@@ -57,10 +73,14 @@ export function PatientPage() {
     case 'idle':
     case 'loading':
     case 'empty':
+      // Holds the patient bar's place so the page doesn't jump when the data arrives.
       return (
-        <p className="muted" role="status">
-          Loading patient...
-        </p>
+        <div className="patient-bar patient-bar-loading">
+          <p className="muted" role="status">
+            <Spinner />
+            Loading patient…
+          </p>
+        </div>
       );
     case 'error': {
       const text = errorText(view.error);

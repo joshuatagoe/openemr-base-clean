@@ -25,15 +25,17 @@ function writeExpanded(id: string, expanded: boolean): void {
   }
 }
 
+// Solid glyphs drawn for this port in the shape of the Font Awesome icons the
+// PHP card uses (card_base.html.twig): fa-compress when open, fa-expand when
+// collapsed, fa-pencil-alt for edit. Own paths, no icon library.
+const COMPRESS = 'M4 1h2.5v5.5H1V4h3zM9.5 1H12v3h3v2.5H9.5zM1 9.5h5.5V15H4v-3H1zM9.5 9.5H15V12h-3v3H9.5z';
+const EXPAND = 'M1 1h5.5v2.5h-3v3H1zM9.5 1H15v5.5h-2.5v-3h-3zM1 9.5h2.5v3h3V15H1zM12.5 9.5H15V15H9.5v-2.5h3z';
+const PENCIL = 'M1 15l.9-3.9 8.3-8.3 3 3-8.3 8.3zM11.1 1.9l1.3-1.3a.85.85 0 0 1 1.2 0l1.8 1.8a.85.85 0 0 1 0 1.2l-1.3 1.3z';
+
 function ExpandIcon({ expanded }: { expanded: boolean }) {
-  // fa-compress when open, fa-expand when collapsed, as in card_base.html.twig.
   return (
     <svg className="card-toggle-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      {expanded ? (
-        <path d="M6 1v5H1M10 1v5h5M6 15v-5H1M10 15v-5h5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      ) : (
-        <path d="M1 6V1h5M15 6V1h-5M1 10v5h5M15 10v5h-5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      )}
+      <path d={expanded ? COMPRESS : EXPAND} fill="currentColor" />
     </svg>
   );
 }
@@ -41,9 +43,14 @@ function ExpandIcon({ expanded }: { expanded: boolean }) {
 function PencilIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path d="M11.5 1.5l3 3L5 14H2v-3z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d={PENCIL} fill="currentColor" />
     </svg>
   );
+}
+
+/** OpenEMR's spinner-border-sm (loader.html.twig); decorative, the text next to it is the status. */
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
 }
 
 export interface CardProps {
@@ -119,6 +126,7 @@ export function CardView<T>({ view, retry, text, children }: { view: QueryView<T
     case 'loading':
       return (
         <p className="card-state muted" role="status">
+          <Spinner />
           Loading {text.noun}…
         </p>
       );
