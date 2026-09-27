@@ -260,6 +260,26 @@ final class FakeAgentClient implements AgentClientInterface
     /** @var list<array{request:array<string,mixed>, cid:string}> */
     public array $documentPosts = [];
 
+    /** @var list<array{bundle_id:string, request:array<string,mixed>}> */
+    public array $refreshes = [];
+
+    public ?AgentUnavailableException $refreshFailure = null;
+
+    public function refreshBundle(string $bundleId, array $request): array
+    {
+        $this->refreshes[] = ['bundle_id' => $bundleId, 'request' => $request];
+        if ($this->refreshFailure !== null) {
+            throw $this->refreshFailure;
+        }
+        $facts = $request['pending_document_facts'] ?? [];
+        return [
+            'bundle_id' => $bundleId,
+            'correlation_id' => $request['correlation_id'] ?? null,
+            'patient_uuid' => $request['patient_uuid'] ?? null,
+            'pending_facts' => is_array($facts) ? count($facts) : 0,
+        ];
+    }
+
     public function postDocumentBriefing(array $request, string $correlationId): array
     {
         $this->documentPosts[] = ['request' => $request, 'cid' => $correlationId];

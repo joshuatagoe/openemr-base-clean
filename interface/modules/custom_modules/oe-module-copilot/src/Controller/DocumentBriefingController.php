@@ -54,6 +54,7 @@ use OpenEMR\Modules\Copilot\Data\SourceUnavailableException;
 use OpenEMR\Modules\Copilot\Data\DocumentTooLargeException;
 use OpenEMR\Modules\Copilot\Data\SqlDocumentReader;
 use OpenEMR\Modules\Copilot\Support\Scalar;
+use OpenEMR\Modules\Copilot\Support\UtcDate;
 use OpenEMR\Modules\Copilot\Support\SessionRelease;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
@@ -321,10 +322,7 @@ final class DocumentBriefingController
     /** `Y-m-d` from a stored datetime; null when unknown or a zero date (the agent never hides an undated document). */
     private static function uploadDate(mixed $stored): ?string
     {
-        if (!is_string($stored) || preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $stored, $m) !== 1) {
-            return null;
-        }
-        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
+        return UtcDate::localDate($stored);
     }
 
     /**

@@ -48,6 +48,19 @@ final class UtcDate
     }
 
     /**
+     * The calendar date of a stored OpenEMR date/datetime (`documents.date`) as
+     * 'Y-m-d', or null when it is missing or not a real date. No zone
+     * conversion: the upload date is the local day it was stored under.
+     */
+    public static function localDate(mixed $stored): ?string
+    {
+        if (!is_string($stored) || preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $stored, $m) !== 1) {
+            return null;
+        }
+        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
+    }
+
+    /**
      * The zone OpenEMR is currently using (globals `gbl_time_zone` or PHP default).
      */
     public static function serverZone(): DateTimeZone

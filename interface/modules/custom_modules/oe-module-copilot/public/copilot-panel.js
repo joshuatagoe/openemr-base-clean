@@ -292,14 +292,21 @@
                 this.renderPlanCheckUnavailable(code);
                 return;
             }
+            if (this.factsStale) {
+                // Documents were read while the ticket was being requested: bring the follow-up context up to date.
+                this.refreshFollowUpContext();
+            }
             await this.streamBriefing();
         }
 
-        async requestTicket(refresh) {
+        async requestTicket(refresh, pendingFacts) {
             const payload = { pid: Number(this.pid) };
             if (refresh && this.bound && this.bound.bundle_id) {
                 payload.refresh_bundle_id = this.bound.bundle_id;
                 payload.refresh_correlation_id = this.bound.correlation_id;
+                if (pendingFacts) {
+                    payload.refresh_pending_facts = true;
+                }
             }
             const resp = await fetch(this.ticketUrl, {
                 method: 'POST',
@@ -547,14 +554,45 @@
             }
         }
 
-        async refreshTicket() {
-            const fresh = await this.requestTicket(true).catch(() => null);
+        async refreshTicket(pendingFacts) {
+            const fresh = await this.requestTicket(true, pendingFacts).catch(() => null);
             if (fresh && fresh.ok && fresh.data.ticket && fresh.data.patient_uuid === this.bound.patient_uuid
                 && fresh.data.bundle_id === this.bound.bundle_id && fresh.data.correlation_id === this.bound.correlation_id) {
                 this.bound.ticket = fresh.data.ticket;
                 return true;
             }
             return false;
+        }
+
+        /**
+         * A document was read on this chart open, or a value was filed, rejected or un-filed: the
+         * follow-up context (built when the ticket was requested) is out of date. The same ticket
+         * refresh, with refresh_pending_facts: the module re-reads the pending facts and lab results
+         * and replaces them in the agent's bundle. No new bundle, no briefing, no model call; a fresh
+         * ticket as any refresh. Before the ticket arrives the refresh is remembered and run then;
+         * requests arriving during one run once more after it.
+         */
+        async refreshFollowUpContext() {
+            if (!this.bound || !this.bound.bundle_id || !this.bound.ticket) {
+                this.factsStale = true;
+                return false;
+            }
+            if (this.factsRefreshing) {
+                this.factsStale = true;
+                return this.factsRefreshing;
+            }
+            this.factsStale = false;
+            this.factsRefreshing = this.refreshTicket(true);
+            let ok = false;
+            try {
+                ok = await this.factsRefreshing;
+            } finally {
+                this.factsRefreshing = null;
+            }
+            if (this.factsStale && !this.closed) {
+                return this.refreshFollowUpContext();
+            }
+            return ok;
         }
 
         renderQuestionBox() {
@@ -672,7 +710,9 @@
                 line.appendChild(document.createTextNode(String(s.text || '')));
                 const cites = Array.isArray(s.citations) ? s.citations : [];
                 if (cites.length) {
-                    line.appendChild(el('div', 'small text-muted', 'Sources: ' + cites.map((c) => String(c.record_id) + ' (' + fmtDate(c.timestamp) + ')').join('; ')));
+                    // An intake item is what the patient wrote, never a chart record: say so beside its id.
+                    const source = (c) => String(c.record_id) + (c.record_type === 'patient_reported' ? ' \u2014 patient-reported, intake form' : '') + ' (' + fmtDate(c.timestamp) + ')';
+                    line.appendChild(el('div', 'small text-muted', 'Sources: ' + cites.map(source).join('; ')));
                 }
                 item.appendChild(line);
             });
@@ -1881,10 +1921,21 @@
             window.addEventListener('pagehide', onLeave);
         }
 
-        /** Chart open: process unread documents (two per call) until none remain, then list them. */
+        /** The pending facts follow-ups answer from changed (read, filed, rejected, un-filed, confirmed). */
+        factsChanged() {
+            if (typeof this.onFactsChanged === 'function') {
+                this.onFactsChanged();
+            }
+        }
+
+        /**
+         * Chart open: process unread documents (two per call) until none remain, then list them.
+         * When a document was read now, follow-ups are told (factsChanged).
+         */
         async start() {
             let calls = 0;
             let last = null;
+            let readNow = false;
             for (;;) {
                 calls += 1;
                 const result = await this.api.json('POST', '/documents/process', { pid: this.api.pid });
@@ -1902,6 +1953,7 @@
                 }
                 const remaining = Number(last.remaining) || 0;
                 const processed = Array.isArray(last.processed) ? last.processed.length : 0;
+                readNow = readNow || (Array.isArray(last.processed) && last.processed.some((p) => p && p.outcome === 'extracted'));
                 this.renderList(Array.isArray(last.documents) ? last.documents : []);
                 if (remaining <= 0) {
                     this.status.textContent = this.summary();
@@ -1914,6 +1966,9 @@
                 this.status.textContent = 'Reading new documents… ' + remaining + ' left.';
             }
             await this.loadAllValues();
+            if (readNow) {
+                this.factsChanged();
+            }
         }
 
         summary() {
@@ -2044,6 +2099,7 @@
                 }
                 say(r.message, r.kind === 'confirmed' ? 'text-success' : 'text-warning');
                 await this.refreshList();
+                this.factsChanged();
             });
             actions.appendChild(view);
             actions.appendChild(confirm);
@@ -2539,6 +2595,7 @@
         /** After file / reject / un-file: refresh the list and values, and the panel beside the page. */
         async afterAction(doc, resultIndex, notice) {
             await this.refreshList();
+            this.factsChanged();
             const panel = this.viewerHost.querySelector('[data-role="value-panel"]');
             if (panel && panel.dataset.documentId === String(doc.document_id) && panel.dataset.resultIndex === String(resultIndex)) {
                 const fresh = this.valueFor(doc.document_id, resultIndex);
@@ -2588,6 +2645,7 @@
         const documents = new DocumentsSection(container);
         window.oeCopilotDocuments = documents;
         panel.onSectionsRendered = () => documents.annotateFiledResults();
+        documents.onFactsChanged = () => panel.refreshFollowUpContext();
         documents.start();
         window.oeCopilotDocumentBriefing = new DocumentBriefingSection(container, documents);
     }
@@ -2606,6 +2664,7 @@
             imageFrame: imageFrame,
             describeDocument: describeDocument,
             classifyConfirmResponse: classifyConfirmResponse,
+            CopilotPanel: CopilotPanel,
             DocumentsSection: DocumentsSection,
             SourceViewer: SourceViewer,
             DocumentBriefingSection: DocumentBriefingSection,

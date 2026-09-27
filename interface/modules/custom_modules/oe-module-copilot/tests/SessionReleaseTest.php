@@ -178,4 +178,9 @@ final class SessionObservingAgent implements AgentClientInterface
         $this->releasesAtCall[] = $this->released->count;
         return (new FakeAgentClient())->postDocumentExtraction($request, $correlationId);
     }
+
+    public function refreshBundle(string $bundleId, array $request): array
+    {
+        throw new \LogicException('not used');
+    }
 }

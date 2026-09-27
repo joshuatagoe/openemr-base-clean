@@ -149,6 +149,36 @@ final class AgentHandoffTest extends TestCase
         }
     }
 
+    public function testBundleRefreshIsSignedToTheBundlesRouteAndChecksTheEcho(): void
+    {
+        $bundleId = 'e6b2abe5-8664-4ebb-bf81-e3d5cca35df4';
+        $request = ['correlation_id' => self::CID, 'patient_uuid' => self::PUUID, 'pending_document_facts' => []];
+        $handler = new MockHandler();
+        $ok = ['bundle_id' => $bundleId, 'correlation_id' => self::CID, 'patient_uuid' => self::PUUID, 'pending_facts' => 0, 'lab_results' => null];
+        $client = self::client([new Response(200, [], json_encode($ok, JSON_THROW_ON_ERROR))], $handler);
+        self::assertSame(0, $client->refreshBundle($bundleId, $request)['pending_facts']);
+        $sent = $handler->getLastRequest();
+        self::assertNotNull($sent);
+        self::assertSame('http://agent.test:8000/v1/bundles/' . $bundleId . '/refresh', (string) $sent->getUri());
+        self::assertSame(self::CID, $sent->getHeaderLine('X-Correlation-Id'), 'the bundle correlation id');
+        self::assertSame(BundleSigner::sign(self::VECTOR_SECRET, (string) $sent->getBody(), self::VECTOR_TS), $sent->getHeaderLine('X-Copilot-Signature'));
+
+        $wrong = self::client([new Response(200, [], json_encode(['patient_uuid' => 'someone-else'] + $ok, JSON_THROW_ON_ERROR))], new MockHandler());
+        try {
+            $wrong->refreshBundle($bundleId, $request);
+            self::fail('expected a bad response');
+        } catch (AgentUnavailableException $e) {
+            self::assertSame(AgentUnavailableException::REASON_BAD_RESPONSE, $e->getReason());
+        }
+        $handler = new MockHandler();
+        try {
+            self::client([], $handler)->refreshBundle('../../v1/other', $request);
+            self::fail('expected the bundle id to be refused');
+        } catch (AgentUnavailableException $e) {
+            self::assertNull($handler->getLastRequest(), 'nothing sent for a malformed bundle id');
+        }
+    }
+
     public function testUnconfiguredClientDoesNotSendAnything(): void
     {
         foreach ([new CopilotConfig(null, self::VECTOR_SECRET), new CopilotConfig('http://agent.test', null), new CopilotConfig('http://agent.test', 'too-short')] as $config) {

@@ -114,6 +114,9 @@ class RecordType(StrEnum):
     #: A value read from an uploaded document, not yet verified or filed (ADR-011).
     #: Never a chart record: cited under its own type so it cannot pass as one.
     PENDING_DOCUMENT_FACT = "pending_document_fact"
+    #: An item the patient wrote on an intake form (ADR-010): patient-reported,
+    #: never a lab value or a chart record, and never fileable.
+    PATIENT_REPORTED = "patient_reported"
 
 
 class EvidenceSource(StrEnum):
@@ -250,6 +253,21 @@ class AllergyRecord(StrictModel):
     duplicate_count: int = Field(default=1, ge=1)
 
 
+#: The item labels an intake form's pending facts carry (``app.intake.intake_items``).
+#: Demographics are never items, so a name or DOB can never arrive as one.
+PATIENT_REPORTED_LABELS = frozenset(
+    {
+        "Chief concern",
+        "Current medication",
+        "Current medications (none reported)",
+        "Allergy",
+        "Allergies (none reported)",
+        "Family history",
+        "Family history (none reported)",
+    }
+)
+
+
 class PendingDocumentFact(StrictModel):
     """One value read from an uploaded document and awaiting clinician review (contract C5, ADR-011).
 
@@ -276,6 +294,23 @@ class PendingDocumentFact(StrictModel):
     page: int | None = Field(default=None, ge=1)
     bbox: tuple[float, float, float, float] | None = Field(default=None, description="Normalised 0..1 (x0, y0, x1, y1), top-left origin.")
     status: Literal["candidate"]
+    received_at: date | None = Field(
+        default=None,
+        description="The date the document was uploaded to OpenEMR (documents.date). Dates the document when no collection date was read (the 12-month ageing rule, app.ageing).",
+    )
+    kind: Literal["lab_value", "patient_reported"] = Field(
+        default="lab_value",
+        description="lab_value: a value read from a lab document. patient_reported: an item the patient wrote on an intake form (test_name is the item label, value_text the item); never a lab value or chart fact.",
+    )
+
+    @model_validator(mode="after")
+    def _patient_reported_is_not_a_lab_value(self) -> PendingDocumentFact:
+        if self.kind == "patient_reported":
+            if self.test_name not in PATIENT_REPORTED_LABELS:
+                raise ValueError("a patient_reported fact must carry an intake item label")
+            if any(v is not None for v in (self.unit, self.reference_range, self.abnormal_flag, self.collection_date)) or self.flag_source != "unavailable":
+                raise ValueError("a patient_reported fact carries no units, range, flag or collection date")
+        return self
 
     @model_validator(mode="after")
     def _located(self) -> PendingDocumentFact:
@@ -445,6 +480,42 @@ class ReadyResponse(StrictModel):
 # --------------------------------------------------------------------------- #
 
 
+class BundleRefresh(StrictModel):
+    """``POST /v1/bundles/{bundle_id}/refresh``: the module replaces a stored bundle's document context.
+
+    Sent after the panel's chart-open processing reads a document, or after a
+    value is filed, rejected or un-filed, so follow-ups see the chart as it is
+    now without a new bundle, a new briefing or any model call. Signed like
+    ``POST /v1/bundles``. Refused unless ``correlation_id``, ``patient_uuid``
+    and ``user_uuid`` match the stored bundle; ``lab_results`` (optional) must
+    come with the ``prior_note_id`` of the bundle's baseline note, because they
+    are windowed from it.
+    """
+
+    correlation_id: UUID
+    patient_uuid: UUID
+    user_uuid: UUID | None = None
+    pending_document_facts: list[PendingDocumentFact] = Field(default_factory=list, max_length=500)
+    prior_note_id: str | None = Field(default=None, min_length=1, description="The baseline note the lab results are windowed from; required with lab_results.")
+    lab_results: list[LabResult] | None = Field(default=None, description="The chart's interval lab results now; null keeps the bundle's.")
+
+    @model_validator(mode="after")
+    def _labs_name_their_window(self) -> BundleRefresh:
+        if self.lab_results is not None and self.prior_note_id is None:
+            raise ValueError("lab_results require prior_note_id")
+        return self
+
+
+class BundleRefreshed(StrictModel):
+    """Response to a bundle refresh: the ids echoed and counts only (never content)."""
+
+    bundle_id: UUID
+    correlation_id: UUID
+    patient_uuid: UUID
+    pending_facts: int = Field(ge=0)
+    lab_results: int | None = Field(default=None, ge=0, description="Lab results now in the bundle; null when they were kept.")
+
+
 class BundleAccepted(StrictModel):
     """Response to ``POST /v1/bundles``: the id the module binds into the ticket."""
 
@@ -588,6 +659,8 @@ __all__ = [
     "BriefingRequest",
     "BriefingResponse",
     "BundleAccepted",
+    "BundleRefresh",
+    "BundleRefreshed",
     "Citation",
     "CommitmentEvent",
     "CommitmentKind",
@@ -613,6 +686,7 @@ __all__ = [
     "MedicationAction",
     "MedicationRecord",
     "MedicationSource",
+    "PATIENT_REPORTED_LABELS",
     "PendingDocumentFact",
     "PriorNote",
     "ReadyResponse",

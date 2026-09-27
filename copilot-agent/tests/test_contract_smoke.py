@@ -267,3 +267,100 @@ def test_no_new_contract_field_reaches_an_exported_span(
         blob = json.dumps(dict(s.attributes), default=str)
         for needle in needles:
             assert needle not in blob, (s.name, needle)
+
+
+# --------------------------------------------------------------------------- #
+# Intake items as patient-reported follow-up facts (contract C5 ``kind``)
+# --------------------------------------------------------------------------- #
+
+REPORTED_LABEL = "patient-reported (from the intake form), not in the chart"
+
+
+def intake_candidates_from(document_id: int, extraction: dict[str, Any], first_id: int, received_at: str) -> list[dict[str, Any]]:
+    """What the module's ContextBundleBuilder sends for one stored intake form (CandidateMapper::fromIntake)."""
+    from app.intake import IntakeForm, intake_items
+
+    return [
+        {
+            "fact_id": f"copilot_extracted_value:{n}",
+            "document_id": document_id,
+            "test_name": item.label,
+            "value_text": item.text,
+            "unit": None,
+            "reference_range": None,
+            "abnormal_flag": None,
+            "flag_source": "unavailable",
+            "collection_date": None,
+            "verification_status": item.verification_status,
+            "page": item.citation.page,
+            "bbox": None,
+            "status": "candidate",
+            "kind": "patient_reported",
+            "received_at": received_at,
+        }
+        for n, item in enumerate(intake_items(IntakeForm.model_validate(extraction)), start=first_id)
+    ]
+
+
+class _IntakeTurnProvider(StubProvider):
+    def __init__(self, cited: str) -> None:
+        super().__init__()
+        self._turns = FakeProvider(
+            turn_script=[
+                calls(("find_patient_reported", {"query": None})),
+                answer(
+                    statement(f"A reported item ({REPORTED_LABEL}).", "fact", cited),
+                    statement("A reported item, on file.", "fact", cited),  # no label: rejected
+                ),
+            ]
+        )
+
+    async def turn_step(self, *args: Any, **kwargs: Any) -> Any:
+        return await self._turns.turn_step(*args, **kwargs)
+
+
+def _intake_follow_up(client: TestClient, fixture_payload: dict) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from tests.test_document_extract import intake_body
+
+    body = intake_body()
+    ex = client.post("/v1/documents/extract", content=body, headers=signed(body)).json()
+    assert ex["status"] == "ok" and ex["doc_type"] == "intake_form"
+    reported = intake_candidates_from(301, ex["extraction"], first_id=40, received_at="2026-09-25")
+    assert reported, "the fixture intake form has items"
+    accepted = post_bundle(client, fixture_payload, pending_document_facts=reported)
+    answered = turn(client, accepted["bundle_id"], ticket_for(accepted), "What did she report on the intake form?")
+    assert answered.status_code == 200, answered.text
+    return reported, answered.json()
+
+
+def test_intake_items_reach_follow_ups_as_patient_reported_facts(fixture_payload: dict) -> None:
+    for client in _client_with(_IntakeTurnProvider("copilot_extracted_value:40")):
+        reported, t = _intake_follow_up(client, fixture_payload)
+    assert [s["citations"][0]["record_type"] for s in t["statements"]] == ["patient_reported"]
+    assert t["rejected_count"] == 1
+    assert [c["tool"] for c in t["tool_calls"]] == ["find_patient_reported"]
+    assert all(f["test_name"] not in ("Patient name", "Date of birth") for f in reported)
+
+
+def test_no_intake_item_text_reaches_an_exported_span(exporter: InMemorySpanExporter, monkeypatch: pytest.MonkeyPatch, fixture_payload: dict) -> None:
+    original = observability.configure_tracing
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    public_key = f"pk-lf-test-{uuid4().hex}"
+
+    def configure_with_memory_exporter(**kwargs: Any) -> bool:
+        kwargs.update(enabled=True, public_key=public_key, secret_key="sk-lf-test", base_url="http://127.0.0.1:9", span_exporter=exporter)
+        return original(**kwargs)
+
+    monkeypatch.setattr("app.main.configure_tracing", configure_with_memory_exporter)
+    for client in _client_with(_IntakeTurnProvider("copilot_extracted_value:40")):
+        reported, t = _intake_follow_up(client, fixture_payload)
+        observability._langfuse.flush()  # type: ignore[union-attr]
+    spans = list(exporter.get_finished_spans())
+    assert {"turn", "tool"} <= {s.name for s in spans}
+    needles = {f["value_text"] for f in reported if f["value_text"]} | {f["fact_id"] for f in reported}
+    needles |= {REPORTED_LABEL, PRINTED_NAME, "Evelyn", fixture_payload["context"]["patient_uuid"]}
+    needles |= {s["text"] for s in t["statements"]}
+    for s in spans:
+        blob = json.dumps(dict(s.attributes), default=str)
+        for needle in needles:
+            assert needle not in blob, (s.name, needle)

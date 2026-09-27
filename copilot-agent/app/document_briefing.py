@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-import calendar
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date
@@ -38,6 +37,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
+from app.ageing import UNREVIEWED_MAX_AGE_MONTHS, DateKind, is_aged, latest_date
 from app.briefing import (
     AgedDocument,
     AssertionTier,
@@ -120,9 +120,7 @@ class StoredDocument(StrictModel):
 
 #: A document whose values are still unreviewed this long after its date is not
 #: briefed as new facts: it becomes one Needs attention line (``aged_documents``).
-UNREVIEWED_MAX_AGE_MONTHS = 12
-
-DateKind = Literal["collected", "received"]
+#: The rule itself lives in ``app.ageing`` (shared with follow-ups).
 
 
 def document_date(document: StoredDocument) -> tuple[date, DateKind] | None:
@@ -131,22 +129,10 @@ def document_date(document: StoredDocument) -> tuple[date, DateKind] | None:
     An intake form has no collection date, so it is dated by ``received_at``.
     """
     extraction = document.extraction
+    collected: list[date | None] = []
     if isinstance(extraction, LabDocument):
-        collected = [d for d in (extraction.collection_date, *(r.collection_date for r in extraction.results)) if d is not None]
-        if collected:
-            return max(collected), "collected"
-    if document.received_at is not None:
-        return document.received_at, "received"
-    return None
-
-
-def is_aged(when: date, *, as_of: date) -> bool:
-    """More than UNREVIEWED_MAX_AGE_MONTHS before ``as_of``; exactly that many months is not aged."""
-    months = as_of.year * 12 + (as_of.month - 1) - UNREVIEWED_MAX_AGE_MONTHS
-    year, month = divmod(months, 12)
-    month += 1
-    day = min(as_of.day, calendar.monthrange(year, month)[1])  # 29 Feb -> 28 Feb
-    return when < date(year, month, day)
+        collected = [extraction.collection_date, *(r.collection_date for r in extraction.results)]
+    return latest_date(collected, document.received_at)
 
 
 def aged_document(document: StoredDocument, *, as_of: date) -> AgedDocument | None:

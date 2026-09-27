@@ -44,4 +44,18 @@ interface AgentClientInterface
      * @throws AgentUnavailableException
      */
     public function postDocumentExtraction(array $request, string $correlationId): array;
+
+    /**
+     * `POST /v1/bundles/{bundle_id}/refresh`: replace the pending document facts (and, when sent, the
+     * lab results) of a bundle the agent already holds, so follow-ups see documents read and values
+     * filed since the bundle was built. Re-runs nothing and calls no model. The request carries the
+     * bundle's correlation id, patient uuid and user uuid; the agent refuses it unless they match the
+     * stored bundle. Returns the decoded response after checking it echoes the correlation id and
+     * patient uuid.
+     *
+     * @param array<string,mixed> $request  correlation_id, patient_uuid, user_uuid?, prior_note_id?, pending_document_facts, lab_results?
+     * @return array<string,mixed>
+     * @throws AgentUnavailableException
+     */
+    public function refreshBundle(string $bundleId, array $request): array;
 }

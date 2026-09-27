@@ -1,0 +1,80 @@
+{
+  "case_id": "w2_followup_pending_aged",
+  "kind": "followup",
+  "source": "hand-authored 2026-09-26 (follow-up documents: 12-month ageing); scripted turn - no model calls",
+  "rubric": "citation_present",
+  "test_class": "pending_facts",
+  "guards": "The briefing's 12-month ageing rule applies to follow-ups (app.ageing): a pending value from a document collected more than 12 months before the briefing date stays findable, but a statement citing it must say it comes from an older document that was never reviewed; the statement with only 'not yet verified or filed' is rejected.",
+  "bundle_update": {
+    "pending_document_facts": [
+      {
+        "fact_id": "copilot_extracted_value:61",
+        "document_id": 210,
+        "test_name": "Hemoglobin A1c",
+        "value_text": "8.4",
+        "unit": "%",
+        "reference_range": "4.0-5.6",
+        "abnormal_flag": null,
+        "flag_source": "unavailable",
+        "collection_date": "2025-03-02",
+        "verification_status": "verified_exact",
+        "page": 1,
+        "bbox": null,
+        "status": "candidate",
+        "received_at": "2025-03-05"
+      }
+    ]
+  },
+  "question": "Is there an A1c in the uploaded documents?",
+  "script": [
+    {
+      "tool_calls": [
+        {
+          "name": "find_pending_document_facts",
+          "arguments": {
+            "test_query": "hba1c"
+          }
+        }
+      ]
+    },
+    {
+      "answer": [
+        {
+          "text": "Hemoglobin A1c 8.4 % on 2025-03-02, read from document 210, is not yet verified or filed.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:61"
+          ]
+        },
+        {
+          "text": "Hemoglobin A1c 8.4 % on 2025-03-02 is from an older document (collected 2025-03-02) that was never reviewed; not yet verified or filed.",
+          "kind": "fact",
+          "cited": [
+            "copilot_extracted_value:61"
+          ]
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "kept": [
+      {
+        "text_contains": [
+          "from an older document",
+          "never reviewed",
+          "not yet verified or filed"
+        ],
+        "cited": [
+          "copilot_extracted_value:61"
+        ],
+        "cited_types": [
+          "pending_document_fact"
+        ]
+      }
+    ],
+    "kept_count": 1,
+    "rejection_codes": [
+      "aged_label_missing"
+    ]
+  }
+}

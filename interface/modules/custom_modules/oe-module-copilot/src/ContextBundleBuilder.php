@@ -89,6 +89,20 @@ final class ContextBundleBuilder
      */
     public const EXCLUDED_RESULT_STATUSES = ['entered-in-error' => 'entered_in_error'];
 
+    /** Contract C5 `kind` of an intake item: what the patient reported, not a lab value or chart fact. */
+    public const KIND_PATIENT_REPORTED = 'patient_reported';
+
+    /** The only labels an intake candidate row can carry (CandidateMapper::fromIntake); anything else is never sent. */
+    public const INTAKE_ITEM_LABELS = [
+        CandidateMapper::LABEL_CHIEF_CONCERN,
+        CandidateMapper::LABEL_MEDICATION,
+        CandidateMapper::LABEL_MEDICATIONS_NONE,
+        CandidateMapper::LABEL_ALLERGY,
+        CandidateMapper::LABEL_ALLERGIES_NONE,
+        CandidateMapper::LABEL_FAMILY_HISTORY,
+        CandidateMapper::LABEL_FAMILY_HISTORY_NONE,
+    ];
+
     /** @var array<string,int> counts of rows the contract could not carry (reported, never logged with content) */
     private array $omitted = ['empty_test_name' => 0, 'non_numeric_value' => 0, 'unmapped_status' => 0, 'unmapped_abnormal_flag' => 0, 'bad_timestamp' => 0, 'orders_omitted' => 0, 'medications_omitted' => 0];
 
@@ -247,9 +261,13 @@ final class ContextBundleBuilder
             if ($id <= 0 || $testName === '') {
                 continue;
             }
+            $reported = ($r['kind'] ?? null) === self::KIND_PATIENT_REPORTED;
+            if ($reported && !in_array($testName, self::INTAKE_ITEM_LABELS, true)) {
+                continue; // only intake items are ever sent: never a demographic or any other field
+            }
             $page = $r['page'] ?? null;
             $page = is_int($page) && $page > 0 ? $page : null;
-            $out[] = [
+            $fact = [
                 'fact_id' => 'copilot_extracted_value:' . $id,
                 'document_id' => Scalar::int($r['document_id'] ?? null),
                 'test_name' => $testName,
@@ -265,6 +283,18 @@ final class ContextBundleBuilder
                 'bbox' => $page === null ? null : CandidateMapper::bboxToList(self::nullableText($r['bbox'] ?? null)),
                 'status' => 'candidate',
             ];
+            if ($reported) {
+                // What the patient wrote on an intake form: no units, range, flag or collection date, ever.
+                $fact = array_merge($fact, ['unit' => null, 'reference_range' => null, 'abnormal_flag' => null, 'flag_source' => 'unavailable', 'collection_date' => null]);
+                $fact['kind'] = self::KIND_PATIENT_REPORTED;
+            }
+            // The upload date dates the document when no collection date was read (the agent's 12-month
+            // ageing rule). Sent only when known, so a bundle without it is unchanged.
+            $receivedAt = UtcDate::localDate($r['received_at'] ?? null);
+            if ($receivedAt !== null) {
+                $fact['received_at'] = $receivedAt;
+            }
+            $out[] = $fact;
         }
         return $out;
     }
