@@ -18,7 +18,7 @@ Every number here was measured on the dev stack (`docker/development-easy`) on 2
 | Challenge requirement | Where |
 |---|---|
 | OAuth2 / OpenID Connect login | Mode A: authorization code + PKCE (S256) + client secret, run by the BFF (`dashboard/bff/src/app.ts`). Modes B/C: SMART EHR launch, code + PKCE as a public client (`dashboard/web/src/smart/launch.ts`). The id_token's `iss`, `aud`, `exp` and `nonce` are checked. No password grant, no refresh tokens |
-| Patient header | `PatientHeader.tsx` / `fhir/patient.ts`: name, `(pubpid)`, DOB and age (or age at death), following PHP's own age rules, and sex ("Birth Sex: Female", from FHIR `Patient.gender`; see §4 for why active status is left out) |
+| Patient header | `PatientHeader.tsx` / `fhir/patient.ts`: name, MRN (OpenEMR's External ID, `pubpid`: FHIR identifier type `PT`, shown in brackets after the name as the PHP bar does), DOB and age (or age at death), following PHP's own age rules, and sex ("Birth Sex: Female", from FHIR `Patient.gender`; see §4 for why active status is left out) |
 | Allergies, Problem List, Medications, Prescriptions, Care Team | `components/ClinicalCards.tsx`, one model per card in `web/src/fhir/*.ts`, all from live FHIR (plus one standard-API route for the medication list) |
 | One additional section | **Labs**: the PHP "Most recent lab data" card, rebuilt from FHIR `Observation?category=laboratory` (`fhir/lab.ts`) |
 | Feature parity | Card titles, order, empty texts, columns, sort orders, collapse defaults and the responsive layout follow the PHP page. The checklist is in `docs/dashboard-parity/PARITY.md` |
@@ -90,11 +90,11 @@ The PHP page is 2,080 lines (`demographics.php`) with 38 inline SQL call sites. 
 
 The port has no database access. Every value comes through OpenEMR's API, under the signed-in user's own token and OpenEMR's own ACLs. When OpenEMR says no, the port says so on the card instead of working around it.
 
-An example: Physicians get 403 on `Practitioner` and `Organization`, so mode A shows care-team names as "Name not available (permission)" (gap G9). We did not grant `admin/users` or use a system credential to hide the gap.
+An example: Physicians get 403 on `Practitioner` and `Organization`, so mode A shows care-team member and facility names as "—", with one note under the team name saying they are hidden by the user's OpenEMR role (gap G9). We did not grant `admin/users` or use a system credential to hide the gap.
 
 ### 3.2 Tests
 
-`npm test` runs **431 tests**: 179 for the BFF and 252 for the web app. They run in CI with no OpenEMR, network or secret: the BFF tests use a mock OpenEMR on a loopback port, and the web tests use MSW.
+`npm test` runs **549 tests**: 211 for the BFF and 338 for the web app (measured 2026-09-27, after the UX waves and the Patient Finder). They run in CI with no OpenEMR, network or secret: the BFF tests use a mock OpenEMR on a loopback port, and the web tests use MSW.
 
 - **BFF**:
   - config validation: it refuses write scopes, `offline_access`, non-https issuers and short session secrets
@@ -193,17 +193,19 @@ How to read the numbers:
    - the OpenEMR image build now also runs `npm ci` for the dashboard
 
    Sessions are held in the BFF's memory. It must therefore run as **one replica**, and a redeploy signs everyone out. That is acceptable for a read-only tool with 1-hour tokens, but it is not horizontally scalable as built.
-2. **Two apps and two logins in mode A.** The clinician signs in to OpenEMR through the BFF, and the consent page shows. The mode A session and an open OpenEMR session are separate (OpenEMR has no token revocation endpoint; sign-out drops the token, which then expires upstream). Modes B/C avoid the second login when the admin turns on OpenEMR's launch-authorization skip for the client.
+
+   A session lasts the access token's lifetime, **1 hour**, and then the clinician signs in again. There are **no refresh tokens, by design**: the dashboard never asks for `offline_access`. OpenEMR's refresh tokens last three months (`GRANT_TYPE_REFRESH_TOKEN_TTL = 'P3M'` in `AuthorizationController.php`) and, because of finding 1 (§5), are not bound to the client's secret; a three-month credential is too much to hold for a read-only viewer.
+2. **Two apps and two logins in mode A.** The clinician signs in to OpenEMR through the BFF, and the consent page shows **on every sign-in**. In this OpenEMR version the consent page's *Remember Me* box is stored but never read back: `AuthorizationController.php` (~line 921) saves `persist_login` into the session and `TrustedUserService` writes it to `oauth_trusted_user`, but no code path uses it to skip the consent page. The mode A session and an open OpenEMR session are separate (OpenEMR has no token revocation endpoint; sign-out drops the token, which then expires upstream). Modes B/C avoid the second login when the admin turns on OpenEMR's launch-authorization skip for the client.
 3. **One-time OAuth admin work per environment.** For each client:
    - set `site_addr_oath` to the public https origin (it must be explicit behind Railway's TLS proxy)
    - register the client (with `curl`; registration from a browser fails the same CORS preflight)
    - enable it in *API Clients*
 
    The PHP page needs none of this.
-4. **Parity limited by what OpenEMR's FHIR exposes.** The full list is the gaps table in `dashboard/README.md` (G2–G24) and the row-by-row checklist in `docs/dashboard-parity/PARITY.md`. On the two compared patients, 23 of 42 rows match. The other 19 are 13 FHIR gaps and 6 design choices (one is sex in the header, added for the challenge), all documented. The ones a clinician notices:
+4. **Parity limited by what OpenEMR's FHIR exposes.** The full list is the gaps table in `dashboard/README.md` (G2–G24) and the row-by-row checklist in `docs/dashboard-parity/PARITY.md`. On the two compared patients, 22 of 43 rows match. The other 21 are 14 FHIR gaps and 7 design choices (among them sex in the header, added for the challenge, and *Signed in as* / *Sign out* in the patient bar in modes B/C), all documented. A row counts as a difference if any part of it differs. The ones a clinician notices:
    - **Allergy severity (G4).** FHIR only has `criticality`, so "Moderate" shows as "Low Risk". Moderate-to-severe and worse show as "High Risk" and stay highlighted, erring on the safe side.
    - **Refills (G8).** OpenEMR always sends `numberOfRepeatsAllowed: 0`, so the port shows "—" rather than a wrong 0.
-   - **Care-team names in mode A (G9).** Physicians get 403 on `Practitioner`/`Organization`, so names show as "Name not available (permission)". In modes B/C they resolve. Member status and note are not in FHIR at all (G11/G12), so inactive members are listed.
+   - **Care-team names in mode A (G9).** Physicians get 403 on `Practitioner`/`Organization`, so names show as "—" with one note under the team name ("Member and facility names are hidden …"; until the UX pass each cell said "Name not available (permission)"). In modes B/C they resolve. Member status and note are not in FHIR at all (G11/G12), so inactive members are listed.
    - **Labs.** We rebuild the report from `Observation`, not `DiagnosticReport` (which needs `admin/super` on this build):
      - the port shows result names ("Tests: …") where PHP shows the procedure name
      - it shows the report date where PHP shows the collection date
@@ -215,11 +217,15 @@ How to read the numbers:
 
    OpenEMR also keeps a per-user recent-patients list (`recent_patients`, updated when the PHP dashboard opens a chart and shown by the Patient Finder), but no REST or FHIR route exposes it and the port does not write to OpenEMR. The port therefore keeps its own list in the browser: at most 10 patients, most recent first, per signed-in user (the key is a hash of `fhirUser`, so it does not name the user). It stores **ids only**, so a shared or lost machine reveals no names, and a patient the user can no longer open simply disappears from the list. The cost: the list does not follow the user to another browser and is separate from OpenEMR's own list.
 6. **No deep links back into OpenEMR's tabbed UI.** OpenEMR has no URL that opens a given patient's edit screen inside its tab frame. The pencil links (when `VITE_OPENEMR_WEB_URL` is set) therefore open the PHP dashboard with `set_pid` in a new tab, and editing continues there. Linking straight to `stats_full.php` could open whichever patient the OpenEMR session last had.
+
+   **The deployed standalone app (mode A on Railway) is built without edit links and without the "view all lab data" link**: `VITE_OPENEMR_WEB_URL` is left unset on that service, by decision. OpenEMR runs on another origin, and a link into its PHP pages cannot work from there. Tested: without an OpenEMR session the link answers 400; with one, the page opens outside OpenEMR's tab frame, without its menus. The dashboard's OAuth session and the clinician's OpenEMR session are separate, and `set_pid` would change whichever chart that OpenEMR session has open. Editing stays in OpenEMR. The code keeps the links behind the variable for a same-origin deployment.
 7. **Scope.** The photo, the encounter selector and the other PHP cards (vitals, notes, appointments, the Co-Pilot panel, and so on) are not ported. The challenge asks for the header, the five cards and one more section.
+
+   OpenEMR's **"Patient Login"** (the patient portal: patients signing in with `patient/` scopes to see their own record) is also out of scope. The dashboard is a clinician tool and needs clinician `user/` scopes (mode A) or a clinician's EHR launch (modes B/C).
 
 ### The Patient Finder on FHIR
 
-The landing page ports OpenEMR's Patient Finder with its wording, so a clinician loses no way of finding a patient. OpenEMR's Finder is SQL (`LIKE` per column, `OR` across columns, a `COUNT` for "of N entries"); the port only has FHIR Patient search, which changes five things, each labelled on the page and listed in `docs/dashboard-parity/PARITY.md`:
+The landing page ports OpenEMR's Patient Finder with its wording, so a clinician loses no way of finding a patient. The row-by-row comparison with the PHP Finder (checked live on the dev stack, screenshots `finder_php.png` / `finder_port.png`, axe 0 violations at 1366 px and 390 px) is the *Patient Finder and recent patients* section of `docs/dashboard-parity/PARITY.md`: tabs, columns, page size, row click and empty texts match; paging, the column filters, the global search, the exact method and SSN sorting differ as below; *Add New Patient* is not ported and the recent-patients list is kept in the browser, both by design. OpenEMR's Finder is SQL (`LIKE` per column, `OR` across columns, a `COUNT` for "of N entries"); the port only has FHIR Patient search, which changes five things, each labelled on the page and listed in `docs/dashboard-parity/PARITY.md`:
 
 - **No total.** OpenEMR's Bundle has no overall count, so the app asks for one row more than the page to know whether Next exists; "of N entries" shows only on the last page.
 - **Whole-value matches.** FHIR `identifier` and `phone` are token searches (`=`), so the SSN, External ID and Home Phone filters match whole values, not prefixes. `identifier` matches SSN **or** External ID and `phone` matches home, work **or** mobile, so the app keeps only the right field's matches in the browser.
@@ -257,12 +263,13 @@ These are behaviours of this OpenEMR build (8.2.0-dev), measured on the dev stac
 
 ## 7. What we would do next
 
-1. **Start the card requests alongside the Patient read.** The Patient read already reports a 403 or 404, so starting the other requests in parallel would cut one API round trip (about 1 s on the dev stack) from time to cards.
-2. **Store BFF sessions in Redis or signed, encrypted cookies**, so mode A can run more than one replica and survive a redeploy without signing everyone out.
-3. **Report findings 1–4 upstream.** Each has a small fix:
+1. **Add the Clinical Co-Pilot panel, in mode B first.** Mode B runs inside OpenEMR's session, so the panel can reuse the Co-Pilot module's existing routes and their server-side checks (ACLs, patient binding, signed hand-off to the agent) unchanged. Mode A has no OpenEMR session; rebuilding the panel there would move those safety checks out of OpenEMR's backend into the BFF.
+2. **Start the card requests alongside the Patient read.** The Patient read already reports a 403 or 404, so starting the other requests in parallel would cut one API round trip (about 1 s on the dev stack) from time to cards.
+3. **Store BFF sessions in Redis or signed, encrypted cookies**, so mode A can run more than one replica and survive a redeploy without signing everyone out.
+4. **Report findings 1–4 upstream.** Each has a small fix:
    - require the secret for confidential clients
    - let `CORSListener` answer `OPTIONS` before routing
    - return 403/404 instead of 500 for an inaccessible patient
    - apply `patient` in the lab search under patient context
-4. **Close parity gaps where FHIR can carry the data.** Candidates: allergy severity (the reaction's `severity` element), refills (`numberOfRepeatsAllowed`) and the lab procedure name (`DiagnosticReport` readable for clinicians). Each needs an OpenEMR change, which this challenge ruled out.
-5. **Add a Playwright suite to CI.** It would replace the manual Selenium runs used for the parity screenshots, the real-browser axe run and the timings, so they run on every change.
+5. **Close parity gaps where FHIR can carry the data.** Candidates: allergy severity (the reaction's `severity` element), refills (`numberOfRepeatsAllowed`) and the lab procedure name (`DiagnosticReport` readable for clinicians). Each needs an OpenEMR change, which this challenge ruled out.
+6. **Add a Playwright suite to CI.** It would replace the manual Selenium runs used for the parity screenshots, the real-browser axe run and the timings, so they run on every change.

@@ -4,12 +4,13 @@ Evidence for the parity requirement of the dashboard port (`dashboard/`). Each r
 
 - **Captured** 2026-09-27 on `docker/development-easy` (OpenEMR 8.2.0-dev, date format `YYYY-MM-DD`). The port screenshots (`*_port.png`, `pid7_phone_port.png`) were re-captured after UX wave 3 the same day (the landing page capture is now `finder_port.png`, see the Patient Finder section), with the same recipe (1400 px window, Care Team and Labs expanded; phone at 390 × 844 with the default collapse state).
 - **PHP**: signed in as `admin`, the dashboard opened in the patient tab.
-- **Port**: mode A (BFF), signed in as `drdash`, a non-admin user in the Physicians group, with the default build (no `VITE_OPENEMR_WEB_URL`, so no edit links).
+- **Port**: mode A (BFF), signed in as `drdash`, a non-admin user in the Physicians group, with the default build (no `VITE_OPENEMR_WEB_URL`, so no edit links; the deployed Railway service is built the same way, by decision).
 - **Mode B** (inside OpenEMR, patient-context token): `pid7_modeB_page.png`, *Patient → Patient Dashboard (React)* for pid 7 as `drdash` (1366 px window, Care Team and Labs expanded). **Mode C**: `pid7_modeC_dialog.png`, the same app launched from the *SMART Enabled Apps* card's *Launch* dialog. Both re-captured 2026-09-27 after the UX waves, with the SMART bundle built from this tree.
 - **Signed-out home page** (mode A): `signed_out_port.png` (1366 px) and `signed_out_phone_port.png` (390 px); no patient data.
 - **Patients**: Evelyn Demo (pid 7) and Thomas Reyes (pid 10). All data is synthetic. Pid 7's care team ("C3 Synthetic Team": one active and one inactive member) was seeded for C3.
 - **Screenshots**: one element per file, named `pid<N>_<part>_{php|port}.png`.
 - **Gap numbers** (G#) refer to the gaps table in `dashboard/README.md` (*FHIR gaps and deliberate differences*).
+- **Planning references** ("plan L5", `W2_PLANNING/DASHBOARD_UX_PLAN.md`, C3/C6) point to planning notes kept outside the repository; this file and `dashboard/README.md` are the complete record.
 
 Status: **match** = same content. Styling follows OpenEMR's default theme (style_light) since the UX waves of 2026-09-27; the remaining visual differences are listed under *Presentation (UX waves 1–3)* below. **gap G#** = a documented difference caused by what OpenEMR's FHIR API exposes. **by design** = a deliberate choice, explained in the README.
 
@@ -93,7 +94,7 @@ Status: **match** = same content. Styling follows OpenEMR's default theme (style
 
 ## Summary
 
-Across the two patients, the tables above have **42 rows: 23 match and 19 differ**. Of the 19, 13 are FHIR gaps and 6 are design choices (the sixth: sex in the header, added for the challenge). The patient list and recent patients below are not counted: the PHP dashboard has no counterpart. Each one is documented in the README, and no difference is unexplained. (A row counts as "differ" if any part of it differs.) The differences a clinician would notice first:
+Across the two patients, the tables above have **43 rows: 22 match and 21 differ**. Of the 21, 14 are FHIR gaps and 7 are design choices: sex in the header (added for the challenge); photo and encounter selector; the close icon; *Signed in as* / *Sign out* in the patient bar (modes B/C); the Remove column; pid 10's explicit empty care team; entered-in-error results dropped. The two "match except" rows (pid 10's prescriptions, G8; care-team Role / Facility / Since, G9) count as gaps. The patient list and recent patients below are not counted: the PHP dashboard has no counterpart. Each one is documented in the README, and no difference is unexplained. (A row counts as "differ" if any part of it differs.) The differences a clinician would notice first:
 
 - the allergy severity wording (G4)
 - refills "—" (G8)

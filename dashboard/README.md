@@ -1,6 +1,8 @@
 # Patient dashboard (React port)
 
-A React + TypeScript port of OpenEMR's patient summary dashboard, reading OpenEMR only through its OAuth2/OIDC-protected FHIR and standard REST APIs. No OpenEMR PHP or SQL is changed.
+A React + TypeScript port of OpenEMR's patient summary dashboard, reading OpenEMR only through its OAuth2/OIDC-protected FHIR and standard REST APIs. No OpenEMR PHP or SQL is changed (the Co-Pilot module adds a menu entry, a launch page and a start-script line for modes B/C).
+
+References below to A1/A2/A3, C1–C6, Phase B and the UX plan point to planning notes kept outside the repository. The gaps table below, `docs/dashboard-parity/PARITY.md` and `PATIENT_DASHBOARD_MIGRATION.md` are the complete record.
 
 | Folder | What |
 |---|---|
@@ -49,7 +51,7 @@ Optional: `PORT` (3000), `HOST` (127.0.0.1), `OPENEMR_SITE` (default), `UPSTREAM
 
 Web build variables:
 - `VITE_DATE_DISPLAY_FORMAT` mirrors OpenEMR's `date_display_format` global: `0` = YYYY-MM-DD (default; OpenEMR's default and the dev stack's setting), `1` = MM/DD/YYYY, `2` = DD/MM/YYYY. Set it to the same value as the OpenEMR site when building.
-- `VITE_OPENEMR_WEB_URL` (optional): OpenEMR's web origin, used for the cards' edit links (see *Clinical cards*). Only `http(s)` URLs are accepted; unset means no edit links.
+- `VITE_OPENEMR_WEB_URL` (optional): OpenEMR's web origin, used for the cards' edit links (see *Clinical cards*). Only `http(s)` URLs are accepted; unset means no edit links. **Left unset on the deployed Railway service, by decision**: links into OpenEMR's PHP pages do not work from another origin (see `PATIENT_DASHBOARD_MIGRATION.md` §4, item 6).
 
 The dev stack uses a self-signed certificate. Trust it rather than switching TLS checks off: export it once (`openssl s_client -connect localhost:9300 -showcerts </dev/null | openssl x509 > openemr-dev.pem`, keep it outside the repo) and start the BFF with `NODE_EXTRA_CA_CERTS=/path/to/openemr-dev.pem` set in the shell.
 
@@ -72,7 +74,7 @@ The dev stack uses a self-signed certificate. Trust it rather than switching TLS
 
    Keep `client_id` and `client_secret` from the response in your `.env` or secret store, never in Git. `application_type` must be `private`: OpenEMR refuses `user/` scopes for public clients.
 3. The client is created **disabled**. Enable it in *Administration → System → API Clients → Edit → Enable Client*.
-4. Sign in with a clinician account (the dev stack's test physician is `drdash`, in the Physicians group). The consent page follows the OpenEMR login.
+4. Sign in with a clinician account (the dev stack's test physician is `drdash`, in the Physicians group). The consent page follows the OpenEMR login, on every sign-in: this OpenEMR version stores the *Remember Me* box but never reads it back.
 
 Scopes are read-only, with no `offline_access`, so no refresh token is issued. A session lasts as long as the access token (1 h); after that the API answers 401 and the app asks the user to sign in again.
 
@@ -91,7 +93,7 @@ Scopes are read-only, with no `offline_access`, so no refresh token is issued. A
   - **What goes in the URL**: name, date of birth, External ID, page, size, sort, exact, tab (so Back returns to them). **The SSN and Home Phone filters and the Search: text never do** (browser history, address bar): they live in memory only (`pages/FinderMemoryProvider.tsx`), for this tab and this user, so returning from a chart restores them; never in storage; dropped on sign-out.
   - **Not ported**: *Add New Patient* (a write action; this port is read-only with read scopes and has no demographics form). The Finder's collapse/expand and search-toggle heading icons (the filters are always shown), column reordering (ColReorder) and `ptlistcols` configuration (the default columns are fixed).
 - **Recent patients** (the *Recent Patients* tab, with the Finder's recent columns First Name, Middle Name, Last Name, Date of Birth, "No recent patients" when empty; `web/src/recent/`): OpenEMR keeps a per-user list server-side (`recent_patients`, shown by the Patient Finder), but no REST or FHIR route exposes it. The app therefore keeps its own, in `localStorage` under `dash.recentPatients.v1.<SHA-256 of the user's fhirUser>`, holding **FHIR patient ids only** (never names, DOBs or other PHI): at most 10, most recent first, updated when a patient's page opens. Names and DOB are read live through the BFF; a patient that answers 404 or 403 is dropped silently (and from storage). *Clear list* empties it. Every storage access is wrapped: with storage blocked, or no `fhirUser`, the list lives in memory for the session.
-- **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)`, then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`, then **`Birth Sex: <Male | Female | Other | Unknown>`** from FHIR `Patient.gender` (asked for by the challenge; OpenEMR fills `gender` from `patient_data.sex`, which its Demographics card labels "Birth Sex"; left out when absent). The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
+- **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)` (the MRN: OpenEMR's External ID, FHIR identifier type `PT`), then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`, then **`Birth Sex: <Male | Female | Other | Unknown>`** from FHIR `Patient.gender` (asked for by the challenge; OpenEMR fills `gender` from `patient_data.sex`, which its Demographics card labels "Birth Sex"; left out when absent). The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
 - **Deliberate differences from the PHP bar**: sex is shown (the PHP bar does not show it; the challenge asks for it). Active status is not shown: OpenEMR's FHIR `active` is hard-coded `true`, and the PHP dashboard does not show it. The photo, encounter controls and the close icon are not ported ("Find another patient" replaces the close icon). `age_display_format = 1` (`#y #m #d`) is not supported. For an age at death under 24 months the PHP prints `11months` (an operator-precedence slip); the port prints `11 months`.
 
 ## Clinical cards (C3, C4)
@@ -264,7 +266,7 @@ Verified on the dev stack (2026-09-27, `drdash`, pid 7): the menu entry and the 
    | `CLIENT_ID` / `CLIENT_SECRET` | from step 3 (mark the secret *sealed*) |
    | `REDIRECT_URI` | `https://<dash-host>/auth/callback` (exactly as registered) |
    | `SESSION_SECRET` | 32+ random characters, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
-   | `VITE_OPENEMR_WEB_URL` | optional, `https://<openemr-host>`: turns on the cards' edit links (a build argument, so it takes effect on the next build) |
+   | `VITE_OPENEMR_WEB_URL` | optional, `https://<openemr-host>`: turns on the cards' edit links (a build argument, so it takes effect on the next build). **Left unset on the deployed service, by decision** (cross-origin links into OpenEMR's tabbed UI do not work) |
 
    Leave `COOKIE_SECURE` unset (default `true`: `__Host-` cookies and HSTS). `PORT` comes from Railway and `HOST=0.0.0.0` from the image. Redeploy.
 5. Check: `curl https://<dash-host>/healthz` → `{"status":"ok"}`; open `https://<dash-host>/`, *Sign in* with a clinician account (not `admin`), accept the consent page, search a demo patient. Physicians see care-team names as "—" with one note under the team name (G9).
@@ -285,6 +287,6 @@ The app ships inside the OpenEMR image (root `Dockerfile`), so it is already the
 
 ## Tests and quality checks
 
-- `npm test`: **548 tests**. BFF 211 (config validation, login/callback/state/nonce/PKCE, session cookie, allow-list and query validation including the bounded patient list and the Finder's phone / `name:exact` / sort rules, upstream error mapping, headers, logs, including that SSN / phone / External ID search values never reach them) and web 337 (FHIR models per card, subject guard, date/age formatting, both data sources, SMART launch, Patient Finder planning (`finder.test.ts`: which searches, refinement, merge, sort, page) and flows with MSW (page size, sorting, paging, column filters, global search, exact method, SSN / phone kept out of the URL and storage, recent tab), patient/cards flows, recent-patients storage (ids only, per user, storage blocked), axe-core on the rendered pages).
+- `npm test`: **549 tests**. BFF 211 (config validation, login/callback/state/nonce/PKCE, session cookie, allow-list and query validation including the bounded patient list and the Finder's phone / `name:exact` / sort rules, upstream error mapping, headers, logs, including that SSN / phone / External ID search values never reach them) and web 338 (FHIR models per card, subject guard, date/age formatting, both data sources, SMART launch, Patient Finder planning (`finder.test.ts`: which searches, refinement, merge, sort, page) and flows with MSW (page size, sorting, paging, column filters, global search, exact method, SSN / phone kept out of the URL and storage, recent tab), patient/cards flows, recent-patients storage (ids only, per user, storage blocked), axe-core on the rendered pages).
 - `web/test/a11y.test.tsx`: axe-core on the signed-out page, search results, the Patient Finder (list with filters, sort buttons and pager, an input error, the Recent Patients tab) and the full patient page, plus a check that each has exactly one `h1` (jsdom reports `page-has-heading-one` as incomplete and cannot check colour contrast; both are checked in a real browser instead).
 - Parity evidence, the real-browser axe run, the keyboard walkthrough and the phone-width check: `docs/dashboard-parity/PARITY.md`.
