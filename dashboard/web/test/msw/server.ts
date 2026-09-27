@@ -21,4 +21,7 @@ export const emptyClinical = [
   http.get('*/api/patient/:puuid', ({ params }) => HttpResponse.json({ pid: '42', uuid: String(params.puuid) })),
 ];
 
-export const server = setupServer(signedOut, ...emptyClinical);
+/** The landing page's patient list: empty unless a test supplies patients. */
+export const emptyPatientList = http.get('*/api/fhir/Patient', emptyBundle);
+
+export const server = setupServer(signedOut, emptyPatientList, ...emptyClinical);

@@ -154,6 +154,34 @@ describe('SmartApp (modes B/C)', () => {
     expect(JSON.stringify({ ...window.sessionStorage, ...window.localStorage })).not.toContain('synthetic-access-token');
   });
 
+  it('shows the birth sex in the header, and has no patient list, search or recent patients (and stores none)', async () => {
+    const seenAuth: string[] = [];
+    let patientSearches = 0;
+    server.use(
+      config,
+      token,
+      ...fhirApi(seenAuth),
+      http.get('*/apis/default/fhir/Patient', () => {
+        patientSearches += 1;
+        return HttpResponse.json(bundle());
+      }),
+    );
+    window.localStorage.clear();
+    seedPending();
+    renderAt('/?code=code-1&state=state-1');
+
+    const bar = await screen.findByRole('region', { name: 'Patient' });
+    await within(bar).findByRole('heading', { level: 1, name: /Ada/ });
+    expect(bar).toHaveTextContent('Birth Sex: Female');
+    expect(bar).not.toHaveTextContent(/active/i);
+    await screen.findByRole('region', { name: 'Allergies' });
+    expect(screen.queryByRole('search')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Recent patients' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: /pages/i })).toBeNull();
+    expect(patientSearches).toBe(0);
+    expect(Object.keys(window.localStorage).filter((k) => k.startsWith('dash.recentPatients'))).toEqual([]);
+  });
+
   it('asks for a relaunch when OpenEMR answers 401', async () => {
     server.use(
       config,

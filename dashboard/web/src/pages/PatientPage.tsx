@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
 import { ClinicalCards } from '../components/ClinicalCards';
 import { PatientHeader } from '../components/PatientHeader';
 import type { DataSourceError } from '../data/errors';
 import { FHIR_ID, usePatient } from '../data/hooks';
+import { useRecentPatients } from '../recent/recentContext';
 
 function FindAnother() {
   return (
@@ -31,6 +33,14 @@ function errorText(error: DataSourceError): string | null {
 export function PatientPage() {
   const id = useParams().id ?? '';
   const { view, retry } = usePatient(id);
+  const recent = useRecentPatients();
+  const opened = view.status === 'ready';
+  const addRecent = recent?.add;
+
+  // Only a patient that actually opened joins the recent list (its id, nothing else).
+  useEffect(() => {
+    if (opened) addRecent?.(id);
+  }, [opened, id, addRecent]);
 
   if (!FHIR_ID.test(id)) {
     return (

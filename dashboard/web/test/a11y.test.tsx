@@ -8,6 +8,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { createQueryClient } from '../src/data/queryClient';
+import { recentStorageKey } from '../src/recent/recentPatients';
 import {
   allergy,
   bundle,
@@ -21,7 +22,7 @@ import {
   practitionerParticipant,
   stdMed,
 } from './fixtures/clinical';
-import { PATIENT_A_ID, patientA, patientB, searchset } from './fixtures/patients';
+import { PATIENT_A_ID, PATIENT_B_ID, patientA, patientB, searchset } from './fixtures/patients';
 import { server, signedIn, signedOut } from './msw/server';
 
 async function violations(): Promise<string[]> {
@@ -50,6 +51,27 @@ describe('axe-core: no violations on the rendered pages', () => {
     window.history.replaceState(null, '', '/dashboard?name=Sample');
     render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
     await screen.findByRole('table');
+    expect(await violations()).toEqual([]);
+  });
+
+  it('landing page: patient list with pager and recent patients', async () => {
+    const fhirUser = 'https://openemr.invalid/apis/default/fhir/Practitioner/9f000000-0000-4000-8000-0000000000aa';
+    const key = await recentStorageKey(fhirUser);
+    window.localStorage.setItem(key ?? '', JSON.stringify([PATIENT_B_ID, PATIENT_A_ID]));
+    const many = Array.from({ length: 21 }, (_, i) => ({ ...patientA, id: `9e000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
+    server.use(
+      http.get('*/auth/me', () =>
+        HttpResponse.json({ authenticated: true, user: { displayName: 'Dana Testdoctor', fhirUser }, expiresAt: '2030-01-01T00:00:00.000Z' }),
+      ),
+      http.get('*/api/fhir/Patient', () => HttpResponse.json(searchset(...many))),
+      http.get('*/api/fhir/Patient/:id', ({ params }) => HttpResponse.json(params.id === PATIENT_B_ID ? patientB : patientA)),
+    );
+    window.history.replaceState(null, '', '/dashboard?page=2');
+    render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
+    await screen.findByRole('table', { name: 'Patients' });
+    const recent = await screen.findByRole('region', { name: 'Recent patients' });
+    await within(recent).findByText('Otherfamily, Bram');
+    await screen.findByRole('navigation', { name: 'Patient list pages' });
     expect(await violations()).toEqual([]);
   });
 

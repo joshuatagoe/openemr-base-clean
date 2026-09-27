@@ -3,6 +3,11 @@
 
 export interface SignedInUser {
   displayName: string;
+  /**
+   * The user's `fhirUser` (from the id_token, via the BFF). Never displayed:
+   * only hashed to namespace this user's recent-patients list in the browser.
+   */
+  userId?: string;
 }
 
 export type MeResult =
@@ -28,9 +33,11 @@ export async function fetchMe(signal?: AbortSignal): Promise<MeResult> {
     return { kind: 'signedOut', reason };
   }
   if (!res.ok) throw new Error(`Session check failed (${res.status})`);
-  const body = (await res.json()) as { user?: { displayName?: unknown }; expiresAt?: unknown };
+  const body = (await res.json()) as { user?: { displayName?: unknown; fhirUser?: unknown }; expiresAt?: unknown };
   const displayName = typeof body.user?.displayName === 'string' ? body.user.displayName : 'Signed-in user';
-  return { kind: 'signedIn', user: { displayName }, expiresAt: String(body.expiresAt ?? '') };
+  const fhirUser = body.user?.fhirUser;
+  const user: SignedInUser = typeof fhirUser === 'string' && fhirUser !== '' ? { displayName, userId: fhirUser } : { displayName };
+  return { kind: 'signedIn', user, expiresAt: String(body.expiresAt ?? '') };
 }
 
 export async function postLogout(): Promise<void> {

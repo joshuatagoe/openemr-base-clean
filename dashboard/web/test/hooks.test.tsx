@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DataSource } from '../src/data/DataSource';
 import { DataSourceContext } from '../src/data/DataSourceContext';
 import { DataSourceError } from '../src/data/errors';
-import { usePatient, usePatientPid, usePatientSearch } from '../src/data/hooks';
+import { usePatient, usePatientList, usePatientPid } from '../src/data/hooks';
 import { createQueryClient } from '../src/data/queryClient';
 import { patientA, PATIENT_A_ID, searchset } from './fixtures/patients';
 
@@ -45,22 +45,37 @@ describe('data hooks over the DataSource interface', () => {
     expect(ds.read).not.toHaveBeenCalled();
   });
 
-  it('usePatientSearch: idle without criteria, trims and drops blank criteria, empty when no match', async () => {
-    const ds = fakeSource({ search: vi.fn(() => Promise.resolve(searchset())) as DataSource['search'] });
-    const idle = renderHook(() => usePatientSearch({ name: '  ' }), { wrapper: wrapper(ds) });
-    expect(idle.result.current.view.status).toBe('idle');
-    const { result } = renderHook(() => usePatientSearch({ name: ' Sample ', birthdate: '' }), { wrapper: wrapper(ds) });
-    await waitFor(() => expect(result.current.view.status).toBe('empty'));
-    expect(ds.search).toHaveBeenCalledTimes(1);
-    expect(ds.search).toHaveBeenCalledWith('Patient', { name: 'Sample' }, expect.any(AbortSignal));
+  it('usePatientList: one page of the list, sorted by family then given name, asking for one extra row to know if there is a next page', async () => {
+    const page = Array.from({ length: 3 }, (_, i) => ({ ...patientA, id: `p${i}` }));
+    const ds = fakeSource({ search: vi.fn(() => Promise.resolve(searchset(...page))) as DataSource['search'] });
+    const { result } = renderHook(() => usePatientList({ criteria: { name: ' Sample ', birthdate: '' }, page: 3, pageSize: 2 }), {
+      wrapper: wrapper(ds),
+    });
+    await waitFor(() => expect(result.current.view.status).toBe('ready'));
+    expect(ds.search).toHaveBeenCalledWith('Patient', { name: 'Sample', _count: '3', _offset: '4', _sort: 'family,given' }, expect.any(AbortSignal));
+    if (result.current.view.status === 'ready') {
+      expect(result.current.view.data.patients.map((p) => p.id)).toEqual(['p0', 'p1']);
+      expect(result.current.view.data.hasNext).toBe(true);
+    }
   });
 
-  it('usePatientSearch: flags a truncated result (bundle has a next link)', async () => {
-    const bundle = { ...searchset(patientA), link: [{ relation: 'next', url: 'https://openemr.invalid/next' }] };
-    const ds = fakeSource({ search: vi.fn(() => Promise.resolve(bundle)) as DataSource['search'] });
-    const { result } = renderHook(() => usePatientSearch({ name: 'Sample' }), { wrapper: wrapper(ds) });
+  it('usePatientList: no criteria is the plain list; last page has no next; empty page is "empty"', async () => {
+    const ds = fakeSource({ search: vi.fn(() => Promise.resolve(searchset(patientA))) as DataSource['search'] });
+    const { result } = renderHook(() => usePatientList({ criteria: {}, page: 1, pageSize: 20 }), { wrapper: wrapper(ds) });
     await waitFor(() => expect(result.current.view.status).toBe('ready'));
-    if (result.current.view.status === 'ready') expect(result.current.view.data.truncated).toBe(true);
+    expect(ds.search).toHaveBeenCalledWith('Patient', { _count: '21', _offset: '0', _sort: 'family,given' }, expect.any(AbortSignal));
+    if (result.current.view.status === 'ready') expect(result.current.view.data.hasNext).toBe(false);
+
+    const none = fakeSource({ search: vi.fn(() => Promise.resolve(searchset())) as DataSource['search'] });
+    const empty = renderHook(() => usePatientList({ criteria: {}, page: 2, pageSize: 20 }), { wrapper: wrapper(none) });
+    await waitFor(() => expect(empty.result.current.view.status).toBe('empty'));
+  });
+
+  it('usePatientList: disabled for the SMART transport (patient-context token, no list)', () => {
+    const ds = fakeSource({ transport: 'smart' });
+    const { result } = renderHook(() => usePatientList({ criteria: {}, page: 1, pageSize: 20 }), { wrapper: wrapper(ds) });
+    expect(result.current.view.status).toBe('idle');
+    expect(ds.search).not.toHaveBeenCalled();
   });
 
   it('usePatientPid: resolves the numeric pid; errors surface as data', async () => {

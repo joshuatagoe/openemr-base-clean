@@ -1,6 +1,6 @@
 import type { Patient } from 'fhir/r4';
 import { describe, expect, it } from 'vitest';
-import { deceasedDate, patientBarName, patientDobAgeLine, patientListName, patientMrn } from '../src/fhir/patient';
+import { deceasedDate, patientBarName, patientDobAgeLine, patientListName, patientMrn, patientSexLabel } from '../src/fhir/patient';
 import { ageAtDeathDisplay, patientAgeDisplay } from '../src/format/age';
 import { formatShortDate, parseDateDisplayFormat } from '../src/format/date';
 import { mrn, patientA, patientB, patientDeceased, ssn, V2_0203 } from './fixtures/patients';
@@ -129,5 +129,20 @@ describe('deceased and the DOB / age line', () => {
   it('says the age at death is unknown when only deceasedBoolean is set', () => {
     const p: Patient = { resourceType: 'Patient', birthDate: '1930-03-20', deceasedBoolean: true };
     expect(patientDobAgeLine(p, { today: TODAY, dateFormat: 0 })).toBe('DOB: 1930-03-20 Age at death: unknown');
+  });
+});
+
+describe('sex (FHIR Patient.gender, from OpenEMR patient_data.sex, labelled "Birth Sex" in Demographics)', () => {
+  it.each([
+    ['male', 'Male'],
+    ['female', 'Female'],
+    ['other', 'Other'],
+    ['unknown', 'Unknown'],
+  ] as const)('%s -> %s', (gender, label) => {
+    expect(patientSexLabel({ resourceType: 'Patient', gender })).toBe(label);
+  });
+
+  it('is empty when gender is absent', () => {
+    expect(patientSexLabel({ resourceType: 'Patient' })).toBe('');
   });
 });
