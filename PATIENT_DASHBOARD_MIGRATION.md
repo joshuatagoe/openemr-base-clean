@@ -22,7 +22,7 @@ Every number here was measured on the dev stack (`docker/development-easy`) on 2
 | Allergies, Problem List, Medications, Prescriptions, Care Team | `components/ClinicalCards.tsx`, one model per card in `web/src/fhir/*.ts`, all from live FHIR (plus one standard-API route for the medication list) |
 | One additional section | **Labs**: the PHP "Most recent lab data" card, rebuilt from FHIR `Observation?category=laboratory` (`fhir/lab.ts`) |
 | Feature parity | Card titles, order, empty texts, columns, sort orders, collapse defaults and the responsive layout follow the PHP page. The checklist is in `docs/dashboard-parity/PARITY.md` |
-| Beyond the challenge (mode A) | **Patient list** as the landing page, like OpenEMR's Patient Finder: 20 per page, sorted by last name, Previous/Next, the search box narrows it (`pages/PatientSearchPage.tsx`). **Recent patients** above it, like the Finder's recent list (`web/src/recent/`) |
+| Beyond the challenge (mode A) | **OpenEMR's Patient Finder** as the landing page (`pages/PatientSearchPage.tsx`, `data/finder.ts`): *Patient List* and *Recent Patients* tabs, the Finder's columns (Full Name, Home Phone, SSN, Date of Birth, External ID), "Show 10/25/50/100 entries", sortable columns, the "Search by …" column filters, the global "Search:" box, *Search with exact method* and *Open in New Browser Tab*. See *The Patient Finder on FHIR* below |
 
 Nothing in OpenEMR's PHP core or database was changed. The only server-side OpenEMR code added is packaging inside our own Co-Pilot module:
 
@@ -133,9 +133,9 @@ The guard was written because of a measured bug: under a patient-context token, 
 | Where the access token lives | n/a (PHP session) | **server-side only**; the browser has an HttpOnly, SameSite=Lax, signed `__Host-` cookie | in a JavaScript closure: never in `localStorage` or `sessionStorage`, gone on reload |
 | Writes possible | yes (same page edits) | no: read-only scopes, and the BFF proxies GET only | no: read-only scopes |
 
-The BFF also narrows what it passes on. OpenEMR's `/api/patient/:puuid` returns the whole `patient_data` row, SSN included. The BFF answers only `{pid, uuid}`, the one mapping the medication route needs. The patient list is always bounded: a Patient search without a name, DOB or MRN must carry `_count` (at most 50), and only `_count`, `_offset` and a fixed set of `_sort` values are accepted.
+The BFF also narrows what it passes on. OpenEMR's `/api/patient/:puuid` returns the whole `patient_data` row, SSN included. The BFF answers only `{pid, uuid}`, the one mapping the medication route needs. The patient list is always bounded: a Patient search without a name, DOB, identifier or phone must carry `_count` (at most 101: a page of 100 plus one probe row), and only `_count`, `_offset` and a fixed set of `_sort` values are accepted. The Finder's SSN and phone search values are never logged, and never put in the browser's URL or storage.
 
-The only thing mode A keeps in the browser about patients is the recent-patients list, and it holds **FHIR patient ids only** (never a name, DOB, MRN or other PHI), under a key derived from a SHA-256 hash of the user's `fhirUser`. Names are read live through the BFF each time the list is shown.
+The only thing mode A keeps in the browser about patients is the recent-patients list, and it holds **FHIR patient ids only** (never a name, DOB, External ID or other PHI), under a key derived from a SHA-256 hash of the user's `fhirUser`. Names are read live through the BFF each time the list is shown.
 
 ### 3.5 Accessibility
 
@@ -217,6 +217,18 @@ How to read the numbers:
 6. **No deep links back into OpenEMR's tabbed UI.** OpenEMR has no URL that opens a given patient's edit screen inside its tab frame. The pencil links (when `VITE_OPENEMR_WEB_URL` is set) therefore open the PHP dashboard with `set_pid` in a new tab, and editing continues there. Linking straight to `stats_full.php` could open whichever patient the OpenEMR session last had.
 7. **Scope.** The photo, the encounter selector and the other PHP cards (vitals, notes, appointments, the Co-Pilot panel, and so on) are not ported. The challenge asks for the header, the five cards and one more section.
 
+### The Patient Finder on FHIR
+
+The landing page ports OpenEMR's Patient Finder with its wording, so a clinician loses no way of finding a patient. OpenEMR's Finder is SQL (`LIKE` per column, `OR` across columns, a `COUNT` for "of N entries"); the port only has FHIR Patient search, which changes five things, each labelled on the page and listed in `docs/dashboard-parity/PARITY.md`:
+
+- **No total.** OpenEMR's Bundle has no overall count, so the app asks for one row more than the page to know whether Next exists; "of N entries" shows only on the last page.
+- **Whole-value matches.** FHIR `identifier` and `phone` are token searches (`=`), so the SSN, External ID and Home Phone filters match whole values, not prefixes. `identifier` matches SSN **or** External ID and `phone` matches home, work **or** mobile, so the app keeps only the right field's matches in the browser.
+- **The global search is several searches.** FHIR has no `OR` across parameters, so the text runs as up to three parallel searches (name, identifier, phone, birthdate, by the text's shape), merged by patient id and bounded to the first 100.
+- **SSN is not sortable.** OpenEMR's sort whitelist has no `ss` column. The other four columns sort (checked live).
+- **Not ported: *Add New Patient*.** It is a write action; the port is read-only (read scopes only, no demographics form), so adding a patient stays in OpenEMR.
+
+The Finder shows the SSN and home phone, so the port does too, but only in the table: those two filters and the global search text never enter the URL (history, address bar) or storage; they stay in memory for the tab and user.
+
 ## 5. Security findings in OpenEMR
 
 These are behaviours of this OpenEMR build (8.2.0-dev), measured on the dev stack during Phase B. The same code is deployed on Railway. We changed none of them. The port either avoids depending on each one or guards against it.
@@ -236,7 +248,7 @@ These are behaviours of this OpenEMR build (8.2.0-dev), measured on the dev stac
 - **Tests**: in `dashboard/`, `npm ci && npm run lint && npm run typecheck && npm test && npm run build && npm run build:smart`. This is the same as the CI job.
 - **Live, mode A**:
   1. Register the confidential client and put its values in `dashboard/.env`.
-  2. `npm run dev`, open http://localhost:5173 and sign in as a clinician. The landing page lists patients by last name; search "Demo" to narrow it; open two patients and they appear under *Recent patients*.
+  2. `npm run dev`, open http://localhost:5173 and sign in as a clinician. The Patient Finder lists patients by last name; type "Demo" in *Search by Name* to narrow it; open two patients and they appear on the *Recent Patients* tab.
   3. Compare with the PHP dashboard for the same patient using `docs/dashboard-parity/PARITY.md`.
 - **Live, modes B/C**: `npm run build:smart`, register the SMART client, then *Patient → Patient Dashboard (React)*.
 - **Images**:
