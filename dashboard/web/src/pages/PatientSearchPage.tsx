@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, typ
 import { Link, useSearchParams } from 'react-router';
 import type { Patient } from 'fhir/r4';
 import { Spinner } from '../components/Card';
+import { FIND_PATIENT_TITLE, useDocumentTitle } from '../components/useDocumentTitle';
 import { useFocusOnChange } from '../components/useFocusOnChange';
 import { DATE_DISPLAY_FORMAT } from '../config';
-import type { DataErrorKind } from '../data/errors';
+import { isRetryable, searchErrorMessage } from '../data/errors';
 import { patientListName, patientMrn, patientSexLabel } from '../fhir/patient';
 import { formatShortDate } from '../format/date';
 import { PATIENT_PAGE_SIZE, usePatientList, usePatientsById, type PatientSearchCriteria } from '../data/hooks';
@@ -26,9 +27,6 @@ const FIELDS: readonly Field[] = ['name', 'birthdate', 'identifier'];
 
 // The BFF accepts _offset up to 999999.
 const MAX_PAGE = Math.floor(999_999 / PATIENT_PAGE_SIZE) + 1;
-
-// The tab names the page, never a patient (tab strips and history are PHI).
-const TITLE = 'Find a patient – Patient Dashboard';
 
 type Validation = { ok: true; criteria: PatientSearchCriteria } | { ok: false; field: Field; message: string };
 
@@ -52,40 +50,6 @@ function pageFromUrl(params: URLSearchParams): number {
   const raw = params.get('page') ?? '';
   const n = /^[1-9]\d{0,5}$/.test(raw) ? Number(raw) : 1;
   return n <= MAX_PAGE ? n : 1;
-}
-
-/** What failed, per error kind (null: the auth layer ends the session and says so). */
-function listErrorMessage(kind: DataErrorKind, filtered: boolean): string | null {
-  switch (kind) {
-    case 'network':
-      return filtered ? "Couldn't reach OpenEMR, so the search didn't run. Try again." : "Couldn't reach OpenEMR, so the patient list didn't load. Try again.";
-    case 'timeout':
-      return 'OpenEMR took too long to answer. Try again.';
-    case 'upstream':
-      return 'OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.';
-    case 'bad_request':
-      return "OpenEMR didn't accept these search terms. Check the name, date of birth and MRN.";
-    case 'forbidden':
-    case 'not_accessible':
-      return "Your OpenEMR role can't view the patient list.";
-    case 'session_expired':
-    case 'unauthenticated':
-      return null;
-    default:
-      return "Couldn't load the patient list from OpenEMR.";
-  }
-}
-
-const TRANSIENT: ReadonlySet<DataErrorKind> = new Set(['network', 'timeout', 'upstream']);
-
-function useDocumentTitle(title: string): void {
-  useEffect(() => {
-    const previous = document.title;
-    document.title = title;
-    return () => {
-      document.title = previous;
-    };
-  }, [title]);
 }
 
 /**
@@ -183,7 +147,7 @@ function RecentPatients() {
 }
 
 export function PatientSearchPage() {
-  useDocumentTitle(TITLE);
+  useDocumentTitle(FIND_PATIENT_TITLE);
   const [params, setParams] = useSearchParams();
   const urlValues = fromUrl(params);
   const urlCheck = validate(urlValues);
@@ -293,9 +257,9 @@ export function PatientSearchPage() {
         <p className="landing-message">{filtered ? 'No patients match. Check the spelling, or search with fewer fields.' : 'No patients to show.'}</p>
       );
   } else if (view.status === 'ready') {
-    status = <span className="landing-sr-only">{count}</span>;
+    status = <span className="visually-hidden">{count}</span>;
   }
-  const errorMessage = view.status === 'error' ? listErrorMessage(view.error.kind, filtered) : null;
+  const errorMessage = view.status === 'error' ? searchErrorMessage(view.error, { filtered }) : null;
   const showPager = (view.status === 'ready' || view.status === 'empty') && (page > 1 || hasNext);
 
   return (
@@ -343,7 +307,7 @@ export function PatientSearchPage() {
             <p className="notice notice-warning" role="alert">
               {errorMessage}
             </p>
-            {TRANSIENT.has(view.error.kind) && (
+            {isRetryable(view.error) && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={retry}>
                 Try again
               </button>

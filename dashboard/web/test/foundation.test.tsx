@@ -18,7 +18,8 @@ import { server, signedIn, signedOut } from './msw/server';
 
 // The stylesheet as text (Vitest empties CSS imports; jsdom has no layout anyway).
 // Vitest runs from the web workspace (npm test -w web); import.meta.url is not a file: URL under jsdom.
-const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
+// Line endings are normalised: a Windows checkout (core.autocrlf) has CRLF.
+const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8').replace(/\r\n?/g, '\n');
 
 /** The declarations of the first rule whose selector list is exactly `selector`. */
 function rule(selector: string): string {
@@ -86,8 +87,23 @@ describe('heading focus (H1)', () => {
     expect(rule(":is(h1, h2, h3)[tabindex='-1']:focus")).toContain('outline: none;');
     expect(css).not.toMatch(/h1:focus-visible/);
     const controls = /\n((?:[^{}\n]+,\n)*[^{}\n]+)\{\s*outline: var\(--oe-focus-ring\);/.exec(css)?.[1] ?? '';
-    for (const sel of ['a:focus-visible', '.btn:focus-visible', '.card-toggle:focus-visible', '.form-field input:focus-visible', '.table-responsive:focus-visible']) {
+    for (const sel of ['a:focus-visible', '.btn:focus-visible', '.card-toggle:focus-visible', 'input:focus-visible', '.table-responsive:focus-visible']) {
       expect(controls).toContain(sel);
+    }
+  });
+});
+
+describe('shared utilities', () => {
+  it('has one visually-hidden utility (text kept for screen readers only)', () => {
+    const hidden = rule('.visually-hidden');
+    for (const decl of ['position: absolute;', 'width: 1px;', 'height: 1px;', 'overflow: hidden;', 'white-space: nowrap;']) {
+      expect(hidden).toContain(decl);
+    }
+  });
+
+  it('keeps no styles for the pre-card landing page', () => {
+    for (const dead of ['.results', '.search-form', '.form-field', '.pager', '.recent-patients', '.section-header', '.patient-search']) {
+      expect(css).not.toContain(dead);
     }
   });
 });
@@ -179,8 +195,9 @@ describe('patient page (L4, M7)', () => {
       }),
     );
     renderAt(`/patient/${PATIENT_A_ID}`);
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('Loading patient…');
+    // "Checking your sign-in…" is the status first; then the patient loads.
+    const status = (await screen.findByText('Loading patient…')).closest('[role="status"]');
+    if (!status) throw new Error('no loading status');
     expect(status.closest('.patient-bar')).not.toBeNull();
     expect(status.querySelector('.spinner')).toHaveAttribute('aria-hidden', 'true');
     release();

@@ -43,6 +43,8 @@ describe('user-facing error messages (plan §6, M8)', () => {
 
   it('search: the plan copy for network, timeout, OpenEMR error and refused terms', () => {
     expect(searchErrorMessage(err('network'))).toBe("Couldn't reach OpenEMR, so the search didn't run. Try again.");
+    // The unfiltered list is not a search the user ran.
+    expect(searchErrorMessage(err('network'), { filtered: false })).toBe("Couldn't reach OpenEMR, so the patient list didn't load. Try again.");
     expect(searchErrorMessage(err('timeout'))).toBe('OpenEMR took too long to answer. Try again.');
     expect(searchErrorMessage(err('upstream'))).toBe('OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.');
     expect(searchErrorMessage(err('bad_request'))).toBe("OpenEMR didn't accept these search terms. Check the name, date of birth and MRN.");

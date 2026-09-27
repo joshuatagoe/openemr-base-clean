@@ -304,7 +304,7 @@ describe('recent patients (mode A)', () => {
     const reads = patientReads({ [PATIENT_A_ID]: { status: 403, error: 'not_accessible' } });
     server.use(signedInAs(USER), patientList([patientA]).handler, reads.handler);
     renderAt(`/patient/${PATIENT_A_ID}`);
-    await screen.findByText('You do not have access to this patient.');
+    await screen.findByText("Your OpenEMR account doesn't have access to this patient's chart.");
     await userEvent.click(screen.getByRole('link', { name: 'Find another patient' }));
     await screen.findByRole('table', { name: 'All patients' });
     expect(screen.queryByRole('region', { name: 'Recent patients' })).toBeNull();

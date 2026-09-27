@@ -187,9 +187,9 @@ describe('patient header (PHP patient-bar parity)', () => {
   });
 
   it.each([
-    [403, 'not_accessible', 'You do not have access to this patient.'],
-    [403, 'forbidden', 'You do not have access to this patient.'],
-    [404, 'not_found', 'Patient not found.'],
+    [403, 'not_accessible', "Your OpenEMR account doesn't have access to this patient's chart."],
+    [403, 'forbidden', "Your OpenEMR account doesn't have access to this patient's chart."],
+    [404, 'not_found', 'No patient matches this link. It may have been removed, or the link is incomplete.'],
   ])('%i %s: shows "%s" and does not retry', async (status, error, text) => {
     let calls = 0;
     server.use(
@@ -224,7 +224,16 @@ describe('patient header (PHP patient-bar parity)', () => {
   it('treats a malformed patient id in the URL as not found without calling the server', async () => {
     server.use(signedIn);
     renderAt('/patient/not%20an%20id');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Patient not found.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No patient matches this link. It may have been removed, or the link is incomplete.');
+  });
+
+  it('an OpenEMR error says what failed and offers "Try again"', async () => {
+    server.use(signedIn, http.get('*/api/fhir/Patient/:id', () => HttpResponse.json({ error: 'upstream_error' }, { status: 502 })));
+    renderAt(`/patient/${PATIENT_A_ID}`);
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(
+      "Couldn't load this patient: OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.",
+    );
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });
 

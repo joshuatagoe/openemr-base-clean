@@ -79,12 +79,15 @@ export function patientErrorMessage(error: DataSourceError): string | null {
   }
 }
 
-/** The patient list and search (mode A landing page). */
-export function searchErrorMessage(error: DataSourceError): string | null {
+/**
+ * The patient list and search (mode A landing page). `filtered: false` is the
+ * whole list, which the user didn't ask for as a search.
+ */
+export function searchErrorMessage(error: DataSourceError, { filtered = true }: { filtered?: boolean } = {}): string | null {
   if (endsSession(error)) return null;
   switch (error.kind) {
     case 'network':
-      return "Couldn't reach OpenEMR, so the search didn't run. Try again.";
+      return filtered ? "Couldn't reach OpenEMR, so the search didn't run. Try again." : "Couldn't reach OpenEMR, so the patient list didn't load. Try again.";
     case 'timeout':
       return 'OpenEMR took too long to answer. Try again.';
     case 'bad_request':

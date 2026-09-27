@@ -1,12 +1,10 @@
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Spinner } from '../components/Card';
 import { ClinicalCards } from '../components/ClinicalCards';
 import { PatientHeader } from '../components/PatientHeader';
+import { CHART_TITLE, useDocumentTitle } from '../components/useDocumentTitle';
 import { isRetryable, patientErrorMessage } from '../data/errors';
 import { usePatient } from '../data/hooks';
-
-// The tab title names the page, never the patient (PHI in tab strips and history).
-const TITLE = 'Chart – Patient Dashboard';
 
 /**
  * The launched patient: the same header and cards as mode A, without patient
@@ -17,13 +15,7 @@ const TITLE = 'Chart – Patient Dashboard';
  */
 export function SmartPatientView({ patientId, account }: { patientId: string; account?: ReactNode }) {
   const { view, retry } = usePatient(patientId);
-  useEffect(() => {
-    const previous = document.title;
-    document.title = TITLE;
-    return () => {
-      document.title = previous;
-    };
-  }, []);
+  useDocumentTitle(CHART_TITLE);
   switch (view.status) {
     case 'idle':
     case 'loading':

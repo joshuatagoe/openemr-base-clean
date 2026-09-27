@@ -62,9 +62,8 @@ body { margin: 0; }
 a:focus-visible,
 .btn:focus-visible,
 .card-toggle:focus-visible,
-.form-field input:focus-visible,
-.table-responsive:focus-visible,
-.results:focus-visible {
+input:focus-visible,
+.table-responsive:focus-visible {
   outline: var(--oe-focus-ring);
   outline-offset: var(--oe-focus-offset);
 }
@@ -110,6 +109,16 @@ a:focus-visible,
 .notice-warning { background: #fff3cd; border-color: #ffe69c; }
 .muted { color: var(--oe-muted); }
 .signed-out { display: grid; gap: 0.75rem; justify-items: start; }
+/* Text for screen readers only. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
 /* OpenEMR loader.html.twig: spinner-border spinner-border-sm + "Loading...". */
 .spinner {
@@ -129,21 +138,8 @@ a:focus-visible,
   .spinner { animation: none; }
 }
 
-/* Patient search (landing). */
-.patient-search h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 500; }
-.search-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
-.form-field { display: grid; gap: 0.25rem; }
-.form-field input { font: inherit; padding: 0.3rem 0.5rem; border: 1px solid #adb5bd; border-radius: 0.25rem; }
-.form-field input[aria-invalid='true'] { border-color: var(--oe-danger); }
-.results { border-collapse: collapse; width: 100%; background: var(--oe-surface); }
-.results caption { text-align: left; font-weight: 600; padding: 0.25rem 0; }
-.results th, .results td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--oe-table-rule); }
+/* Page-level messages (patient not found, couldn't load) and their buttons. */
 .page-state, .page-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-.pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.75rem 0; }
-.pager-page { font-weight: 600; }
-.recent-patients { margin: 0.5rem 0 1.25rem; }
-.section-header { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-.section-header h2 { font-size: 1.125rem; margin: 0.25rem 0; }
 
 /* Persistent patient bar: OpenEMR's tab-frame patient bar. Name large (PHP
    ptName: 1.75rem, weight 400; kept dark because here it is not a link),

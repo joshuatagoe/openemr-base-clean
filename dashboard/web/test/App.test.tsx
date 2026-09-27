@@ -65,15 +65,45 @@ describe('auth shell', () => {
   it('shows a readable message for a failed sign-in and removes the code from the URL', async () => {
     server.use(signedOut);
     renderAt('/?auth_error=state_mismatch');
-    expect(await screen.findByRole('alert')).toHaveTextContent(/sign-in link expired or was already used/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent("Sign-in didn't complete: the sign-in link expired or was already used.");
     expect(window.location.search).toBe('');
+    // The page's one sign-in button says what to do next (plan §6).
+    expect(screen.getByRole('link', { name: 'Sign in again' })).toHaveAttribute('href', '/auth/login');
+    expect(screen.queryByRole('link', { name: 'Sign in with OpenEMR' })).toBeNull();
   });
 
   it('does not render arbitrary auth_error text from the URL', async () => {
     server.use(signedOut);
     renderAt('/?auth_error=%3Cb%3Einjected%3C%2Fb%3E');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in did not complete: an unexpected error occurred.');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Sign-in didn't complete: an unexpected error occurred.");
     expect(screen.queryByText(/injected/)).not.toBeInTheDocument();
+  });
+
+  it('uses contractions in every sign-in failure reason', async () => {
+    server.use(signedOut);
+    renderAt('/?auth_error=token_exchange_failed');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Sign-in didn't complete: OpenEMR didn't accept the sign-in.");
+  });
+
+  it('says how to recover when the dashboard server is unreachable', async () => {
+    server.use(http.get('*/auth/me', () => HttpResponse.error()));
+    renderAt('/');
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach the dashboard server. Check your connection, then reload the page.");
+  });
+
+  it('says "Checking your sign-in…" with a spinner before opening a protected page', async () => {
+    server.use(http.get('*/auth/me', () => new Promise<Response>(() => {})));
+    renderAt('/dashboard');
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Checking your sign-in…');
+    expect(status.querySelector('.spinner')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('an unknown address says the page does not exist and links to the patient list', async () => {
+    server.use(signedIn);
+    renderAt('/no-such-page');
+    expect(await screen.findByText("This page doesn't exist.")).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to the patient list' })).toHaveAttribute('href', '/dashboard');
   });
 
   it('switches to "session expired" when a data call comes back 401', async () => {

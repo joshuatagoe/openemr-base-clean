@@ -1,9 +1,10 @@
 /* Landing page (/dashboard): the search form, Recent patients and All
    patients. OpenEMR style_light language (DASHBOARD_UX_PLAN.md §3, M3): the
    dashboard's square card with a plain title, table-sm / striped / hover
-   tables with a grey head. Uses the --oe-* tokens and .card / .btn / .notice /
-   .spinner from styles.css; everything here is prefixed landing- so it can't
-   collide with the patient page. */
+   tables with a grey head. Uses the --oe-* tokens, .card / .btn / .notice /
+   .spinner / .visually-hidden and the input focus ring from styles.css;
+   everything here is prefixed landing- so it can't collide with the patient
+   page. */
 
 /* A readable column: the form fits on one line and a name sits close to its
    DOB, instead of spreading four columns across 1200px. */
@@ -28,7 +29,6 @@
 .landing-field-name { width: 16rem; }
 .landing-field-birthdate { width: 10.5rem; }
 .landing-field-identifier { width: 10rem; }
-.landing-field input:focus-visible { outline: var(--oe-focus-ring); outline-offset: var(--oe-focus-offset); }
 .landing-field input[aria-invalid='true'] { border-color: var(--oe-danger); }
 .landing-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .landing-problem { margin: 0.75rem 0 0; }
@@ -80,16 +80,6 @@
 .row-link:has(.stretched-link:focus-visible) { outline: var(--oe-focus-ring); outline-offset: -3px; }
 
 .landing-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.75rem 0; }
-
-.landing-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
 
 /* Phones: name across the top, DOB and MRN side by side, buttons below. */
 @media (max-width: 575.98px) {

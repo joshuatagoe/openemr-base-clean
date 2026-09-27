@@ -1,6 +1,4 @@
 import { useId, useState, type ReactNode } from 'react';
-import type { DataSourceError } from '../data/errors';
-import type { QueryView } from '../data/queryView';
 
 // Collapse state is remembered per browser under the PHP user-setting names
 // (allergy_ps_expand, ...). PHP stores it per user on the server; this port
@@ -94,59 +92,4 @@ export function Card({ id, title, defaultExpanded, edit, className, children }: 
       </div>
     </section>
   );
-}
-
-export interface CardViewText {
-  /** Lower-case noun for messages: "allergies", "the care team". */
-  noun: string;
-  /** Sentence start for load failures: "Allergies". */
-  subject: string;
-  empty: ReactNode;
-}
-
-function errorMessage(error: DataSourceError, text: CardViewText): string | null {
-  switch (error.kind) {
-    case 'forbidden':
-    case 'not_accessible':
-      return `You don't have permission to view ${text.noun}.`;
-    case 'session_expired':
-    case 'unauthenticated':
-      return null; // The auth layer ends the session and says so.
-    default:
-      return `${text.subject} could not be loaded.`;
-  }
-}
-
-const TRANSIENT = new Set(['upstream', 'timeout', 'network']);
-
-/** Loading / error / empty states shared by every card; `ready` renders `children`. */
-export function CardView<T>({ view, retry, text, children }: { view: QueryView<T>; retry: () => void; text: CardViewText; children: (data: T) => ReactNode }) {
-  switch (view.status) {
-    case 'idle':
-    case 'loading':
-      return (
-        <p className="card-state muted" role="status">
-          <Spinner />
-          Loading {text.noun}…
-        </p>
-      );
-    case 'error': {
-      const message = errorMessage(view.error, text);
-      if (message === null) return null;
-      return (
-        <div className="card-state">
-          <p className="card-error">{message}</p>
-          {TRANSIENT.has(view.error.kind) && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={retry}>
-              Try again
-            </button>
-          )}
-        </div>
-      );
-    }
-    case 'empty':
-      return <div className="card-state">{text.empty}</div>;
-    case 'ready':
-      return <>{children(view.data)}</>;
-  }
 }
