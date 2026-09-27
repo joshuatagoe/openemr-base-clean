@@ -32,7 +32,8 @@ body { margin: 0; }
 .notice { padding: 0.5rem 0.75rem; border-radius: 0.25rem; border: 1px solid; }
 .notice-info { background: #cff4fc; border-color: #9eeaf9; }
 .notice-warning { background: #fff3cd; border-color: #ffe69c; }
-.muted { color: #6c757d; }
+/* #5c636a: at least 4.5:1 (WCAG AA) on the page background and on striped table rows (axe, C6). */
+.muted { color: #5c636a; }
 .signed-out { display: grid; gap: 0.75rem; justify-items: start; }
 
 /* Patient search (C2). */
@@ -100,6 +101,8 @@ h1:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
 /* PHP: bg-warning font-weight-bold px-1 on severe / life threatening / fatal. */
 .severity-alert { background: #ffc107; font-weight: 700; padding: 0 0.25rem; }
 .table-responsive { overflow-x: auto; }
+/* Focusable so a keyboard user can scroll a wide table on a phone (axe scrollable-region-focusable). */
+.table-responsive:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
 .card-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .card-table th, .card-table td { text-align: left; padding: 0.3rem; border-top: 1px solid #dee2e6; vertical-align: top; }
 .card-table thead th { border-bottom: 2px solid #dee2e6; background: #f8f9fa; }

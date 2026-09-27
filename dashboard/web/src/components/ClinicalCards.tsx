@@ -111,7 +111,7 @@ function PrescriptionsCard({ view, retry, edit }: { view: QueryView<MedicationCa
           table.total === 0 ? (
             <div className="card-state">None</div>
           ) : (
-            <div className="table-responsive">
+            <div className="table-responsive" tabIndex={0} role="region" aria-label="Prescriptions table">
               <table className="card-table">
                 <thead>
                   <tr>
@@ -229,7 +229,7 @@ function CareTeamCard({ patientId, edit }: { patientId: string; edit: EditLink }
                   </>
                 )}
               </h3>
-              <div className="table-responsive">
+              <div className="table-responsive" tabIndex={0} role="region" aria-label="Care team members">
                 <table className="card-table">
                   <thead>
                     <tr>
