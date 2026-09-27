@@ -21,30 +21,56 @@ const PATIENT_REF: ParamRule = { name: 'patient', required: true, pattern: FHIR_
 
 // OpenEMR's FHIR applies _count / _offset / _sort on Patient searches only
 // (FhirPatientService overrides searchForOpenEMRRecordsWithConfig; A2 §5).
-// _sort maps to patient_data columns: family -> lname, given -> fname, mname,
-// birthdate -> DOB. Other sort keys are refused here rather than silently
-// dropped by OpenEMR's column whitelist.
-export const PATIENT_MAX_COUNT = 50;
-export const PATIENT_SORTS = ['family', '-family', 'family,given', '-family,-given', 'birthdate', '-birthdate'] as const;
+// _sort maps each FHIR search parameter to its patient_data columns, then keeps
+// only the columns in PatientService::ALLOWED_SORT_COLUMNS:
+//   family -> lname; given -> fname, mname; birthdate -> DOB;
+//   phone -> phone_home, phone_biz, phone_cell;
+//   identifier -> ss, pubpid, of which only pubpid is allowed (so it sorts by
+//   the External ID; the SSN cannot be sorted on).
+// Other sort keys are refused here rather than silently dropped by OpenEMR.
+/** Rows per page at most (the Patient Finder's largest "Show" option). */
+export const PATIENT_MAX_PAGE = 100;
+/** One more than a page: the app asks for one extra row to learn whether a next page exists. */
+export const PATIENT_MAX_COUNT = PATIENT_MAX_PAGE + 1;
+export const PATIENT_SORTS = [
+  'family',
+  '-family',
+  'family,given',
+  '-family,-given',
+  'birthdate',
+  '-birthdate',
+  'phone',
+  '-phone',
+  'identifier',
+  '-identifier',
+] as const;
 
 interface SearchRule {
   params: readonly ParamRule[];
   /** At least one of these must be present. */
   anyOf?: readonly string[];
+  /** Pairs that must not be sent together (OpenEMR would keep only one). */
+  exclusive?: ReadonlyArray<readonly [string, string]>;
 }
 
 const SEARCHES: Readonly<Record<string, SearchRule>> = {
   Patient: {
     // A search needs a criterion or a _count: the patient list (no criterion)
     // is always bounded, never "every patient".
-    anyOf: ['name', 'birthdate', 'identifier', '_count'],
+    anyOf: ['name', 'name:exact', 'birthdate', 'identifier', 'phone', '_count'],
+    exclusive: [['name', 'name:exact']],
     params: [
       // Letters (any script), spaces, apostrophes, hyphens and dots.
       { name: 'name', pattern: /^[\p{L}\p{M}' .-]{1,64}$/u },
+      // The Finder's "Search with exact method" (OpenEMR: BINARY column = value).
+      { name: 'name:exact', pattern: /^[\p{L}\p{M}' .-]{1,64}$/u },
       { name: 'birthdate', pattern: /^(eq|ge|le|gt|lt)?\d{4}(-\d{2}(-\d{2})?)?$/ },
       { name: 'identifier', pattern: /^[A-Za-z0-9._|:-]{1,64}$/ },
-      // 1..PATIENT_MAX_COUNT, no leading zeros.
-      { name: '_count', pattern: /^(?:[1-9]|[1-4]\d|50)$/ },
+      // A phone number (OpenEMR matches phone_home, phone_biz or phone_cell
+      // exactly): digits and the usual separators only, with at least one digit.
+      { name: 'phone', pattern: /^(?=[^0-9]*[0-9])[0-9 ()+.-]{1,32}$/ },
+      // 1..PATIENT_MAX_COUNT (101), no leading zeros.
+      { name: '_count', pattern: /^(?:[1-9]|[1-9]\d|100|101)$/ },
       // 0..999999, no leading zeros.
       { name: '_offset', pattern: /^(?:0|[1-9]\d{0,5})$/ },
       { name: '_sort', values: PATIENT_SORTS },
@@ -67,7 +93,7 @@ function badRequest(detail: string): MatchResult {
   return { ok: false, status: 400, error: 'bad_request', detail };
 }
 
-function checkParams(query: URLSearchParams, rules: readonly ParamRule[], anyOf: readonly string[] | undefined): string | null {
+function checkParams(query: URLSearchParams, { params: rules, anyOf, exclusive }: SearchRule): string | null {
   const allowed = new Map(rules.map((r) => [r.name, r]));
   const seen = new Set<string>();
   for (const [name, value] of query) {
@@ -81,6 +107,7 @@ function checkParams(query: URLSearchParams, rules: readonly ParamRule[], anyOf:
   }
   for (const r of rules) if (r.required && !seen.has(r.name)) return `parameter required: ${r.name}`;
   if (anyOf && !anyOf.some((n) => seen.has(n))) return `one of these parameters is required: ${anyOf.join(', ')}`;
+  for (const [a, b] of exclusive ?? []) if (seen.has(a) && seen.has(b)) return `parameters not allowed together: ${a}, ${b}`;
   return null;
 }
 
@@ -91,7 +118,7 @@ export function matchFhirRequest(path: string, query: URLSearchParams): MatchRes
   if (parts.length === 1) {
     const search = Object.hasOwn(SEARCHES, resource) ? SEARCHES[resource] : undefined;
     if (!search) return NOT_FOUND;
-    const problem = checkParams(query, search.params, search.anyOf);
+    const problem = checkParams(query, search);
     if (problem) return badRequest(problem);
     return { ok: true, upstreamPath: resource, query, resource, kind: 'search' };
   }
