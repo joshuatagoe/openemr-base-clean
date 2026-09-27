@@ -35,7 +35,9 @@ Copy `.env.example` to `.env` (git-ignored). Required:
 
 Optional: `PORT` (3000), `HOST` (127.0.0.1), `OPENEMR_SITE` (default), `UPSTREAM_TIMEOUT_MS` (10000), `LOG_LEVEL` (info), `WEB_DIST_DIR` (relative paths resolve against the working directory), `OAUTH_SCOPES`.
 
-Web build variable: `VITE_DATE_DISPLAY_FORMAT` mirrors OpenEMR's `date_display_format` global: `0` = YYYY-MM-DD (default; OpenEMR's default and the dev stack's setting), `1` = MM/DD/YYYY, `2` = DD/MM/YYYY. Set it to the same value as the OpenEMR site when building.
+Web build variables:
+- `VITE_DATE_DISPLAY_FORMAT` mirrors OpenEMR's `date_display_format` global: `0` = YYYY-MM-DD (default; OpenEMR's default and the dev stack's setting), `1` = MM/DD/YYYY, `2` = DD/MM/YYYY. Set it to the same value as the OpenEMR site when building.
+- `VITE_OPENEMR_WEB_URL` (optional): OpenEMR's web origin, used for the cards' edit links (see *Clinical cards*). Only `http(s)` URLs are accepted; unset means no edit links.
 
 The dev stack uses a self-signed certificate. Trust it rather than switching TLS checks off: export it once (`openssl s_client -connect localhost:9300 -showcerts </dev/null | openssl x509 > openemr-dev.pem`, keep it outside the repo) and start the BFF with `NODE_EXTRA_CA_CERTS=/path/to/openemr-dev.pem` set in the shell.
 
@@ -68,6 +70,52 @@ Scopes are read-only, with no `offline_access`, so no refresh token is issued. A
 - **Patient search** (`/dashboard`): name, date of birth and/or MRN, checked in the browser against the same patterns the BFF allow-lists. Criteria live in the URL (`/dashboard?name=Demo`), so Back returns to the results. The results table shows name, DOB, sex and MRN, and each name links to `/patient/:id`. Switching patients keeps the session. OpenEMR's `identifier` search also matches SSNs; the SSN is never displayed.
 - **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)`, then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`. The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
 - **Deliberate differences from the PHP bar**: sex and active status are not shown (the PHP bar shows neither; OpenEMR's FHIR `active` is hard-coded `true`). The photo, encounter controls and the close icon are not ported ("Find another patient" replaces the close icon). `age_display_format = 1` (`#y #m #d`) is not supported. For an age at death under 24 months the PHP prints `11months` (an operator-precedence slip); the port prints `11 months`.
+
+## Clinical cards (C3)
+
+Five cards under the patient bar, in the PHP page order (`demographics.php`): **Allergies**, **Medical Problems** and **Medications** side by side (three equal columns from 768 px, like `col-md-4`), then **Prescriptions** and **Care Team** full width. Below 768 px everything stacks. Titles, empty texts, columns and ordering follow `DASHBOARD_ANALYSIS_A1_PARITY.md` §2–§6 and the live PHP page.
+
+| Card | Data | Shows |
+|---|---|---|
+| Allergies | `AllergyIntolerance?patient=` | `Title (criticality)`; high criticality highlighted (PHP: `bg-warning`, bold); tooltip `<title> Reaction: <reaction> - <severity>`; server order (PHP has no sort); active only |
+| Medical Problems | `Condition?patient=&category=problem-list-item` **and** `…&category=encounter-diagnosis` | Title only; per-encounter copies merged (same id, or same code / free text and same onset); ended problems hidden; onset ascending, no onset first |
+| Medications | `GET /api/patient/:pid/medication` rows, plus their `MedicationRequest` for the dosage | `title dosage`; PHP issue filter (outcome not Resolved, end date empty or in the future); begdate ascending, no begdate first |
+| Prescriptions | the `MedicationRequest`s whose id is **not** a medication-list uuid | Drug / Details / Qty / Refills / Filled; active and completed only; newest modified first; `None` only when there are none at all, headers only when all are inactive (as PHP) |
+| Care Team | `CareTeam?patient=`, then `Practitioner/:id` and `Organization/:id` per member | First active team (else the first that is not entered-in-error); team name + status badge; Type / Member / Role / Facility / Since / Status / Note |
+
+- **States**: each card shows "Loading …", its empty text, the data, or an error. A 403 says "You don't have permission to view …"; other failures say "… could not be loaded." with **Try again** for transient ones. A 401 ends the session (C2 behaviour).
+- **Medication split**: the numeric pid comes from `/api/patient/:puuid` (C2). The medication-list route answering 404 means "no list medications". If the pid lookup or the list is **forbidden** (or the transport has no standard API), the Medications and Prescriptions cards are replaced by one card titled **"Medications and prescriptions (combined)"** that says why and lists every current order once. The port never guesses a split from `intent`.
+- **Subject guard**: every FHIR result must reference `Patient/<selected id>`, and every standard-API row must carry the selected pid. Anything else is dropped, and the browser console gets one line with the count and the resource type only (Phase B saw a search ignore its `patient` parameter).
+- **Collapse**: the card title is a toggle button (`aria-expanded`). Defaults as in PHP for a user with no saved setting: Care Team collapsed, the others expanded. The choice is kept per browser in `localStorage` under the PHP setting names (`allergy_ps_expand`, …). PHP keeps it per user on the server, which this read-only app cannot write.
+- **Edit links**: when `VITE_OPENEMR_WEB_URL` is set at build time, each card has a pencil link (new tab); otherwise there are none. Prescriptions links to `controller.php?prescription&list&id=<pid>`, the PHP pencil's own target, which names the patient. Allergies, Medical Problems, Medications and Care Team link to `interface/patient_file/summary/demographics.php?set_pid=<pid>`, the PHP dashboard for this patient, **not** straight to `stats_full.php`: that screen reads the patient from the OpenEMR session, so a direct link could open whichever patient the user last had open. OpenEMR has no deep link into its tabbed UI, so the dashboard opens on its own; its pencils call `top.restoreSession()`, which only exists inside the tab frame, and do nothing there. Editing then continues from the chart in OpenEMR. Links are shown to everyone who can see the card; OpenEMR enforces write access.
+
+### FHIR gaps and deliberate differences (cards)
+
+G-numbers refer to `DASHBOARD_ANALYSIS_A2_FHIR.md` §6; G21 is new in C3.
+
+| # | PHP card | This port | Why |
+|---|---|---|---|
+| G4 | Allergy severity from `severity_ccda` (Mild … Fatal); highlight for severe, life threatening, fatal | FHIR `criticality`: "Low Risk" (mild, mild to moderate, moderate), "High Risk" (moderate to severe and worse, highlighted), "Unassigned" (unassigned) | OpenEMR's FHIR emits only the criticality. "Moderate to severe" is highlighted too (the safe direction) |
+| — | Allergy with no severity: `Title ()` | `Title` | nothing to show |
+| — | Reaction "Unassigned" in the allergy tooltip | empty | OpenEMR's FHIR omits unassigned reactions |
+| — | Allergy with an end date in the **future** still listed | hidden | FHIR maps any end date without outcome Resolved to `inactive` and does not emit the date |
+| — | Empty allergies: "No Known Allergies" when the list was marked reviewed (`lists_touch`), else "Nothing Recorded". Problems / medications: "None" vs "Nothing Recorded" | always "Nothing Recorded" | FHIR cannot say whether the list was reviewed, so the port never asserts "No Known Allergies" |
+| G3 | Problem title = `lists.title` | a coded problem shows the code's display text | OpenEMR's FHIR drops the free-text title when a code is present |
+| G3 | One row per problem | per-encounter `encounter-diagnosis` copies merged by id, else by code / text + onset | heuristic: two different problems with the same code and onset would merge |
+| G21 | Problems with outcome Resolved hidden | FHIR `resolved` problems shown, marked "(Resolved)" | OpenEMR also emits `resolved` for occurrence "First" (an open first episode, which PHP lists); hiding them could hide active problems |
+| G2 | Medications = `lists` rows | the same rows (standard API) with the dosage from the matching `MedicationRequest`; a list row linked to a prescription shows no dosage | OpenEMR's FHIR leaves linked list rows out; the PHP card lists them |
+| G8 | Refills = `prescriptions.refills` | "—" (tooltip: not available) | OpenEMR's FHIR always sends `numberOfRepeatsAllowed: 0` |
+| G7 | Details = size + unit + `dosage`, or "`<dosage> in <form> <interval>`" | dose quantity + unit, dosage text, timing text | FHIR has no drug form, and OpenEMR drops a numeric `dosage` |
+| — | Drug = `prescriptions.drug` | `medicationCodeableConcept.text`, else the RxNorm display | OpenEMR sends the RxNorm display for coded prescriptions (the drug name when the code has no description) |
+| — | Filled = raw `date_added` (`2026-01-15 09:00:00`) | the same text, from `authoredOn` before its offset | OpenEMR writes the server's local time plus its offset |
+| — | Prescription order `active DESC, date_modified DESC, date_added DESC` | `meta.lastUpdated` (= date_modified) desc, then `authoredOn` desc | every row shown is active |
+| — | "Prescription History" title with eRx; Rx card hidden by `disable_prescriptions`; cards hidden by `hide_dashboard_cards` or issue ACLs | always shown, titled "Prescriptions" | globals are not readable over the API; a 403 shows the permission message instead |
+| G9 | Member name "Last, First" | the same when `Practitioner/:id` is readable. For the Physicians group (mode A) it answers 403: **"Name not available (permission)"**; facility names likewise; related persons "Name not available" | ACL `admin/users` on Practitioner / Organization. The dashboard never works around it |
+| G10 | Role = the care-team role | FHIR role display, where the user's provider type wins over the care-team role | OpenEMR's mapping |
+| G11 / G12 | Member Status and Note shown; inactive / entered-in-error members hidden | Status and Note "—"; **inactive members are listed** | OpenEMR's FHIR emits neither the member status nor the note |
+| — | A1 expected blank Role / Facility / Status in PHP view mode (bug) | Role, Facility and Since filled from FHIR (user decision) | on the dev stack the PHP card does fill them (from its edit selects), so this is a change of data source, not a visible fix |
+| — | No care team: table header, no rows | "Nothing Recorded" | explicit empty state |
+| — | Each member's facility appears again as an Organization participant | skipped | not a person; the facility is on the member's row |
 
 ## BFF behaviour
 
