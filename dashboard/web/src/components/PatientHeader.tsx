@@ -22,15 +22,17 @@ export function PatientHeader({ patient, actions }: { patient: Patient; actions?
   return (
     <section className="patient-bar" aria-label="Patient">
       <div className="patient-bar-main">
-        <h1 className="patient-name" ref={headingRef} tabIndex={-1}>
-          {patientBarName(patient)}
-        </h1>
-        {mrn !== undefined && (
-          <>
-            {' '}
-            <small className="patient-mrn muted">({mrn})</small>
-          </>
-        )}
+        <div className="patient-bar-name">
+          <h1 className="patient-name" ref={headingRef} tabIndex={-1}>
+            {patientBarName(patient)}
+          </h1>
+          {mrn !== undefined && (
+            <>
+              {' '}
+              <small className="patient-mrn muted">({mrn})</small>
+            </>
+          )}
+        </div>
         <div className="patient-dob">
           {patientDobAgeLine(patient, { today: localToday(), dateFormat: DATE_DISPLAY_FORMAT })}
           {sex && (

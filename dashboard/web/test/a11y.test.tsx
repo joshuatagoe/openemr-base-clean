@@ -68,7 +68,7 @@ describe('axe-core: no violations on the rendered pages', () => {
     );
     window.history.replaceState(null, '', '/dashboard?page=2');
     render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     const recent = await screen.findByRole('region', { name: 'Recent patients' });
     await within(recent).findByText('Otherfamily, Bram');
     await screen.findByRole('navigation', { name: 'Patient list pages' });
@@ -112,7 +112,7 @@ describe('axe-core: no violations on the rendered pages', () => {
     }
     await within(await screen.findByRole('region', { name: 'Prescriptions' })).findByRole('table');
     await within(await screen.findByRole('region', { name: 'Care Team' })).findByText('Synthetic, Dana');
-    await within(await screen.findByRole('region', { name: 'Labs' })).findByText(/permission/);
+    await within(await screen.findByRole('region', { name: 'Labs' })).findByText(/can't view lab data/);
     expect(await violations()).toEqual([]);
     // Wide tables scroll sideways on a phone; the scroll box must take keyboard focus
     // (axe scrollable-region-focusable, which needs layout and so only fires in a browser).

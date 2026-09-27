@@ -96,13 +96,13 @@ describe('patient search (mode A)', () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     await userEvent.click(await screen.findByRole('button', { name: 'Search' }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(window.location.search).toBe('');
     await userEvent.type(screen.getByLabelText('Name'), '<b>x');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Names may contain letters, spaces, apostrophes, hyphens and dots.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Use only letters, spaces, apostrophes, hyphens and dots in the name.');
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
     // Only the landing list was requested.
     expect(search.seen).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('patient search (mode A)', () => {
     const search = patientSearch(searchset());
     server.use(signedIn, search.handler);
     renderAt('/dashboard?name=Nobody');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients found.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients match.'));
     expect(screen.getByLabelText('Name')).toHaveValue('Nobody');
   });
 
@@ -127,7 +127,7 @@ describe('patient search (mode A)', () => {
       }),
     );
     renderAt('/dashboard?name=Sample');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Patient search failed');
+    expect(await screen.findByRole('alert')).toHaveTextContent('OpenEMR returned an error.');
     expect(calls).toBe(3);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
@@ -187,9 +187,9 @@ describe('patient header (PHP patient-bar parity)', () => {
   });
 
   it.each([
-    [403, 'not_accessible', 'You do not have access to this patient.'],
-    [403, 'forbidden', 'You do not have access to this patient.'],
-    [404, 'not_found', 'Patient not found.'],
+    [403, 'not_accessible', "Your OpenEMR account doesn't have access to this patient's chart."],
+    [403, 'forbidden', "Your OpenEMR account doesn't have access to this patient's chart."],
+    [404, 'not_found', 'No patient matches this link. It may have been removed, or the link is incomplete.'],
   ])('%i %s: shows "%s" and does not retry', async (status, error, text) => {
     let calls = 0;
     server.use(
@@ -215,7 +215,7 @@ describe('patient header (PHP patient-bar parity)', () => {
       }),
     );
     renderAt(`/patient/${PATIENT_A_ID}`);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your session has expired. Please sign in again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your session expired. Sign in again to continue.');
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(calls).toBe(1);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
@@ -224,7 +224,16 @@ describe('patient header (PHP patient-bar parity)', () => {
   it('treats a malformed patient id in the URL as not found without calling the server', async () => {
     server.use(signedIn);
     renderAt('/patient/not%20an%20id');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Patient not found.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No patient matches this link. It may have been removed, or the link is incomplete.');
+  });
+
+  it('an OpenEMR error says what failed and offers "Try again"', async () => {
+    server.use(signedIn, http.get('*/api/fhir/Patient/:id', () => HttpResponse.json({ error: 'upstream_error' }, { status: 502 })));
+    renderAt(`/patient/${PATIENT_A_ID}`);
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(
+      "Couldn't load this patient: OpenEMR returned an error. Try again; if it keeps happening, tell your OpenEMR administrator.",
+    );
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });
 

@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (ctrl.signal.aborted) return;
         setState({ status: 'signedOut' });
-        setNotice({ kind: 'error', message: 'The dashboard server could not be reached.' });
+        setNotice({ kind: 'error', message: "Couldn't reach the dashboard server. Check your connection, then reload the page." });
       });
     return () => ctrl.abort();
   }, []);

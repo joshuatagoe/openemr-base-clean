@@ -1,0 +1,25 @@
+/* Card contents and messages (UX wave 2). OpenEMR's style_light language:
+   footnotes are Bootstrap's small .text-muted line, nothing more. Tokens come
+   from styles.css (:root). */
+
+/* One short muted line that explains the "—" cells of a card (plan M2), or
+   the hidden care-team names (M1). Sits flush with the table text. */
+.card-footnote {
+  margin: 0.375rem 0.3rem 0.125rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--oe-muted);
+}
+.labdata .card-footnote { margin: 0; }
+/* Under the team name, before the table it explains. */
+.care-team-name + .care-team-hidden { margin: -0.25rem 0 0.5rem; }
+
+/* Load failures: the message, then "Try again" under it (never beside it,
+   so a long message in a narrow PAMI card doesn't squeeze the button). */
+.card-problem { display: grid; justify-items: start; gap: 0.5rem; }
+.card-problem .card-error { margin: 0; max-width: 60ch; }
+
+/* Modes B/C: "Signed in as" and Sign out sit in the patient bar's action slot
+   (plan L5); OpenEMR's own tab bar is already above the app. */
+.bar-account { display: flex; align-items: center; gap: 0.75rem; }
+.bar-account .app-user { white-space: nowrap; }

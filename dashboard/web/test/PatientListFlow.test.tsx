@@ -66,7 +66,7 @@ function renderAt(path: string) {
   return render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
 }
 
-const listTable = () => screen.getByRole('table', { name: 'Patients' });
+const listTable = () => screen.getByRole('table', { name: 'All patients' });
 const rowsOf = (table: HTMLElement) => within(table).getAllByRole('row').slice(1);
 
 beforeEach(() => window.localStorage.clear());
@@ -78,7 +78,7 @@ describe('patient list (landing page, mode A)', () => {
     server.use(signedInAs(USER), list.handler);
     renderAt('/dashboard');
 
-    const table = await screen.findByRole('table', { name: 'Patients' });
+    const table = await screen.findByRole('table', { name: 'All patients' });
     expect(list.seen[0]).toEqual({ _count: '21', _offset: '0', _sort: 'family,given' });
     const rows = rowsOf(table);
     expect(rows).toHaveLength(20);
@@ -98,14 +98,14 @@ describe('patient list (landing page, mode A)', () => {
     expect(within(pager).getByText('Page 1')).toBeInTheDocument();
     expect(within(pager).getByRole('button', { name: 'Previous page' })).toBeDisabled();
     expect(within(pager).getByRole('button', { name: 'Next page' })).toBeEnabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Showing patients 1–20');
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 1–20');
   });
 
   it('pages with Next / Previous (keyboard), keeps the page in the URL, and moves focus to the list', async () => {
     const list = patientList();
     server.use(signedInAs(USER), list.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
 
     screen.getByRole('button', { name: 'Next page' }).focus();
     await userEvent.keyboard('{Enter}');
@@ -119,7 +119,7 @@ describe('patient list (landing page, mode A)', () => {
     await waitFor(() => expect(rowsOf(listTable())[0]).toHaveTextContent('Family041, Given'));
     expect(rowsOf(listTable())).toHaveLength(5);
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Showing patients 41–45');
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 41–45');
 
     screen.getByRole('button', { name: 'Previous page' }).focus();
     await userEvent.keyboard(' ');
@@ -144,7 +144,7 @@ describe('patient list (landing page, mode A)', () => {
   it('hides the pager when everything fits on one page', async () => {
     server.use(signedInAs(USER), patientList(ALL.slice(0, 14)).handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     expect(rowsOf(listTable())).toHaveLength(14);
     expect(screen.queryByRole('navigation', { name: 'Patient list pages' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('14 patients');
@@ -153,7 +153,7 @@ describe('patient list (landing page, mode A)', () => {
   it('says so on a page past the end, with Previous still available', async () => {
     server.use(signedInAs(USER), patientList(ALL.slice(0, 5)).handler);
     renderAt('/dashboard?page=4');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients on this page.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('This page is past the end of the list.'));
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
   });
 
@@ -161,7 +161,7 @@ describe('patient list (landing page, mode A)', () => {
     const list = patientList([...ALL, patientA, patientB]);
     server.use(signedInAs(USER), list.handler);
     renderAt('/dashboard?page=2');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
 
     await userEvent.type(screen.getByLabelText('Name'), 'Sample');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
@@ -173,7 +173,7 @@ describe('patient list (landing page, mode A)', () => {
 
     await userEvent.clear(screen.getByLabelText('Name'));
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     expect(window.location.search).toBe('');
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -183,7 +183,7 @@ describe('patient list (landing page, mode A)', () => {
     server.use(signedInAs(USER), list.handler);
     renderAt('/dashboard?name=Family');
     await screen.findByRole('table', { name: 'Search results' });
-    expect(screen.getByRole('status')).toHaveTextContent('Showing matches 1–20');
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 1–20');
     await userEvent.click(screen.getByRole('button', { name: 'Next page' }));
     await waitFor(() => expect(window.location.search).toBe('?name=Family&page=2'));
     expect(list.seen.at(-1)).toEqual({ name: 'Family', _count: '21', _offset: '20', _sort: 'family,given' });
@@ -200,7 +200,7 @@ describe('recent patients (mode A)', () => {
     const reads = patientReads();
     server.use(signedInAs(USER), patientList([patientA, patientB, patientDeceased]).handler, reads.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     expect(screen.queryByRole('heading', { name: 'Recent patients' })).toBeNull();
 
     await openFromList('Samplefamily, Ada Quinn');
@@ -252,14 +252,14 @@ describe('recent patients (mode A)', () => {
     await waitFor(() => expect(JSON.parse(window.localStorage.getItem(key) ?? '[]')).toEqual([PATIENT_B_ID, PATIENT_A_ID]));
   });
 
-  it('Clear empties the list and the stored entry', async () => {
+  it('Clear list empties the list and the stored entry', async () => {
     const key = (await recentStorageKey(USER)) ?? '';
     window.localStorage.setItem(key, JSON.stringify([PATIENT_A_ID]));
     server.use(signedInAs(USER), patientList([]).handler, patientReads().handler);
     renderAt('/dashboard');
     const recent = await screen.findByRole('region', { name: 'Recent patients' });
     await within(recent).findByText('Samplefamily, Ada Quinn');
-    await userEvent.click(within(recent).getByRole('button', { name: 'Clear recent patients' }));
+    await userEvent.click(within(recent).getByRole('button', { name: 'Clear list' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Recent patients' })).toBeNull());
     expect(window.localStorage.getItem(key)).toBeNull();
   });
@@ -269,7 +269,7 @@ describe('recent patients (mode A)', () => {
     window.localStorage.setItem(other ?? '', JSON.stringify([PATIENT_A_ID]));
     server.use(signedInAs(USER), patientList(ALL.slice(0, 3)).handler, patientReads().handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     expect(screen.queryByRole('region', { name: 'Recent patients' })).toBeNull();
   });
 
@@ -304,9 +304,9 @@ describe('recent patients (mode A)', () => {
     const reads = patientReads({ [PATIENT_A_ID]: { status: 403, error: 'not_accessible' } });
     server.use(signedInAs(USER), patientList([patientA]).handler, reads.handler);
     renderAt(`/patient/${PATIENT_A_ID}`);
-    await screen.findByText('You do not have access to this patient.');
+    await screen.findByText("Your OpenEMR account doesn't have access to this patient's chart.");
     await userEvent.click(screen.getByRole('link', { name: 'Find another patient' }));
-    await screen.findByRole('table', { name: 'Patients' });
+    await screen.findByRole('table', { name: 'All patients' });
     expect(screen.queryByRole('region', { name: 'Recent patients' })).toBeNull();
     expect(window.localStorage.length).toBe(0);
   });

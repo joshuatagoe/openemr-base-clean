@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
+import { Spinner } from '../components/Card';
 import { ClinicalCards } from '../components/ClinicalCards';
 import { PatientHeader } from '../components/PatientHeader';
-import type { DataSourceError } from '../data/errors';
+import { CHART_TITLE, useDocumentTitle } from '../components/useDocumentTitle';
+import { DataSourceError, isRetryable, patientErrorMessage } from '../data/errors';
 import { FHIR_ID, usePatient } from '../data/hooks';
 import { useRecentPatients } from '../recent/recentContext';
 
@@ -14,23 +16,8 @@ function FindAnother() {
   );
 }
 
-function errorText(error: DataSourceError): string | null {
-  switch (error.kind) {
-    case 'forbidden':
-    case 'not_accessible':
-      return 'You do not have access to this patient.';
-    case 'not_found':
-    case 'bad_request':
-      return 'Patient not found.';
-    case 'session_expired':
-    case 'unauthenticated':
-      return null; // The auth layer shows "session expired" and returns to sign-in.
-    default:
-      return 'The patient could not be loaded.';
-  }
-}
-
 export function PatientPage() {
+  useDocumentTitle(CHART_TITLE);
   const id = useParams().id ?? '';
   const { view, retry } = usePatient(id);
   const recent = useRecentPatients();
@@ -46,7 +33,7 @@ export function PatientPage() {
     return (
       <section className="page-state">
         <p className="notice notice-warning" role="alert">
-          Patient not found.
+          {patientErrorMessage(new DataSourceError('not_found', 'malformed patient id'))}
         </p>
         <FindAnother />
       </section>
@@ -57,22 +44,27 @@ export function PatientPage() {
     case 'idle':
     case 'loading':
     case 'empty':
+      // Holds the patient bar's place so the page doesn't jump when the data arrives.
       return (
-        <p className="muted" role="status">
-          Loading patient...
-        </p>
+        <div className="patient-bar patient-bar-loading">
+          <p className="muted" role="status">
+            <Spinner />
+            Loading patient…
+          </p>
+        </div>
       );
     case 'error': {
-      const text = errorText(view.error);
+      // A refused id reads as a bad link, the same as one OpenEMR doesn't know.
+      const error = view.error.kind === 'bad_request' ? new DataSourceError('not_found', view.error.message) : view.error;
+      const text = patientErrorMessage(error); // null: the auth layer shows "session expired"
       if (text === null) return null;
-      const transient = ['upstream', 'timeout', 'network'].includes(view.error.kind);
       return (
         <section className="page-state">
           <p className="notice notice-warning" role="alert">
             {text}
           </p>
           <div className="page-actions">
-            {transient && (
+            {isRetryable(error) && (
               <button type="button" className="btn btn-primary" onClick={retry}>
                 Try again
               </button>

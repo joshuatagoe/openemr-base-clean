@@ -48,13 +48,16 @@ const AUTH_ERROR_REASONS: Readonly<Record<string, string>> = {
   access_denied: 'access was denied',
   state_mismatch: 'the sign-in link expired or was already used',
   login_expired: 'the sign-in link expired or was already used',
-  token_exchange_failed: 'OpenEMR did not accept the sign-in',
-  invalid_id_token: 'the identity token could not be verified',
-  missing_code: 'OpenEMR did not return an authorization code',
+  token_exchange_failed: "OpenEMR didn't accept the sign-in",
+  invalid_id_token: "the identity token couldn't be verified",
+  missing_code: "OpenEMR didn't return an authorization code",
 };
 
-/** Maps the BFF's coarse `auth_error` codes to text; unknown codes get generic text (never echoed). */
+/**
+ * Maps the BFF's coarse `auth_error` codes to text; unknown codes get generic
+ * text (never echoed). The home page's button then reads "Sign in again".
+ */
 export function describeAuthError(code: string): string {
   const reason = Object.hasOwn(AUTH_ERROR_REASONS, code) ? AUTH_ERROR_REASONS[code] : undefined;
-  return `Sign-in did not complete: ${reason ?? 'an unexpected error occurred'}.`;
+  return `Sign-in didn't complete: ${reason ?? 'an unexpected error occurred'}.`;
 }

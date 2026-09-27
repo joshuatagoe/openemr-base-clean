@@ -1,6 +1,4 @@
 import { useId, useState, type ReactNode } from 'react';
-import type { DataSourceError } from '../data/errors';
-import type { QueryView } from '../data/queryView';
 
 // Collapse state is remembered per browser under the PHP user-setting names
 // (allergy_ps_expand, ...). PHP stores it per user on the server; this port
@@ -25,15 +23,17 @@ function writeExpanded(id: string, expanded: boolean): void {
   }
 }
 
+// Solid glyphs drawn for this port in the shape of the Font Awesome icons the
+// PHP card uses (card_base.html.twig): fa-compress when open, fa-expand when
+// collapsed, fa-pencil-alt for edit. Own paths, no icon library.
+const COMPRESS = 'M4 1h2.5v5.5H1V4h3zM9.5 1H12v3h3v2.5H9.5zM1 9.5h5.5V15H4v-3H1zM9.5 9.5H15V12h-3v3H9.5z';
+const EXPAND = 'M1 1h5.5v2.5h-3v3H1zM9.5 1H15v5.5h-2.5v-3h-3zM1 9.5h2.5v3h3V15H1zM12.5 9.5H15V15H9.5v-2.5h3z';
+const PENCIL = 'M1 15l.9-3.9 8.3-8.3 3 3-8.3 8.3zM11.1 1.9l1.3-1.3a.85.85 0 0 1 1.2 0l1.8 1.8a.85.85 0 0 1 0 1.2l-1.3 1.3z';
+
 function ExpandIcon({ expanded }: { expanded: boolean }) {
-  // fa-compress when open, fa-expand when collapsed, as in card_base.html.twig.
   return (
     <svg className="card-toggle-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      {expanded ? (
-        <path d="M6 1v5H1M10 1v5h5M6 15v-5H1M10 15v-5h5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      ) : (
-        <path d="M1 6V1h5M15 6V1h-5M1 10v5h5M15 10v5h-5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      )}
+      <path d={expanded ? COMPRESS : EXPAND} fill="currentColor" />
     </svg>
   );
 }
@@ -41,9 +41,14 @@ function ExpandIcon({ expanded }: { expanded: boolean }) {
 function PencilIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path d="M11.5 1.5l3 3L5 14H2v-3z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d={PENCIL} fill="currentColor" />
     </svg>
   );
+}
+
+/** OpenEMR's spinner-border-sm (loader.html.twig); decorative, the text next to it is the status. */
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
 }
 
 export interface CardProps {
@@ -87,58 +92,4 @@ export function Card({ id, title, defaultExpanded, edit, className, children }: 
       </div>
     </section>
   );
-}
-
-export interface CardViewText {
-  /** Lower-case noun for messages: "allergies", "the care team". */
-  noun: string;
-  /** Sentence start for load failures: "Allergies". */
-  subject: string;
-  empty: ReactNode;
-}
-
-function errorMessage(error: DataSourceError, text: CardViewText): string | null {
-  switch (error.kind) {
-    case 'forbidden':
-    case 'not_accessible':
-      return `You don't have permission to view ${text.noun}.`;
-    case 'session_expired':
-    case 'unauthenticated':
-      return null; // The auth layer ends the session and says so.
-    default:
-      return `${text.subject} could not be loaded.`;
-  }
-}
-
-const TRANSIENT = new Set(['upstream', 'timeout', 'network']);
-
-/** Loading / error / empty states shared by every card; `ready` renders `children`. */
-export function CardView<T>({ view, retry, text, children }: { view: QueryView<T>; retry: () => void; text: CardViewText; children: (data: T) => ReactNode }) {
-  switch (view.status) {
-    case 'idle':
-    case 'loading':
-      return (
-        <p className="card-state muted" role="status">
-          Loading {text.noun}…
-        </p>
-      );
-    case 'error': {
-      const message = errorMessage(view.error, text);
-      if (message === null) return null;
-      return (
-        <div className="card-state">
-          <p className="card-error">{message}</p>
-          {TRANSIENT.has(view.error.kind) && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={retry}>
-              Try again
-            </button>
-          )}
-        </div>
-      );
-    }
-    case 'empty':
-      return <div className="card-state">{text.empty}</div>;
-    case 'ready':
-      return <>{children(view.data)}</>;
-  }
 }
