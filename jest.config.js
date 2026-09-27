@@ -4,6 +4,8 @@ const config = {
         'public/assets',
         'vendor'
     ],
+    // dashboard/ is a separate TypeScript workspace tested with its own Vitest setup.
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/dashboard/'],
     coverageDirectory: 'coverage/js-unit',
     collectCoverageFrom: ['**/*.js'],
     coveragePathIgnorePatterns: [
