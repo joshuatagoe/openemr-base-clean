@@ -66,11 +66,11 @@ describe('axe-core: no violations on the rendered pages', () => {
     expect(await violations()).toEqual([]);
   });
 
-  it('landing page: patient list with pager and recent patients', async () => {
+  it('Patient Finder: list with filters, sort buttons and pager; then the Recent Patients tab', async () => {
     const fhirUser = 'https://openemr.invalid/apis/default/fhir/Practitioner/9f000000-0000-4000-8000-0000000000aa';
     const key = await recentStorageKey(fhirUser);
     window.localStorage.setItem(key ?? '', JSON.stringify([PATIENT_B_ID, PATIENT_A_ID]));
-    const many = Array.from({ length: 21 }, (_, i) => ({ ...patientA, id: `9e000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
+    const many = Array.from({ length: 11 }, (_, i) => ({ ...patientA, id: `9e000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
     server.use(
       http.get('*/auth/me', () =>
         HttpResponse.json({ authenticated: true, user: { displayName: 'Dana Testdoctor', fhirUser }, expiresAt: '2030-01-01T00:00:00.000Z' }),
@@ -78,12 +78,20 @@ describe('axe-core: no violations on the rendered pages', () => {
       http.get('*/api/fhir/Patient', () => HttpResponse.json(searchset(...many))),
       http.get('*/api/fhir/Patient/:id', ({ params }) => HttpResponse.json(params.id === PATIENT_B_ID ? patientB : patientA)),
     );
-    window.history.replaceState(null, '', '/dashboard?page=2');
+    window.history.replaceState(null, '', '/dashboard?page=2&sort=-dob');
     render(<App queryClient={createQueryClient({ retryDelay: 0 })} />);
-    await screen.findByRole('table', { name: 'All patients' });
-    const recent = await screen.findByRole('region', { name: 'Recent patients' });
-    await within(recent).findByText('Otherfamily, Bram');
+    await screen.findByRole('table', { name: 'Patient List' });
     await screen.findByRole('navigation', { name: 'Patient list pages' });
+    expect(await violations()).toEqual([]);
+
+    // With an input problem shown.
+    await userEvent.type(screen.getByLabelText('Search by SSN'), 'a b{Enter}');
+    await screen.findByRole('alert');
+    expect(await violations()).toEqual([]);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Recent Patients' }));
+    const recent = await screen.findByRole('tabpanel', { name: 'Recent Patients' });
+    await within(recent).findByText('Otherfamily');
     expect(await violations()).toEqual([]);
   });
 

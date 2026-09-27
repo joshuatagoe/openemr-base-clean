@@ -49,7 +49,7 @@ describe('allow-listed proxy', () => {
   });
 
   it('400s an unbounded patient list and never calls OpenEMR', async () => {
-    for (const url of ['/api/fhir/Patient', '/api/fhir/Patient?_offset=0&_sort=family', '/api/fhir/Patient?_count=51']) {
+    for (const url of ['/api/fhir/Patient', '/api/fhir/Patient?_offset=0&_sort=family', '/api/fhir/Patient?_count=102']) {
       const res = await h.app.inject({ url, headers: { cookie } });
       expect(res.statusCode).toBe(400);
     }

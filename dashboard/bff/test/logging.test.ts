@@ -48,4 +48,26 @@ describe('request logging', () => {
     const search = done.find((l) => l.resource === 'Patient' && l.statusCode === 200);
     expect(search?.route).toBe('/api/fhir/*');
   });
+
+  it('never logs the Finder search values: SSN, phone number, External ID, or a refused value', async () => {
+    const cookie = await login(h);
+    const urls = [
+      '/api/fhir/Patient?identifier=900-11-2222&_count=101&_sort=identifier',
+      '/api/fhir/Patient?phone=(555)%20010-0199&_count=101&_sort=-phone',
+      '/api/fhir/Patient?identifier=EXT-77123&_count=11',
+      // Refused (400): a malformed phone, and an unknown parameter with a value.
+      '/api/fhir/Patient?phone=555-0199x44&_count=11',
+      '/api/fhir/Patient?ssn=900-99-8888',
+    ];
+    const statuses: number[] = [];
+    for (const url of urls) statuses.push((await h.app.inject({ url, headers: { cookie } })).statusCode);
+    expect(statuses).toEqual([200, 200, 200, 400, 400]);
+
+    const text = h.logs.join('\n');
+    for (const value of ['900-11-2222', '010-0199', '0199', '(555)', 'EXT-77123', '77123', '0199x44', '900-99-8888', 'identifier=', 'phone=', 'ssn']) {
+      expect(text).not.toContain(value);
+    }
+    const done = h.logs.map((l) => JSON.parse(l) as Record<string, unknown>).filter((l) => l.msg === 'request completed');
+    expect(done.filter((l) => l.resource === 'Patient')).toHaveLength(3);
+  });
 });

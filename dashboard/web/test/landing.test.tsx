@@ -1,6 +1,5 @@
-// UX wave 2 (DASHBOARD_UX_PLAN.md H6, M3, M8, §6 copy): the landing page's
-// search form, list card, recent-patients card, and their loading, empty and
-// error states.
+// The landing page (OpenEMR's Patient Finder): input checks before a search is
+// sent, the Finder's wording for the list states, errors, and the recent tab.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Patient } from 'fhir/r4';
@@ -36,23 +35,25 @@ function markIncomplete(input: HTMLElement) {
   Object.defineProperty(input, 'validity', { configurable: true, get: () => ({ badInput: true, valid: false }) });
 }
 
+const table = () => screen.getByRole('table', { name: 'Patient List' });
+const waitPastTypingDelay = () => new Promise((r) => setTimeout(r, 500));
+
 beforeEach(() => window.localStorage.clear());
 afterEach(() => {
   document.title = 'Patient Dashboard';
 });
 
 describe('partly typed date of birth (H6)', () => {
-  it('blocks the search, says what to do, marks and focuses the field, and sends no request', async () => {
+  it('Enter blocks the search, says what to do, marks and focuses the field, and sends no request', async () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
+    await screen.findByRole('table', { name: 'Patient List' });
     expect(search.seen).toHaveLength(1);
 
-    await userEvent.type(screen.getByLabelText('Name'), 'Sample');
-    const dob = screen.getByLabelText('Date of birth');
+    const dob = screen.getByLabelText('Search by Date of Birth');
     markIncomplete(dob);
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await userEvent.type(dob, '{Enter}');
 
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('Enter the full date of birth, or clear the field.');
@@ -60,72 +61,72 @@ describe('partly typed date of birth (H6)', () => {
     expect(dob).toHaveAccessibleDescription('Enter the full date of birth, or clear the field.');
     expect(dob).toHaveFocus();
     expect(window.location.search).toBe('');
-    // Give a stray request time to show up, then check none was sent.
-    await new Promise((r) => setTimeout(r, 50));
+    await waitPastTypingDelay();
     expect(search.seen).toHaveLength(1);
   });
 
-  it('pressing Enter in another field is blocked the same way', async () => {
+  it('typing in another field waits for the date (no request, no message); Enter there explains', async () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
-    markIncomplete(screen.getByLabelText('Date of birth'));
-    await userEvent.type(screen.getByLabelText('MRN'), 'SYN-1001{Enter}');
+    await screen.findByRole('table', { name: 'Patient List' });
+    markIncomplete(screen.getByLabelText('Search by Date of Birth'));
+    await userEvent.type(screen.getByLabelText('Search by External ID'), 'SYN-1001');
+    await waitPastTypingDelay();
+    expect(search.seen).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await userEvent.type(screen.getByLabelText('Search by External ID'), '{Enter}');
     expect(screen.getByRole('alert')).toHaveTextContent('Enter the full date of birth, or clear the field.');
-    await new Promise((r) => setTimeout(r, 50));
     expect(search.seen).toHaveLength(1);
   });
 
   it('never mentions the YYYY-MM-DD format for a bad date in the URL either', async () => {
     server.use(signedIn, patientSearch().handler);
     renderAt('/dashboard?birthdate=1980-06');
-    await screen.findByRole('table', { name: 'All patients' });
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await screen.findByRole('table', { name: 'Patient List' });
+    await userEvent.type(screen.getByLabelText('Search by Name'), '{Enter}');
     expect(screen.getByRole('alert')).toHaveTextContent('Enter the full date of birth, or clear the field.');
     expect(document.body).not.toHaveTextContent('YYYY-MM-DD');
   });
 });
 
 describe('search rules copy (§6)', () => {
-  it('names and MRNs say which characters to use', async () => {
+  it('each filter says which characters to use, and nothing is sent', async () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
-    await userEvent.type(screen.getByLabelText('Name'), '<b>');
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Use only letters, spaces, apostrophes, hyphens and dots in the name.');
-    await userEvent.clear(screen.getByLabelText('Name'));
-    await userEvent.type(screen.getByLabelText('MRN'), 'a b');
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Use only letters, digits and . _ | : - in the MRN.');
+    await screen.findByRole('table', { name: 'Patient List' });
+    const cases: Array<[string, string, string]> = [
+      ['Search by Name', '<b>', 'Use only letters, spaces, apostrophes, hyphens and dots in the name.'],
+      ['Search by External ID', 'a b', 'Use only letters, digits and . _ : - in the External ID.'],
+      ['Search by SSN', '900|11', 'Use only letters, digits and . _ : - in the SSN.'],
+      ['Search by Home Phone', '555-0100 ext', 'Use only digits, spaces and ( ) + . - in the home phone.'],
+    ];
+    for (const [label, value, message] of cases) {
+      const box = screen.getByLabelText(label);
+      await userEvent.type(box, `${value}{Enter}`);
+      expect(screen.getByRole('alert')).toHaveTextContent(message);
+      expect(box).toHaveAttribute('aria-invalid', 'true');
+      await userEvent.clear(box);
+    }
+    await waitPastTypingDelay();
     expect(search.seen).toHaveLength(1);
   });
 });
 
-describe('list card (M3)', () => {
-  it('titles the tab "Find a patient – Patient Dashboard"', async () => {
+describe('the Finder list states', () => {
+  it('titles the page and the tab "Patient Finder"', async () => {
     server.use(signedIn, patientSearch().handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
-    expect(document.title).toBe('Find a patient – Patient Dashboard');
+    await screen.findByRole('table', { name: 'Patient List' });
+    expect(screen.getByRole('heading', { level: 1, name: 'Patient Finder' })).toBeInTheDocument();
+    expect(document.title).toBe('Patient Finder – Patient Dashboard');
   });
 
-  it('puts the list in an "All patients" card, headed by the count; a search heads it "Search results"', async () => {
+  it('the info line gives the range, and the total when the whole list fits', async () => {
     server.use(signedIn, patientSearch().handler);
-    const view = renderAt('/dashboard');
-    const card = await screen.findByRole('region', { name: 'All patients' });
-    expect(within(card).getByRole('heading', { level: 2, name: 'All patients' })).toBeInTheDocument();
-    expect(await within(card).findByRole('table', { name: 'All patients' })).toBeInTheDocument();
-    expect(within(card).getByRole('status')).toHaveTextContent('2 patients');
-    view.unmount();
-
-    renderAt('/dashboard?name=Sample');
-    const results = await screen.findByRole('region', { name: 'Search results' });
-    expect(await within(results).findByRole('table', { name: 'Search results' })).toBeInTheDocument();
-    expect(within(results).getByRole('status')).toHaveTextContent('2 patients found');
-    expect(screen.queryByRole('region', { name: 'All patients' })).toBeNull();
+    renderAt('/dashboard');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Showing 1 to 2 of 2 entries'));
   });
 
   it('shows a spinner with "Loading patients…" while the list loads', async () => {
@@ -144,38 +145,38 @@ describe('list card (M3)', () => {
     const status = await screen.findByText('Loading patients…');
     expect(status.closest('[role="status"]')?.querySelector('.spinner')).not.toBeNull();
     release();
-    await screen.findByRole('table', { name: 'All patients' });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Showing 1 to 1 of 1 entries'));
   });
 
-  it('says "No patients to show." when the list is empty', async () => {
+  it('says "No data available in table" when the list is empty, and keeps the filters usable', async () => {
     server.use(signedIn, patientSearch(() => HttpResponse.json(searchset())).handler);
     renderAt('/dashboard');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients to show.'));
-    expect(screen.queryByRole('table')).toBeNull();
+    await waitFor(() => expect(table()).toHaveTextContent('No data available in table'));
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 0 to 0 of 0 entries');
+    expect(screen.getByLabelText('Search by Name')).toBeEnabled();
   });
 
-  it('suggests what to change when nothing matches a search', async () => {
+  it('says "No matching records found" when nothing matches a search', async () => {
     server.use(signedIn, patientSearch(() => HttpResponse.json(searchset())).handler);
     renderAt('/dashboard?name=Nobody');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients match. Check the spelling, or search with fewer fields.'));
+    await waitFor(() => expect(table()).toHaveTextContent('No matching records found'));
   });
 
   it('past the last page, links back to page 1 of the same search', async () => {
     const search = patientSearch(() => HttpResponse.json(searchset()));
     server.use(signedIn, search.handler);
     renderAt('/dashboard?name=Sample&page=4');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('This page is past the end of the list.'));
+    await waitFor(() => expect(table()).toHaveTextContent('This page is past the end of the list.'));
     await userEvent.click(screen.getByRole('link', { name: 'Go to page 1' }));
     await waitFor(() => expect(window.location.search).toBe('?name=Sample'));
     expect(search.seen.at(-1)).toMatchObject({ name: 'Sample', _offset: '0' });
   });
 
-  it('shows "Showing 1–20" on a list with more pages', async () => {
-    const many: Patient[] = Array.from({ length: 21 }, (_, i) => ({ ...patientA, id: `9e000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
+  it('shows "Showing 1 to 10" (no total) on a list with more pages', async () => {
+    const many: Patient[] = Array.from({ length: 11 }, (_, i) => ({ ...patientA, id: `9e000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
     server.use(signedIn, patientSearch(() => HttpResponse.json(searchset(...many))).handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
-    expect(screen.getByRole('status')).toHaveTextContent('Showing 1–20');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Showing 1 to 10$/));
   });
 });
 
@@ -192,7 +193,7 @@ describe('list errors say what failed (M8)', () => {
     [
       'bad_request',
       () => HttpResponse.json({ error: 'bad_request' }, { status: 400 }),
-      "OpenEMR didn't accept these search terms. Check the name, date of birth and MRN.",
+      "OpenEMR didn't accept these search terms. Check the name, phone number, SSN, date of birth and External ID.",
       false,
     ],
   ];
@@ -208,8 +209,8 @@ describe('list errors say what failed (M8)', () => {
   }
 });
 
-describe('recent patients card', () => {
-  it('is its own card with a "Clear list" button, and every row opens the chart', async () => {
+describe('Recent Patients tab', () => {
+  it('has a "Clear list" button, and every row opens the chart', async () => {
     const key = (await recentStorageKey(USER)) ?? '';
     window.localStorage.setItem(key, JSON.stringify([PATIENT_A_ID]));
     server.use(
@@ -217,14 +218,14 @@ describe('recent patients card', () => {
       patientSearch(() => HttpResponse.json(searchset(patientB))).handler,
       http.get('*/api/fhir/Patient/:id', () => HttpResponse.json(patientA)),
     );
-    renderAt('/dashboard');
-    const recent = await screen.findByRole('region', { name: 'Recent patients' });
-    const link = await within(recent).findByRole('link', { name: 'Samplefamily, Ada Quinn' });
-    // Bootstrap's stretched-link: the name is the one real link, drawn over the whole row.
+    renderAt('/dashboard?tab=recent');
+    const recent = await screen.findByRole('tabpanel', { name: 'Recent Patients' });
+    const link = await within(recent).findByRole('link', { name: 'Ada' });
+    // Bootstrap's stretched-link: the first column is the one real link, drawn over the whole row.
     expect(link).toHaveClass('stretched-link');
     expect(link.closest('tr')).toHaveClass('row-link');
     await userEvent.click(within(recent).getByRole('button', { name: 'Clear list' }));
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Recent patients' })).toBeNull());
+    await waitFor(() => expect(recent).toHaveTextContent('No recent patients'));
   });
 });
 

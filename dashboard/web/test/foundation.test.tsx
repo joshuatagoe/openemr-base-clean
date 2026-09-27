@@ -177,9 +177,9 @@ describe('patient page (L4, M7)', () => {
     expect(document.title).toBe('Chart – Patient Dashboard');
     expect(document.title).not.toContain('Samplefamily');
     await userEvent.click(screen.getByRole('link', { name: 'Find another patient' }));
-    await screen.findByRole('heading', { level: 1, name: 'Find a patient' });
+    await screen.findByRole('heading', { level: 1, name: 'Patient Finder' });
     // Leaving the chart restores the title; the landing page then sets its own.
-    await waitFor(() => expect(document.title).toBe('Find a patient – Patient Dashboard'));
+    await waitFor(() => expect(document.title).toBe('Patient Finder – Patient Dashboard'));
   });
 
   it('while loading, holds the patient bar\'s place with a spinner and "Loading patient…"', async () => {

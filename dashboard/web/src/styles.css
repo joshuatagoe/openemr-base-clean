@@ -84,7 +84,7 @@ input:focus-visible,
 /* Every page starts on the app title's left edge, as the patient page does;
    the landing page keeps its own readable width (landing.css). */
 .app-main { padding: 1rem; }
-.app-main > .notice { max-width: 55rem; box-sizing: border-box; } /* the landing column's width */
+.app-main > .notice { max-width: 75rem; box-sizing: border-box; } /* the Patient Finder column's width */
 .app-main:has(.patient-bar) { padding: 0 0 0.5rem; }
 .app-main:has(.patient-bar) > .notice { margin: 0.5rem; max-width: none; }
 

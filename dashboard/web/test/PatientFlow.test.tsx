@@ -40,34 +40,32 @@ function renderAt(path: string, queryClient = createQueryClient({ retryDelay: 0 
 const expectedAge = (dob: string) => patientAgeDisplay(dob, localToday());
 
 describe('patient search (mode A)', () => {
-  it('searches by name, lists name / DOB / sex / MRN (never the SSN), and opens the chosen patient', async () => {
+  it('filters by name (Enter), lists the Finder columns, and opens the chosen patient', async () => {
     const search = patientSearch();
     const reads = patientReads();
     server.use(signedIn, search.handler, reads.handler);
     renderAt('/dashboard');
 
-    const nameBox = await screen.findByLabelText('Name');
-    await userEvent.type(nameBox, 'Sample');
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    const nameBox = await screen.findByLabelText('Search by Name');
+    await userEvent.type(nameBox, 'Sample{Enter}');
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 patients found'));
+    await waitFor(() => expect(window.location.search).toBe('?name=Sample'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Showing 1 to 2 of 2 entries'));
     // The landing list, then the search (same paging and sort).
     expect(search.seen).toHaveLength(2);
     expect([...(search.seen[1]?.entries() ?? [])]).toEqual([
       ['name', 'Sample'],
-      ['_count', '21'],
+      ['_count', '11'],
       ['_offset', '0'],
       ['_sort', 'family,given'],
     ]);
 
-    const results = screen.getByRole('table', { name: 'Search results' });
+    const results = screen.getByRole('table', { name: 'Patient List' });
     const rowA = within(results).getByRole('row', { name: /Samplefamily, Ada Quinn/ });
     expect(rowA).toHaveTextContent('1980-06-15');
-    expect(rowA).toHaveTextContent('Female');
     expect(rowA).toHaveTextContent('SYN-1001');
-    expect(results).not.toHaveTextContent('900-11-2222');
-    expect(results).not.toHaveTextContent('900-33-4444');
-    expect(window.location.search).toBe('?name=Sample');
+    // The Finder shows the SSN column (synthetic data).
+    expect(rowA).toHaveTextContent('900-11-2222');
 
     await userEvent.click(within(rowA).getByRole('link', { name: 'Samplefamily, Ada Quinn' }));
     expect(window.location.pathname).toBe(`/patient/${PATIENT_A_ID}`);
@@ -75,46 +73,46 @@ describe('patient search (mode A)', () => {
     await waitFor(() => expect(heading).toHaveFocus());
   });
 
-  it('sends DOB and MRN as birthdate / identifier', async () => {
-    const search = patientSearch(searchset(patientA));
+  it('sends Date of Birth and External ID as birthdate / identifier, and keeps only the External ID match', async () => {
+    const search = patientSearch(searchset(patientA, patientB));
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await userEvent.type(await screen.findByLabelText('Date of birth'), '1980-06-15');
-    await userEvent.type(screen.getByLabelText('MRN'), 'SYN-1001');
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 patient found'));
+    await userEvent.type(await screen.findByLabelText('Search by Date of Birth'), '1980-06-15');
+    await userEvent.type(screen.getByLabelText('Search by External ID'), 'SYN-1001{Enter}');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Showing 1 to 1 of 1 entries'));
     expect(Object.fromEntries(search.seen.at(-1) ?? [])).toEqual({
       birthdate: '1980-06-15',
       identifier: 'SYN-1001',
-      _count: '21',
-      _offset: '0',
+      _count: '101',
       _sort: 'family,given',
     });
+    expect(window.location.search).toBe('?birthdate=1980-06-15&identifier=SYN-1001');
   });
 
   it('an empty search just shows the list; characters the server would refuse are rejected without calling it', async () => {
     const search = patientSearch();
     server.use(signedIn, search.handler);
     renderAt('/dashboard');
-    await screen.findByRole('table', { name: 'All patients' });
-    await userEvent.click(await screen.findByRole('button', { name: 'Search' }));
+    await screen.findByRole('table', { name: 'Patient List' });
+    await userEvent.type(screen.getByLabelText('Search by Name'), '{Enter}');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(window.location.search).toBe('');
-    await userEvent.type(screen.getByLabelText('Name'), '<b>x');
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await userEvent.type(screen.getByLabelText('Search by Name'), '<b>x{Enter}');
     expect(screen.getByRole('alert')).toHaveTextContent('Use only letters, spaces, apostrophes, hyphens and dots in the name.');
-    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
-    // Only the landing list was requested.
+    expect(screen.getByLabelText('Search by Name')).toHaveAttribute('aria-invalid', 'true');
+    // Only the landing list was requested (also after the typing delay).
+    await new Promise((r) => setTimeout(r, 500));
     expect(search.seen).toHaveLength(1);
-    expect(Object.fromEntries(search.seen[0] ?? [])).toEqual({ _count: '21', _offset: '0', _sort: 'family,given' });
+    expect(Object.fromEntries(search.seen[0] ?? [])).toEqual({ _count: '11', _offset: '0', _sort: 'family,given' });
   });
 
   it('says so when nothing matches', async () => {
     const search = patientSearch(searchset());
     server.use(signedIn, search.handler);
     renderAt('/dashboard?name=Nobody');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No patients match.'));
-    expect(screen.getByLabelText('Name')).toHaveValue('Nobody');
+    await waitFor(() => expect(screen.getByRole('table', { name: 'Patient List' })).toHaveTextContent('No matching records found'));
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 0 to 0 of 0 entries');
+    expect(screen.getByLabelText('Search by Name')).toHaveValue('Nobody');
   });
 
   it('shows a readable error with a retry when the server fails (after retrying)', async () => {
@@ -255,10 +253,9 @@ describe('switching patients', () => {
     await screen.findByRole('heading', { level: 1, name: 'Ada Samplefamily' });
 
     await userEvent.click(screen.getByRole('link', { name: 'Find another patient' }));
-    const searchHeading = await screen.findByRole('heading', { level: 1, name: 'Find a patient' });
+    const searchHeading = await screen.findByRole('heading', { level: 1, name: 'Patient Finder' });
     await waitFor(() => expect(searchHeading).toHaveFocus());
-    await userEvent.type(screen.getByLabelText('Name'), 'Other');
-    await userEvent.keyboard('{Enter}');
+    await userEvent.type(screen.getByLabelText('Search by Name'), 'Other{Enter}');
     const rowB = await screen.findByRole('row', { name: /Otherfamily, Bram/ });
     await userEvent.click(within(rowB).getByRole('link'));
 
