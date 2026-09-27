@@ -19,14 +19,35 @@ interface ParamRule {
 const FHIR_ID = /^[A-Za-z0-9.-]{1,64}$/;
 const PATIENT_REF: ParamRule = { name: 'patient', required: true, pattern: FHIR_ID };
 
-const SEARCHES: Readonly<Record<string, { params: readonly ParamRule[]; atLeastOne?: boolean }>> = {
+// OpenEMR's FHIR applies _count / _offset / _sort on Patient searches only
+// (FhirPatientService overrides searchForOpenEMRRecordsWithConfig; A2 §5).
+// _sort maps to patient_data columns: family -> lname, given -> fname, mname,
+// birthdate -> DOB. Other sort keys are refused here rather than silently
+// dropped by OpenEMR's column whitelist.
+export const PATIENT_MAX_COUNT = 50;
+export const PATIENT_SORTS = ['family', '-family', 'family,given', '-family,-given', 'birthdate', '-birthdate'] as const;
+
+interface SearchRule {
+  params: readonly ParamRule[];
+  /** At least one of these must be present. */
+  anyOf?: readonly string[];
+}
+
+const SEARCHES: Readonly<Record<string, SearchRule>> = {
   Patient: {
-    atLeastOne: true,
+    // A search needs a criterion or a _count: the patient list (no criterion)
+    // is always bounded, never "every patient".
+    anyOf: ['name', 'birthdate', 'identifier', '_count'],
     params: [
       // Letters (any script), spaces, apostrophes, hyphens and dots.
       { name: 'name', pattern: /^[\p{L}\p{M}' .-]{1,64}$/u },
       { name: 'birthdate', pattern: /^(eq|ge|le|gt|lt)?\d{4}(-\d{2}(-\d{2})?)?$/ },
       { name: 'identifier', pattern: /^[A-Za-z0-9._|:-]{1,64}$/ },
+      // 1..PATIENT_MAX_COUNT, no leading zeros.
+      { name: '_count', pattern: /^(?:[1-9]|[1-4]\d|50)$/ },
+      // 0..999999, no leading zeros.
+      { name: '_offset', pattern: /^(?:0|[1-9]\d{0,5})$/ },
+      { name: '_sort', values: PATIENT_SORTS },
     ],
   },
   AllergyIntolerance: { params: [PATIENT_REF] },
@@ -46,7 +67,7 @@ function badRequest(detail: string): MatchResult {
   return { ok: false, status: 400, error: 'bad_request', detail };
 }
 
-function checkParams(query: URLSearchParams, rules: readonly ParamRule[], atLeastOne: boolean): string | null {
+function checkParams(query: URLSearchParams, rules: readonly ParamRule[], anyOf: readonly string[] | undefined): string | null {
   const allowed = new Map(rules.map((r) => [r.name, r]));
   const seen = new Set<string>();
   for (const [name, value] of query) {
@@ -59,7 +80,7 @@ function checkParams(query: URLSearchParams, rules: readonly ParamRule[], atLeas
     if (rule.values && !rule.values.includes(value)) return `parameter value not allowed: ${name}`;
   }
   for (const r of rules) if (r.required && !seen.has(r.name)) return `parameter required: ${r.name}`;
-  if (atLeastOne && seen.size === 0) return 'at least one search parameter is required';
+  if (anyOf && !anyOf.some((n) => seen.has(n))) return `one of these parameters is required: ${anyOf.join(', ')}`;
   return null;
 }
 
@@ -70,7 +91,7 @@ export function matchFhirRequest(path: string, query: URLSearchParams): MatchRes
   if (parts.length === 1) {
     const search = Object.hasOwn(SEARCHES, resource) ? SEARCHES[resource] : undefined;
     if (!search) return NOT_FOUND;
-    const problem = checkParams(query, search.params, search.atLeastOne ?? false);
+    const problem = checkParams(query, search.params, search.anyOf);
     if (problem) return badRequest(problem);
     return { ok: true, upstreamPath: resource, query, resource, kind: 'search' };
   }
