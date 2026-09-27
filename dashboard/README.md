@@ -33,7 +33,9 @@ Copy `.env.example` to `.env` (git-ignored). Required:
 | `SESSION_SECRET` | 32+ random characters; signs the session cookie |
 | `COOKIE_SECURE` | `true` (default: `Secure`, `__Host-` cookies, HSTS). `false` only for plain-http local dev |
 
-Optional: `PORT` (3000), `HOST` (127.0.0.1), `OPENEMR_SITE` (default), `UPSTREAM_TIMEOUT_MS` (10000), `LOG_LEVEL` (info), `WEB_DIST_DIR`, `OAUTH_SCOPES`.
+Optional: `PORT` (3000), `HOST` (127.0.0.1), `OPENEMR_SITE` (default), `UPSTREAM_TIMEOUT_MS` (10000), `LOG_LEVEL` (info), `WEB_DIST_DIR` (relative paths resolve against the working directory), `OAUTH_SCOPES`.
+
+Web build variable: `VITE_DATE_DISPLAY_FORMAT` mirrors OpenEMR's `date_display_format` global: `0` = YYYY-MM-DD (default; OpenEMR's default and the dev stack's setting), `1` = MM/DD/YYYY, `2` = DD/MM/YYYY. Set it to the same value as the OpenEMR site when building.
 
 The dev stack uses a self-signed certificate. Trust it rather than switching TLS checks off: export it once (`openssl s_client -connect localhost:9300 -showcerts </dev/null | openssl x509 > openemr-dev.pem`, keep it outside the repo) and start the BFF with `NODE_EXTRA_CA_CERTS=/path/to/openemr-dev.pem` set in the shell.
 
@@ -60,6 +62,13 @@ The dev stack uses a self-signed certificate. Trust it rather than switching TLS
 
 Scopes are read-only, with no `offline_access`, so no refresh token is issued. A session lasts as long as the access token (1 h); after that the API answers 401 and the app asks the user to sign in again.
 
+## Web app
+
+- **Data layer**: TanStack Query hooks (`web/src/data/hooks.ts`) over the `DataSource` interface, typed with `@types/fhir` R4. Components receive the state as data (`idle` / `loading` / `error` / `empty` / `ready`, `web/src/data/queryView.ts`). Only transient failures (502/5xx, 504, network) are retried, twice; 400/401/403/404 never are. A 401 ends the session ("Your session has expired"), and the query cache is cleared whenever the user is signed out.
+- **Patient search** (`/dashboard`): name, date of birth and/or MRN, checked in the browser against the same patterns the BFF allow-lists. Criteria live in the URL (`/dashboard?name=Demo`), so Back returns to the results. The results table shows name, DOB, sex and MRN, and each name links to `/patient/:id`. Switching patients keeps the session. OpenEMR's `identifier` search also matches SSNs; the SSN is never displayed.
+- **Patient header** (`/patient/:id`): parity with OpenEMR's persistent patient bar (`patient_data_template.php`, `demographics.php` `setMyPatient`): `First Last (pubpid)`, then `DOB: <date> Age: <age>` or `DOB: <date> Age at death: <age>`. The MRN is the identifier with type code `PT`, chosen by code, never by position (OpenEMR emits the SSN identifier first). Age follows `PatientService::getPatientAge` (whole years above 24 full months, else `n month`) and age at death follows `oeFormatAge`. The bar is sticky while scrolling. Focus moves to the page heading after each navigation.
+- **Deliberate differences from the PHP bar**: sex and active status are not shown (the PHP bar shows neither; OpenEMR's FHIR `active` is hard-coded `true`). The photo, encounter controls and the close icon are not ported ("Find another patient" replaces the close icon). `age_display_format = 1` (`#y #m #d`) is not supported. For an age at death under 24 months the PHP prints `11months` (an operator-precedence slip); the port prints `11 months`.
+
 ## BFF behaviour
 
 - **Login**: `GET /auth/login` redirects to OpenEMR with authorization code + PKCE (S256), `state`, `nonce` and `aud`. The login is bound to the browser by a signed, 10-minute cookie. The callback checks `state` (single use), exchanges the code with the client secret and PKCE verifier, and checks the id_token `iss`, `aud`, `exp` and `nonce`.
@@ -76,6 +85,7 @@ Scopes are read-only, with no `offline_access`, so no refresh token is issued. A
   | `/api/fhir/Observation` | FHIR search | `patient` (required), `category=laboratory` (required) |
   | `/api/fhir/Practitioner/:id`, `/api/fhir/Organization/:id` | FHIR read | none |
   | `/api/patient/:pid/medication` | standard API | none (OpenEMR's 404 means "no list medications") |
+  | `/api/patient/:puuid` | standard API | none; `puuid` must be a uuid. Maps the FHIR Patient id to the numeric pid the medication route needs. OpenEMR answers the whole `patient_data` row (SSN included); the BFF answers **only** `{ "pid": "7", "uuid": "..." }` and 502 when there is no numeric pid |
 
   Browser cookies and headers are not forwarded; the BFF adds only the bearer token. OpenEMR's 401 ends the session. Its `500` on a read of an inaccessible patient becomes `403 {"error":"not_accessible"}`. Other 5xx become 502, and a timeout becomes 504. API responses are `Cache-Control: no-store`.
 - **Headers**: CSP (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, and HSTS when cookies are Secure.

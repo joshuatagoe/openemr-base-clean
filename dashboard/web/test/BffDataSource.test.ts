@@ -66,6 +66,23 @@ describe('BffDataSource', () => {
     expect(await ds.patientMedicationList('7')).toEqual([]);
   });
 
+  it('maps a FHIR patient uuid to the numeric pid via /api/patient/:puuid', async () => {
+    let path = '';
+    server.use(
+      http.get('*/api/patient/:puuid', ({ request, params }) => {
+        path = new URL(request.url).pathname;
+        return HttpResponse.json({ pid: '7', uuid: params.puuid });
+      }),
+    );
+    expect(await new BffDataSource().patientPid(PID)).toBe('7');
+    expect(path).toBe(`/api/patient/${PID}`);
+  });
+
+  it('rejects a pid answer that is not a numeric string', async () => {
+    server.use(http.get('*/api/patient/:puuid', () => HttpResponse.json({ pid: 'x', uuid: PID })));
+    await expect(new BffDataSource().patientPid(PID)).rejects.toMatchObject({ kind: 'upstream' });
+  });
+
   it('reports a 401 as session expired and notifies the auth layer', async () => {
     server.use(http.get('*/api/fhir/Patient', () => HttpResponse.json({ error: 'session_expired' }, { status: 401 })));
     const onSessionExpired = vi.fn();
@@ -105,5 +122,6 @@ describe('SmartDataSource (planned for C5)', () => {
     expect((err as DataSourceError).kind).toBe('not_implemented');
     await expect(ds.search('Patient', { name: 'x' })).rejects.toMatchObject({ kind: 'not_implemented' });
     await expect(ds.patientMedicationList('7')).rejects.toMatchObject({ kind: 'not_implemented' });
+    await expect(ds.patientPid(PID)).rejects.toMatchObject({ kind: 'not_implemented' });
   });
 });

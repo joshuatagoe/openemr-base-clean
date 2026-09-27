@@ -30,6 +30,10 @@ export class SmartDataSource implements DataSource {
     return Promise.reject(this.notYet());
   }
 
+  patientPid(_patientId: string, _signal?: AbortSignal): Promise<string> {
+    return Promise.reject(this.notYet());
+  }
+
   private notYet(): DataSourceError {
     return new DataSourceError('not_implemented', 'The SMART transport (modes B/C) is planned for milestone C5.');
   }

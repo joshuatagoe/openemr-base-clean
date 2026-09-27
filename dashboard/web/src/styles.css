@@ -34,3 +34,37 @@ body { margin: 0; }
 .notice-warning { background: #fff3cd; border-color: #ffe69c; }
 .muted { color: #6c757d; }
 .signed-out { display: grid; gap: 0.75rem; justify-items: start; }
+
+/* Patient search (C2). */
+.patient-search h1, .patient-name { margin: 0 0 0.5rem; }
+h1:focus { outline: none; }
+h1:focus-visible { outline: 3px solid #86b7fe; outline-offset: 2px; }
+.search-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
+.form-field { display: grid; gap: 0.25rem; }
+.form-field input { font: inherit; padding: 0.3rem 0.5rem; border: 1px solid #adb5bd; border-radius: 0.25rem; }
+.form-field input:focus-visible, .results a:focus-visible { outline: 3px solid #86b7fe; outline-offset: 1px; }
+.form-field input[aria-invalid='true'] { border-color: #dc3545; }
+.results { border-collapse: collapse; width: 100%; background: #fff; }
+.results caption { text-align: left; font-weight: 600; padding: 0.25rem 0; }
+.results th, .results td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #dee2e6; }
+.page-state, .page-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+
+/* Persistent patient bar: mirrors OpenEMR's tab-frame patient bar
+   (name as large text, "(pubpid)" small + muted, "DOB: ... Age: ..." below). */
+.patient-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin: 0 -1rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+.patient-name { display: inline; font-size: 1.75rem; font-weight: 500; }
+.patient-mrn { font-size: 1.4rem; } /* <small> inside the PHP h3: 80% of the name size */
+.patient-dob { margin-top: 0.5rem; }

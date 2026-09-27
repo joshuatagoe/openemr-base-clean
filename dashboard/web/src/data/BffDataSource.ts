@@ -65,6 +65,13 @@ export class BffDataSource implements DataSource {
     }
   }
 
+  async patientPid(patientId: string, signal?: AbortSignal): Promise<string> {
+    // The BFF reduces OpenEMR's patient_data row to { pid, uuid }.
+    const body = await this.getJson<{ pid?: unknown }>(`/api/patient/${encodeURIComponent(patientId)}`, signal);
+    if (typeof body.pid === 'string' && /^\d{1,10}$/.test(body.pid)) return body.pid;
+    throw new DataSourceError('upstream', 'The server did not return a patient number.');
+  }
+
   private async getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     let res: Response;
     try {

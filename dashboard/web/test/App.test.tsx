@@ -27,7 +27,7 @@ describe('auth shell', () => {
     renderAt('/');
     expect(await screen.findByText('Signed in as Dana Testdoctor')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Find a patient' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/dashboard');
   });
 
@@ -35,7 +35,7 @@ describe('auth shell', () => {
     server.use(signedOut);
     renderAt('/dashboard');
     expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Find a patient' })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 

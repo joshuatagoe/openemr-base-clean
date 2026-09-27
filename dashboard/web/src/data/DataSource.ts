@@ -30,4 +30,6 @@ export interface DataSource {
   search<T extends FhirResource = FhirResource>(type: FhirSearchType, params: SearchParams, signal?: AbortSignal): Promise<Bundle<T>>;
   /** Medication-list rows (not prescriptions). OpenEMR answers 404 when there are none: returned as []. */
   patientMedicationList(pid: string, signal?: AbortSignal): Promise<StdMedicationRow[]>;
+  /** OpenEMR's numeric pid (as a string) for a FHIR Patient id (uuid). */
+  patientPid(patientId: string, signal?: AbortSignal): Promise<string>;
 }
