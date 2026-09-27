@@ -24,7 +24,9 @@ variables:
   # eval recordings, keyed to the true bytes, looked stale. A fresh clone is
   # also exactly what a grader does, which is the claim EVAL_GATE.md makes.
   GIT_STRATEGY: clone
-  GIT_DEPTH: "10"
+  # Full history: with a shallow clone, a checkout the runner could not fully delete
+  # failed in the "unshallow" repair step (pipeline 31038).
+  GIT_DEPTH: "0"
 
 stages:
   - gate
@@ -61,3 +63,10 @@ dashboard:
     - npm run build
     # Modes B/C build (the root Dockerfile runs the same script into the module folder).
     - $env:DASHBOARD_OUT_DIR = "$env:TEMP\dashboard-smart-ci"; npm run build:smart
+  after_script:
+    # Always remove the installed packages, even when a step failed: the runner's
+    # clean-up of the build folder prompts (and fails) on deep, read-only
+    # node_modules paths, which broke the next job's checkout (pipeline 31038).
+    - cmd /c "if exist dashboard\node_modules rmdir /s /q dashboard\node_modules"
+    - cmd /c "if exist dashboard\bff\node_modules rmdir /s /q dashboard\bff\node_modules"
+    - cmd /c "if exist dashboard\web\node_modules rmdir /s /q dashboard\web\node_modules"
