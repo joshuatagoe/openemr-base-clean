@@ -33,8 +33,8 @@ Nothing in OpenEMR's PHP core or database was changed. The only server-side Open
 
 | Mode | How to open it | Login and data path |
 |---|---|---|
-| **A: standalone** | `https://<dashboard-host>/` (Railway service built from `dashboard/Dockerfile`); locally `npm run dev` in `dashboard/`, then http://localhost:5173 | The clinician signs in on OpenEMR's login page through the BFF (confidential client, `user/` scopes). They can search patients and switch between them in the app. The token never reaches the browser |
-| **B: inside OpenEMR** | `https://<openemr-host>/`: open a chart → *Patient → Patient Dashboard (React)* | SMART EHR launch for the open chart. The same React build is served by OpenEMR's Apache from the module's `public/dashboard/`. A public client with `patient/` scopes; the token is held in memory only |
+| **A: standalone** | [`https://dashboard-production-cf2f.up.railway.app/`](https://dashboard-production-cf2f.up.railway.app/) (Railway service built from `dashboard/Dockerfile`); locally `npm run dev` in `dashboard/`, then http://localhost:5173 | The clinician signs in on OpenEMR's login page through the BFF (confidential client, `user/` scopes). They can search patients and switch between them in the app. The token never reaches the browser |
+| **B: inside OpenEMR** | [`https://openemr-base-clean-production.up.railway.app/`](https://openemr-base-clean-production.up.railway.app/): open a chart → *Patient → Patient Dashboard (React)* | SMART EHR launch for the open chart. The same React build is served by OpenEMR's Apache from the module's `public/dashboard/`. A public client with `patient/` scopes; the token is held in memory only |
 | **C: SMART app** | The patient dashboard's *SMART Enabled Apps* card → *Launch* | Same as B |
 
 Setup (one-time admin steps, the exact commands, and the Railway steps for each mode) is in `dashboard/README.md`: *Register the OAuth client*, *Register the SMART client* and *Deploying on Railway*. The dev stack's test clinician is `drdash`, a non-admin user in the Physicians group.
