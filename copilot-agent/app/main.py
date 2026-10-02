@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import Counter
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -382,6 +383,21 @@ async def require_delete_ticket(
 # --------------------------------------------------------------------------- #
 
 
+def require_ops_auth(x_ops_key: Annotated[str | None, Header()] = None) -> None:
+    """Gate /metrics and /ready when an ops key is configured (opt-in hardening).
+
+    Fix for AF-INC-0001 (AgentForge finding): these returned operational data
+    unauthenticated. When ``COPILOT_OPS_KEY`` is set (production), require a matching
+    ``X-Ops-Key`` header or return 401; when it is unset (dev/test default) the endpoints
+    stay open, so existing behaviour and tests are unchanged - production closes the hole
+    by setting the key.
+    """
+    expected = os.environ.get("COPILOT_OPS_KEY")
+    if expected and x_ops_key != expected:
+        raise _error(status.HTTP_401_UNAUTHORIZED, "ops_auth_required",
+                     "This operational endpoint requires a valid ops key.")
+
+
 @app.get("/health", response_model=HealthResponse, tags=["operations"])
 async def health() -> HealthResponse:
     """Liveness: the process is up."""
@@ -427,7 +443,7 @@ async def _probe_provider(model: ModelSettings) -> DependencyStatus:
 
 
 @app.get("/ready", response_model=ReadyResponse, tags=["operations"], responses={503: {"model": ReadyResponse}})
-async def ready(response: Response, cfg: ServiceSettings = Depends(get_settings), store: BundleStore = Depends(get_store)) -> ReadyResponse:
+async def ready(response: Response, cfg: ServiceSettings = Depends(get_settings), store: BundleStore = Depends(get_store), _: None = Depends(require_ops_auth)) -> ReadyResponse:
     """Readiness (ARCHITECTURE.md section 14): secret, model provider (cheap models lookup, cached), store,
     and - when configured - OpenEMR's unauthenticated FHIR metadata and Langfuse's health endpoint."""
     model = ModelSettings()
@@ -447,7 +463,7 @@ async def ready(response: Response, cfg: ServiceSettings = Depends(get_settings)
 
 
 @app.get("/metrics", tags=["operations"])
-async def metrics_snapshot() -> dict[str, Any]:
+async def metrics_snapshot(_: None = Depends(require_ops_auth)) -> dict[str, Any]:
     """Process-local counters, latency percentiles per stage, token totals, estimated cost and the
     provider queue (in-flight limit and calls waiting for a slot). No clinical data."""
     snapshot = metrics.snapshot()
