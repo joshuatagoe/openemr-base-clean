@@ -23,6 +23,7 @@ from app.providers.base import (
     ProviderUnavailableError,
 )
 from app.service import NO_USABLE_PLAN_WARNING, PLAN_TOO_LONG_WARNING, BriefingService, select_plan_text
+from tests.conftest import post_briefing
 from tests.fakes import FakeProvider, hba1c, metformin, model_output
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "lab_followup.json"
@@ -41,7 +42,7 @@ def by_kind(body: dict) -> dict[str, dict]:
 
 def test_full_scenario_matching_result_found(client: TestClient, fixture_payload: dict, fake_provider: FakeProvider) -> None:
     """Tracer bullet end to end: commitment, evidence state, neutral summary, and source citations."""
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
@@ -66,7 +67,7 @@ def test_full_scenario_matching_result_found(client: TestClient, fixture_payload
 
 
 def test_ids_are_result_scoped_in_source_order(client: TestClient, fixture_payload: dict) -> None:
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     assert [m["commitment"]["commitment_id"] for m in body["matches"]] == ["c-001", "c-002"]
     assert [m["commitment"]["kind"] for m in body["matches"]] == ["medication", "lab_test"]
 
@@ -79,7 +80,7 @@ def test_ids_are_result_scoped_in_source_order(client: TestClient, fixture_paylo
 def test_no_matching_result(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: no subsequent result -> scoped absence claim citing only the note; never 'not done'."""
     fixture_payload["context"]["lab_results"] = []
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     lab = by_kind(body)["lab_test"]
     assert lab["state"] == EvidenceState.NO_MATCHING_RECORD_FOUND.value
     assert [c["record_type"] for c in lab["citations"]] == ["prior_note"]
@@ -88,7 +89,7 @@ def test_no_matching_result(client: TestClient, fixture_payload: dict) -> None:
 
 def test_medication_commitment_with_no_records_is_scoped_absence(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: the fixture carries no medication rows, so 'continue metformin' is no_matching_record_found - never 'not done'."""
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     med = by_kind(body)["medication"]
     assert med["commitment"]["source_span"] == "Continue metformin."
     assert med["state"] == EvidenceState.NO_MATCHING_RECORD_FOUND.value
@@ -98,7 +99,7 @@ def test_medication_commitment_with_no_records_is_scoped_absence(client: TestCli
 def test_unavailable_lab_source_is_verification_unavailable(client: TestClient, fixture_payload: dict) -> None:
     """Guards: 'could not check' never collapses into 'nothing found' across the whole pipeline."""
     fixture_payload["context"]["data_quality"]["sources_unavailable"] = [EvidenceSource.LAB_RESULTS.value]
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     assert by_kind(body)["lab_test"]["state"] == EvidenceState.VERIFICATION_UNAVAILABLE.value
 
 
@@ -106,7 +107,7 @@ def test_unavailable_lab_source_is_verification_unavailable(client: TestClient, 
 def test_no_usable_prior_plan_skips_the_model(client: TestClient, fixture_payload: dict, fake_provider: FakeProvider, plan_text: str) -> None:
     """Boundary: a plan with no letters or digits is reported as unusable and the model is never called."""
     fixture_payload["context"]["prior_note"]["plan_text"] = plan_text
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 200
     assert resp.json()["matches"] == []
     assert resp.json()["warnings"] == [NO_USABLE_PLAN_WARNING]
@@ -133,7 +134,7 @@ def test_provider_failure_is_an_explicit_error_not_an_empty_briefing(
     app.dependency_overrides[get_provider_factory] = lambda: (lambda: provider)
     try:
         with TestClient(app) as client:
-            resp = client.post("/v1/briefings", json=fixture_payload)
+            resp = post_briefing(client, fixture_payload)
     finally:
         app.dependency_overrides.pop(get_provider_factory, None)
 
@@ -154,7 +155,7 @@ def test_rate_limit_error_carries_retry_after(fixture_payload: dict) -> None:
     app.dependency_overrides[get_provider_factory] = lambda: (lambda: FakeProvider(ProviderRateLimitError("r")))
     try:
         with TestClient(app) as client:
-            resp = client.post("/v1/briefings", json=fixture_payload)
+            resp = post_briefing(client, fixture_payload)
     finally:
         app.dependency_overrides.pop(get_provider_factory, None)
     assert resp.status_code == 503 and resp.headers["Retry-After"] == "5"
@@ -175,7 +176,7 @@ def test_health_does_not_require_provider(unconfigured_client: TestClient) -> No
 @pytest.mark.parametrize("provider_script", [[model_output(hba1c(source_span="Repeat A1c in 3 months."))]])
 def test_ungrounded_extraction_yields_no_matches_and_a_generic_warning(client: TestClient, fixture_payload: dict) -> None:
     """Guards: a hallucinated span produces no match and a fixed warning that carries no clinical text."""
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     assert body["matches"] == []
     assert body["warnings"] == [REJECTED_SPAN_WARNING]
     assert "A1c" not in " ".join(body["warnings"])
@@ -184,7 +185,7 @@ def test_ungrounded_extraction_yields_no_matches_and_a_generic_warning(client: T
 @pytest.mark.parametrize("provider_script", [[model_output(hba1c(), warnings=["Patient likely non-adherent"])]])
 def test_model_authored_warnings_are_not_shown(client: TestClient, fixture_payload: dict) -> None:
     """Guards: model prose never reaches the user; only its count is reported."""
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     assert body["warnings"] == [MODEL_NOTES_WARNING.format(n=1)]
     assert "non-adherent" not in json.dumps(body)
 

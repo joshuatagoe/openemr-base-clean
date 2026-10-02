@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app, get_provider_factory, get_settings
 from app.providers.base import ModelExtractionOutput
+from app.security import SIGNATURE_HEADER, TIMESTAMP_HEADER, sign_body
 from app.settings import ServiceSettings
 from tests.fakes import FakeProvider, hba1c, metformin, model_output
 
@@ -25,6 +27,21 @@ FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "lab_follow
 
 # Shared secret used by the configured test client. Long enough for the minimum-length check; not a real value.
 TEST_TICKET_SECRET = "test-only-shared-secret-0123456789abcdef"
+
+
+def post_briefing(client: TestClient, payload: object, *, secret: str = TEST_TICKET_SECRET):
+    """POST /v1/briefings with the module's HMAC over the exact body.
+
+    The inline-bundle briefing path now requires a signed body (it triggers paid inference),
+    the same proof /v1/documents/briefing requires. Signing the exact bytes means a *malformed*
+    payload still passes the signature gate and reaches model validation (so the 422 boundary
+    tests keep asserting 422, not 401).
+    """
+    body = json.dumps(payload).encode()
+    ts = int(time.time())
+    headers = {"Content-Type": "application/json", TIMESTAMP_HEADER: str(ts),
+               SIGNATURE_HEADER: sign_body(secret, body, ts)}
+    return client.post("/v1/briefings", content=body, headers=headers)
 
 
 def configured_settings(**overrides: object) -> ServiceSettings:

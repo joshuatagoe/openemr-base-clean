@@ -28,8 +28,40 @@ from app.contracts import (
     RecordType,
 )
 from app.main import CORRELATION_HEADER
+from tests.conftest import post_briefing
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "lab_followup.json"
+
+
+# --------------------------------------------------------------------------- #
+# Security: the inline-bundle briefing path requires authentication
+# --------------------------------------------------------------------------- #
+
+
+def test_briefing_rejects_unsigned_request(client: TestClient, fixture_payload: dict) -> None:
+    """Security (closes dos-unauth-briefings / dos-cost-amplification): POST /v1/briefings
+    triggers paid model inference, so an unsigned/anonymous request must be rejected with 401
+    before any processing — never reach the provider."""
+    resp = client.post("/v1/briefings", json=fixture_payload)  # deliberately no signature headers
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] in ("invalid_signature", "stale_signature")
+
+
+def test_briefing_rejects_tampered_body(client: TestClient, fixture_payload: dict) -> None:
+    """Security: a valid signature over one body cannot authorize a different body."""
+    import json as _json
+
+    from tests.conftest import SIGNATURE_HEADER, TIMESTAMP_HEADER, TEST_TICKET_SECRET
+    from app.security import sign_body
+    import time as _time
+
+    good = _json.dumps(fixture_payload).encode()
+    ts = int(_time.time())
+    headers = {"Content-Type": "application/json", TIMESTAMP_HEADER: str(ts),
+               SIGNATURE_HEADER: sign_body(TEST_TICKET_SECRET, good, ts)}
+    tampered = good + b" "  # same signature, different bytes
+    resp = client.post("/v1/briefings", content=tampered, headers=headers)
+    assert resp.status_code == 401
 
 
 # --------------------------------------------------------------------------- #
@@ -59,7 +91,7 @@ def test_fixture_conforms_to_briefing_request(fixture_payload: dict) -> None:
 
 def test_briefing_accepts_fixture_and_echoes_identifiers(client: TestClient, fixture_payload: dict) -> None:
     """Invariant: the response is bound to the same correlation id and patient as the request (ARCH-002)."""
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["correlation_id"] == fixture_payload["context"]["correlation_id"]
@@ -69,7 +101,7 @@ def test_briefing_accepts_fixture_and_echoes_identifiers(client: TestClient, fix
 
 def test_briefing_returns_matches_for_the_fixture(client: TestClient, fixture_payload: dict) -> None:
     """Regression guard: the wired endpoint evaluates the fixture (full scenarios live in test_briefing.py)."""
-    body = client.post("/v1/briefings", json=fixture_payload).json()
+    body = post_briefing(client, fixture_payload).json()
     assert len(body["matches"]) == 2
     assert not any("not wired" in w for w in body["warnings"])
 
@@ -82,7 +114,7 @@ def test_briefing_returns_matches_for_the_fixture(client: TestClient, fixture_pa
 def test_unexpected_field_is_rejected(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: extra="forbid" - an unknown field (here a direct identifier) is a 422, never accepted."""
     fixture_payload["context"]["patient_name"] = "should not be here"
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
     locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
     assert ("body", "context", "patient_name") in locs
@@ -91,7 +123,7 @@ def test_unexpected_field_is_rejected(client: TestClient, fixture_payload: dict)
 def test_validation_errors_do_not_echo_input(client: TestClient, fixture_payload: dict) -> None:
     """Guards: 422 bodies carry location/message/type only, never the submitted clinical text."""
     fixture_payload["context"]["prior_note"]["plan_text"] = ""
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
     for err in resp.json()["detail"]:
         assert set(err) == {"loc", "msg", "type"}
@@ -100,7 +132,7 @@ def test_validation_errors_do_not_echo_input(client: TestClient, fixture_payload
 def test_invalid_enum_value_is_rejected_by_api(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: a lab abnormal flag outside the closed set is rejected (interpretation must come from source flags)."""
     fixture_payload["context"]["lab_results"][0]["abnormal_flag"] = "critical"
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
 
 
@@ -163,7 +195,7 @@ def test_no_matching_record_found_is_valid_without_citations() -> None:
 def test_missing_required_prior_note_field_is_rejected(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: a prior note without plan text cannot be evaluated and must fail validation, not silently pass."""
     del fixture_payload["context"]["prior_note"]["plan_text"]
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
     locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
     assert ("body", "context", "prior_note", "plan_text") in locs
@@ -172,21 +204,21 @@ def test_missing_required_prior_note_field_is_rejected(client: TestClient, fixtu
 def test_missing_prior_note_entirely_is_rejected(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: the bundle must carry a baseline note; the scaffold does not invent one."""
     del fixture_payload["context"]["prior_note"]
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
 
 
 def test_naive_timestamp_is_rejected(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: timestamps must be timezone-aware so evidence windows are unambiguous."""
     fixture_payload["context"]["lab_results"][0]["observed_at"] = "2026-09-12T09:15:00"
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
 
 
 def test_unknown_schema_version_is_rejected(client: TestClient, fixture_payload: dict) -> None:
     """Boundary: an unknown contract version is refused rather than guessed (ARCHITECTURE.md section 7)."""
     fixture_payload["context"]["schema_version"] = "2.0"
-    resp = client.post("/v1/briefings", json=fixture_payload)
+    resp = post_briefing(client, fixture_payload)
     assert resp.status_code == 422
 
 

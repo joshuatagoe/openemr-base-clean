@@ -310,6 +310,40 @@ async def require_signed_body(request: Request, cfg: ServiceSettings = Depends(g
     return body
 
 
+async def require_signed_briefing(request: Request, cfg: ServiceSettings = Depends(get_settings)) -> None:
+    """Authenticate the inline-bundle briefing path (POST /v1/briefings).
+
+    That route runs paid model inference over a caller-supplied bundle. Left open it lets an
+    anonymous caller drive inference — unauthenticated access and cost amplification (a denial
+    of the Co-Pilot's availability to clinicians). When a shared ticket secret is configured —
+    every real deployment, since the panel's signed GET/POST paths already need it — require the
+    module's HMAC over the body, the same proof ``/v1/documents/briefing`` and ``/v1/bundles``
+    require. Reads via ``request.body()`` (cached by Starlette) so FastAPI still parses the
+    ``BriefingRequest`` model from the same bytes. With no secret configured the service cannot
+    verify anything, so the gate is inert (matching the other signed routes, which 503 rather
+    than silently accept) and the existing not-configured behaviour is preserved.
+    """
+    if not cfg.has_ticket_secret():
+        return  # no shared secret on this service — nothing to verify against
+    secret = _require_secret(cfg)
+    body = await request.body()
+    if len(body) > cfg.max_signed_body_bytes:
+        raise _error(status.HTTP_413_CONTENT_TOO_LARGE, "body_too_large",
+                     f"The request body exceeds {cfg.max_signed_body_bytes} bytes.")
+    try:
+        verify_body_signature(
+            secret,
+            body,
+            request.headers.get(TIMESTAMP_HEADER),
+            request.headers.get(SIGNATURE_HEADER),
+            max_skew_seconds=cfg.signature_max_skew_seconds,
+        )
+    except StaleSignatureError as exc:
+        raise _error(status.HTTP_401_UNAUTHORIZED, exc.code, "The briefing signature timestamp is outside the accepted window.") from None
+    except InvalidSignatureError as exc:
+        raise _error(status.HTTP_401_UNAUTHORIZED, exc.code, "The briefing request is missing a valid module signature.") from None
+
+
 def _verify_ticket_or_401(secret: str, authorization: str | None, *, check_expiry: bool) -> TicketClaims:
     try:
         return verify_ticket(secret, parse_bearer(authorization), check_expiry=check_expiry)
@@ -866,6 +900,7 @@ async def document_briefing(
     status_code=status.HTTP_200_OK,
     tags=["briefings"],
     responses={
+        401: {"description": "Missing or invalid module signature", "model": ErrorDetail},
         502: {"description": "Model output failed validation", "model": ErrorDetail},
         503: {"description": "Model provider not configured, unauthenticated, rate limited or unavailable", "model": ErrorDetail},
         504: {"description": "Model provider timed out", "model": ErrorDetail},
@@ -875,6 +910,7 @@ async def create_briefing(
     request: BriefingRequest,
     response: Response,
     service: BriefingService = Depends(get_briefing_service),
+    _: None = Depends(require_signed_briefing),
 ) -> BriefingResponse:
     """Produce a plan-continuity briefing for one inline bundle.
 

@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.contracts import BriefingRequest, EvidenceState, LabResultStatus
+from tests.conftest import post_briefing
 from tests.fakes import hba1c, metformin, model_output
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "openemr_evelyn_demo_context.json"
@@ -55,7 +56,7 @@ def test_openemr_bundle_contains_no_direct_identifiers(openemr_payload: dict) ->
 @pytest.mark.parametrize("provider_script", [[model_output(metformin(), hba1c())]])
 def test_openemr_bundle_yields_matching_result_found_end_to_end(client: TestClient, openemr_payload: dict) -> None:
     """Tracer bullet on real adapter output: the seeded final HbA1c is matched and cited."""
-    resp = client.post("/v1/briefings", json=openemr_payload)
+    resp = post_briefing(client, openemr_payload)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     lab = next(m for m in body["matches"] if m["commitment"]["kind"] == "lab_test")
