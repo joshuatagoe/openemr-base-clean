@@ -122,6 +122,10 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     reply.header('x-frame-options', 'DENY');
     reply.header('cross-origin-opener-policy', 'same-origin');
     reply.header('cross-origin-resource-policy', 'same-origin');
+    // All resources are same-origin (CSP default-src 'self'), so cross-origin isolation
+    // costs nothing here and closes the two info-level gaps a web scan (nuclei) flags.
+    reply.header('cross-origin-embedder-policy', 'require-corp');
+    reply.header('x-permitted-cross-domain-policies', 'none');
     reply.header('permissions-policy', 'camera=(), microphone=(), geolocation=()');
     if (config.cookieSecure) reply.header('strict-transport-security', 'max-age=31536000');
     const path = request.url.split('?', 1)[0] ?? '';

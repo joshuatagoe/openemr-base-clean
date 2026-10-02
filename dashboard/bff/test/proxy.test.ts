@@ -196,6 +196,8 @@ describe('security headers and health', () => {
       expect(res.headers['x-content-type-options']).toBe('nosniff');
       expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.headers['x-frame-options']).toBe('DENY');
+      expect(res.headers['cross-origin-embedder-policy']).toBe('require-corp');
+      expect(res.headers['x-permitted-cross-domain-policies']).toBe('none');
     }
   });
 
